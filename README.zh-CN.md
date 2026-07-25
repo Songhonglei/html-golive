@@ -30,9 +30,12 @@ golive serve            # 启动内置服务
 | 实时预览 + 风格切换面板（`golive preview`） | ✅ v0.1 |
 | 内置静态服务 + JSON API（`golive serve`） | ✅ v0.1 |
 | 健康检查（`golive doctor`） | ✅ v0.1 |
-| 数据层：Supabase/PostgREST 驱动的 `window.TemplateAPI` / `window.SupabaseAPI` | 🚧 M2 |
-| S3 兼容存储后端（MinIO/COS/OSS/TOS） | 🚧 M2 |
-| Docker Compose 部署 | 🚧 M2 |
+| `golive.yaml` 配置加载（env 优先，`--config`） | ✅ v0.2 |
+| 数据层：Supabase/PostgREST 驱动的 `window.TemplateAPI` / `window.SupabaseAPI` | ✅ v0.2 |
+| Supabase 后端三件套：存储 bucket + 注册表 + 数据层 | ✅ v0.2 |
+| S3 兼容存储与图床（MinIO/COS/OSS/TOS） | ✅ v0.2 |
+| 内网页面迁移检查（`golive migrate-check`） | ✅ v0.2 |
+| Docker Compose 部署（含可选 MinIO profile） | ✅ v0.2 |
 | 浏览器在线编辑器 + 保存 API | 🚧 M3 |
 | 水印 + 可选 LLM 安全复核 | 🚧 M3 |
 | Token / OAuth 鉴权 | 🚧 M3（serve 模式的 token 基础能力 v0.1 已有） |
@@ -93,7 +96,14 @@ golive doctor                                # 环境体检
 - `FIRECRAWL_API_KEY` — `golive clone` 的可选降级抓取通道（针对重 JS
   渲染页面）；默认不设置、不产生任何外部调用
 - `golive.yaml` — 后端选型与规则扩展，见
-  [golive.example.yaml](golive.example.yaml)（大部分字段 M2 生效）
+  [golive.example.yaml](golive.example.yaml)。查找顺序：
+  `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
+  `$GOLIVE_HOME/golive.yaml`；环境变量永远覆盖 yaml 同项
+- `GOLIVE_SUPABASE_URL` / `GOLIVE_SUPABASE_ANON_KEY` /
+  `GOLIVE_SUPABASE_SERVICE_KEY` — Supabase 后端
+  （详见 [docs/backends.md](docs/backends.md)）
+- `GOLIVE_S3_AK` / `GOLIVE_S3_SK` — S3 后端
+  （`pip install 'html-golive[s3]'`）
 
 **网络行为说明**：golive 在发布/托管时不产生任何外呼。例外：`golive clone
 <url>` 抓取目标页面；`golive preview` 首次运行会从 `cdn.tailwindcss.com`
@@ -107,11 +117,34 @@ CDN（可用 `GOLIVE_FONT_CDN_BASE` 替换）；以及你自己配置的
 强特征命中直接阻断发布；弱特征命中仅告警。可用自己的 YAML 文件扩展规则，
 确认误报时可用 `--skip-scan` 跳过。
 
+## 数据层（v0.2）
+
+静态页面接上你自己的 Supabase 项目即可获得完整读写能力，无需写服务端：
+
+```bash
+golive db init --print-sql              # 建表 SQL 粘到 Supabase SQL Editor
+golive publish app.html --data-model myapp_v1
+```
+
+页面里直接调 `window.TemplateAPI`（命名空间化记录存储：list / listAll /
+get / create / update / delete / sort / upsert）或 `window.SupabaseAPI`
+（直连表操作：query / insert / update / delete）。签名是稳定契约——在
+其他 golive 部署上开发的页面零改动可跑。完整指南（含 RLS 安全须知）：
+[docs/data-layer.md](docs/data-layer.md)。从内网部署迁移页面：先跑
+`golive migrate-check page.html`（[迁移指南](docs/migrate-from-intranet.md)）。
+
+## Docker
+
+```bash
+docker compose up -d golive                 # golive serve 跑在 :8787
+docker compose --profile minio up -d        # 加本地 S3（图床用）
+```
+
 ## 路线图
 
-- **M2 — 数据层**：Supabase 后端三件套（存储 / 注册表 / PostgREST 数据
-  API，保持 `window.TemplateAPI` / `window.SupabaseAPI` 签名稳定）、S3
-  存储适配器、Docker Compose、图床后端。
+- ~~**M1 — 内核**：发布/托管/回滚、风格、克隆、预览、安全扫描~~ ✅ v0.1
+- ~~**M2 — 数据层**：Supabase 后端三件套、TemplateAPI/SupabaseAPI 注入、
+  S3 适配器、migrate-check、Docker Compose~~ ✅ v0.2
 - **M3 — 编辑与进阶**：浏览器在线编辑器（带版本化保存 API）、水印、可选
   OpenAI 兼容 LLM 安全复核、OAuth。
 

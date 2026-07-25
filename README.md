@@ -30,9 +30,12 @@ golive serve            # start the built-in server
 | Live preview with style-switch panel (`golive preview`) | ✅ v0.1 |
 | Built-in static server + JSON API (`golive serve`) | ✅ v0.1 |
 | Health check (`golive doctor`) | ✅ v0.1 |
-| Data layer: Supabase/PostgREST backed `window.TemplateAPI` / `window.SupabaseAPI` | 🚧 M2 |
-| S3-compatible storage backend (MinIO/COS/OSS/TOS) | 🚧 M2 |
-| Docker Compose deployment | 🚧 M2 |
+| `golive.yaml` config loader (env-first, `--config`) | ✅ v0.2 |
+| Data layer: Supabase/PostgREST backed `window.TemplateAPI` / `window.SupabaseAPI` | ✅ v0.2 |
+| Supabase backends: storage bucket + registry table + data layer | ✅ v0.2 |
+| S3-compatible storage & image uploader (MinIO/COS/OSS/TOS) | ✅ v0.2 |
+| Migration checker for intranet-built pages (`golive migrate-check`) | ✅ v0.2 |
+| Docker Compose deployment (+ optional MinIO profile) | ✅ v0.2 |
 | In-browser inline editor with save API | 🚧 M3 |
 | Watermark & optional LLM security review | 🚧 M3 |
 | Token / OAuth auth providers | 🚧 M3 (token basics already in v0.1 serve mode) |
@@ -71,11 +74,11 @@ golive doctor                                # health check
 │ bundle / image compress / CSS styles / clone / preview /  │
 │ security scanner / slug checker                           │
 └──────┬──────────────────┬──────────────────┬──────────────┘
-  StorageBackend    RegistryBackend     DataBackend (M2)
+  StorageBackend    RegistryBackend     DataBackend
   site HTML/assets  site metadata       TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs (v0.1)    SQLite (v0.1)      supabase (M2)
-  s3 (M2)            postgres/supabase (M2)
+  local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
+  supabase storage
        │
   AuthProvider: none (default) / token (GOLIVE_TOKEN) / oauth (M3)
 ```
@@ -109,7 +112,14 @@ Everything works with zero config. Optional knobs:
   when a page is heavily JS-rendered; unset by default (no external
   calls unless you configure it)
 - `golive.yaml` — backend selection & rule extensions, see
-  [golive.example.yaml](golive.example.yaml) (most fields land in M2)
+  [golive.example.yaml](golive.example.yaml). Lookup order:
+  `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
+  `$GOLIVE_HOME/golive.yaml`; env vars always win over yaml
+- `GOLIVE_SUPABASE_URL` / `GOLIVE_SUPABASE_ANON_KEY` /
+  `GOLIVE_SUPABASE_SERVICE_KEY` — Supabase backends
+  ([docs/backends.md](docs/backends.md))
+- `GOLIVE_S3_AK` / `GOLIVE_S3_SK` — S3 backends
+  (`pip install 'html-golive[s3]'`)
 
 **Network behavior**: golive makes no outbound calls at publish/serve time.
 Exceptions: `golive clone <url>` fetches the target page; `golive preview`
@@ -125,11 +135,36 @@ database connection strings, PII patterns). Strong hits block the publish;
 weak hits warn. Extend rules with your own YAML file, or bypass a false
 positive with `--skip-scan`.
 
+## Data layer (v0.2)
+
+Give static pages real persistence backed by your own Supabase project —
+no server code:
+
+```bash
+golive db init --print-sql              # create tables in Supabase SQL editor
+golive publish app.html --data-model myapp_v1
+```
+
+Pages call `window.TemplateAPI` (namespaced record store: list / listAll /
+get / create / update / delete / sort / upsert) or `window.SupabaseAPI`
+(direct table access: query / insert / update / delete). Signatures are
+stable contracts — pages built on other golive deployments run unchanged.
+Full guide with RLS warnings: [docs/data-layer.md](docs/data-layer.md).
+Moving pages off an intranet deployment? `golive migrate-check page.html`
+reports anything deployment-specific ([guide](docs/migrate-from-intranet.md)).
+
+## Docker
+
+```bash
+docker compose up -d golive                 # golive serve on :8787
+docker compose --profile minio up -d        # + local S3 stack for images
+```
+
 ## Roadmap
 
-- **M2 — data layer**: Supabase backend trio (storage / registry / PostgREST
-  data API with stable `window.TemplateAPI` / `window.SupabaseAPI` signatures),
-  S3 storage adapter, Docker Compose, image uploader backends.
+- ~~**M1 — core**: publish/serve/rollback, styles, clone, preview, scan~~ ✅ v0.1
+- ~~**M2 — data layer**: Supabase backend trio, TemplateAPI/SupabaseAPI
+  injection, S3 adapters, migrate-check, Docker Compose~~ ✅ v0.2
 - **M3 — editing & beyond**: in-browser inline editor with versioned save API,
   watermarking, optional OpenAI-compatible LLM security review, OAuth.
 

@@ -42,6 +42,18 @@ def _boto3():
             "pip install 'html-golive[s3]'") from e
 
 
+# botocore error codes that mean "the object does not exist"
+_NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "404", "NotFound"}
+
+
+def _client_error_code(exc) -> str:
+    """Extract the official error code from a botocore ClientError."""
+    try:
+        return str(exc.response.get("Error", {}).get("Code", ""))
+    except AttributeError:
+        return ""
+
+
 class S3Storage:
     """StorageBackend implementation on an S3-compatible object store."""
 
@@ -97,8 +109,15 @@ class S3Storage:
         except self.s3.exceptions.NoSuchKey:
             raise FileNotFoundError(f"site content not found: {site_id}")
         except Exception as e:
-            if "NoSuchKey" in str(e) or "404" in str(e):
+            # official botocore API: ClientError carries a structured code —
+            # match on that instead of substring-scanning str(e).
+            code = _client_error_code(e)
+            if code in _NOT_FOUND_CODES:
                 raise FileNotFoundError(f"site content not found: {site_id}")
+            if code == "AccessDenied":
+                raise PermissionError(
+                    f"S3 access denied reading {self._key(site_id)} — "
+                    f"check credentials/bucket policy") from e
             raise
         html = obj["Body"].read().decode("utf-8")
         self._cache[site_id] = (time.time() + CACHE_TTL, html)

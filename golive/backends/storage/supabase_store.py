@@ -151,11 +151,60 @@ class SupabaseStorage:
         self._upload(f"{site_id}/backups/{ts}.html", html)
         self._prune(site_id)
 
+    # ── prune with a storage-level advisory lock ────────────────────────────
+    # Multiple publishers (CI + laptop + a second server) may prune the same
+    # site concurrently; without coordination they can race on deletes. A
+    # tiny lockfile object (<site_id>/.prune.lock, JSON {pid, ts}) acts as an
+    # advisory lock: stale after LOCK_TTL, and losing the race just skips
+    # this round — the next publish prunes again.
+    PRUNE_LOCK_TTL = 60  # seconds
+
+    def _try_acquire_prune_lock(self, site_id: str) -> bool:
+        import json as _json
+        import os as _os
+        path = f"{site_id}/.prune.lock"
+        existing = None
+        try:
+            existing = self._download(path)
+        except SupabaseStorageError:
+            return False  # can't even read the lock — skip pruning this round
+        if existing:
+            try:
+                info = _json.loads(existing)
+                age = time.time() - float(info.get("ts", 0))
+                if age < self.PRUNE_LOCK_TTL:
+                    return False  # fresh lock held by someone else
+            except (ValueError, TypeError):
+                pass  # corrupt lock — treat as stale, take it over
+        payload = _json.dumps({"pid": _os.getpid(), "ts": time.time()})
+        try:
+            resp = requests.post(
+                self._obj_url(path), data=payload.encode("utf-8"),
+                headers={**self._headers("application/json"), "x-upsert": "true"},
+                timeout=DEFAULT_TIMEOUT)
+            return resp.status_code < 400
+        except requests.RequestException:
+            return False
+
+    def _release_prune_lock(self, site_id: str) -> None:
+        try:
+            self._remove(f"{site_id}/.prune.lock")
+        except Exception:
+            pass  # TTL expiry cleans up abandoned locks
+
     def _prune(self, site_id: str) -> None:
-        snaps = sorted(self.list_snapshots(site_id), key=lambda s: s["ts"])
-        while len(snaps) > BACKUP_MAX_KEEP:
-            oldest = snaps.pop(0)
-            self._remove(f"{site_id}/backups/{oldest['ts']}.html")
+        if not self._try_acquire_prune_lock(site_id):
+            import sys as _sys
+            print(f"ℹ️  {site_id} 快照清理被其他发布进程占用，本次跳过"
+                  "（下次发布自动补）", file=_sys.stderr)
+            return
+        try:
+            snaps = sorted(self.list_snapshots(site_id), key=lambda s: s["ts"])
+            while len(snaps) > BACKUP_MAX_KEEP:
+                oldest = snaps.pop(0)
+                self._remove(f"{site_id}/backups/{oldest['ts']}.html")
+        finally:
+            self._release_prune_lock(site_id)
 
     def list_snapshots(self, site_id: str) -> list:
         out = []

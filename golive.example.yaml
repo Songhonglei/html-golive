@@ -4,29 +4,50 @@
 # mode (local storage + SQLite registry + built-in server).
 #
 # Config file lookup order:
-#   1. --config <path>
-#   2. ./golive.yaml
-#   3. $GOLIVE_HOME/golive.yaml
+#   1. golive --config <path>
+#   2. $GOLIVE_CONFIG
+#   3. ./golive.yaml
+#   4. $GOLIVE_HOME/golive.yaml
+#
+# Environment variables always override yaml (12-factor). Secrets never
+# live in this file: yaml stores the *name* of an env var (…_env keys)
+# and the value is read from the environment at runtime.
 
-# ── storage backend ──────────────────────────────────────────────────────────
+# ── shared Supabase connection ───────────────────────────────────────────────
+# One Supabase project can host all three layers (storage + registry + data).
+# Keys: set GOLIVE_SUPABASE_ANON_KEY / GOLIVE_SUPABASE_SERVICE_KEY in env,
+# or point *_env at your own variable names.
+supabase:
+  url: ""                 # e.g. https://abcdefg.supabase.co  (or env GOLIVE_SUPABASE_URL)
+  anon_key_env: GOLIVE_SUPABASE_ANON_KEY
+  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY
+
+# ── storage backend (published site HTML) ────────────────────────────────────
 storage:
-  backend: local          # local (v0.1) | s3 (coming in M2)
-  # s3:                   # coming in M2
-  #   endpoint: https://s3.example.com
+  backend: local          # local | s3 | supabase
+  # s3:                   # any S3-compatible store (MinIO / COS / OSS / TOS / AWS)
+  #   endpoint: https://s3.example.com     # empty = AWS default endpoints
   #   bucket: golive-sites
+  #   prefix: ""                            # optional key prefix
+  #   region: ""                            # e.g. us-east-1
   #   access_key_env: GOLIVE_S3_AK
   #   secret_key_env: GOLIVE_S3_SK
+  #   public_base: ""                       # optional public/CDN URL prefix
+  # supabase:
+  #   bucket: golive-sites                  # Supabase Storage bucket name
 
-# ── registry backend ─────────────────────────────────────────────────────────
+# ── registry backend (site metadata) ─────────────────────────────────────────
 registry:
-  backend: sqlite         # sqlite (v0.1) | postgres (M2) | supabase (M2)
-  # supabase:             # coming in M2
-  #   url: https://xyz.supabase.co
-  #   anon_key_env: GOLIVE_SUPABASE_ANON_KEY
+  backend: sqlite         # sqlite | supabase
+  # supabase:
+  #   table: golive_sites  # see `golive db init --print-sql` for the schema
 
-# ── data layer (window.TemplateAPI / window.SupabaseAPI) ────────────────────
+# ── data layer (window.TemplateAPI / window.SupabaseAPI injection) ───────────
 data:
-  backend: none           # none (v0.1) | supabase (coming in M2)
+  backend: none           # none | supabase
+  # supabase:
+  #   templates_table: golive_templates    # TemplateAPI storage table
+  #   user_id: ""                           # identity stamped on created rows
 
 # ── CSS style fonts ──────────────────────────────────────────────────────────
 style:
@@ -37,26 +58,29 @@ style:
 
 # ── image uploader (bundling) ────────────────────────────────────────────────
 uploader:
-  # Shell command template for uploading bundled images to your own
-  # image host. golive writes each image to a temp file, substitutes
-  # {file}, runs the command, and takes the last stdout line as the URL.
-  # On failure the image silently falls back to base64 inlining.
-  # Env GOLIVE_UPLOADER_CMD takes precedence.
-  # Examples:
-  #   command: "mytool upload {file}"
-  #   command: "aws s3 cp {file} s3://bucket/img/ --acl public-read && echo https://cdn.example.com/img/{name}"
+  # Option 1 — shell command template ({file} → temp path, {name} → filename;
+  # last stdout line that looks like a URL is used). Env GOLIVE_UPLOADER_CMD wins.
   command: ""             # empty = base64 inline (default)
-  # s3:                   # native S3 uploader — coming in M2
+  # Option 2 — native S3 uploader (pip install 'html-golive[s3]')
+  # s3:
+  #   endpoint: https://s3.example.com
+  #   bucket: golive-img
+  #   prefix: img/
+  #   region: ""
+  #   access_key_env: GOLIVE_S3_AK
+  #   secret_key_env: GOLIVE_S3_SK
+  #   public_base: https://cdn.example.com  # URL prefix returned to pages
 
 # ── auth (serve-mode write ops & /api/sites) ────────────────────────────────
 auth:
   provider: none          # none | token   (oauth coming in M3)
-  # token: ""             # or set env GOLIVE_TOKEN
+  # token: ""             # prefer env GOLIVE_TOKEN over writing it here
 
 # ── server ───────────────────────────────────────────────────────────────────
 server:
   host: 0.0.0.0
   port: 8787
+  public_base: ""         # e.g. https://pages.example.com — used in printed URLs
 
 # ── slug rules ───────────────────────────────────────────────────────────────
 slug:

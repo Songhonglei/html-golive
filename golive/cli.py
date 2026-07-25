@@ -391,6 +391,9 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--version", action="version",
                         version=f"golive {__version__}")
+    parser.add_argument("--config", default="", metavar="PATH",
+                        help="golive.yaml 配置文件路径（默认按 $GOLIVE_CONFIG → "
+                             "./golive.yaml → $GOLIVE_HOME/golive.yaml 查找）")
     sub = parser.add_subparsers(dest="command")
 
     # publish
@@ -461,6 +464,14 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_doctor)
 
     args = parser.parse_args(argv)
+
+    from golive.config import ConfigError, load_config, set_config
+    try:
+        set_config(load_config(cli_path=args.config or None))
+    except ConfigError as e:
+        print(f"❌ 配置文件错误：{e}", file=sys.stderr)
+        return 1
+
     if not getattr(args, "func", None):
         parser.print_help()
         return 0

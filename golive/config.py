@@ -1,0 +1,353 @@
+"""golive.config — golive.yaml loader with env-first overrides.
+
+Lookup order (first hit wins):
+  1. --config <path>           (CLI, passed via load_config(cli_path=...))
+  2. $GOLIVE_CONFIG            (env)
+  3. ./golive.yaml             (cwd)
+  4. $GOLIVE_HOME/golive.yaml  (data dir)
+
+No file found -> full defaults (the zero-config path stays untouched).
+
+Env always wins over yaml (12-factor):
+  GOLIVE_TOKEN                 -> auth.token (and implies provider=token)
+  GOLIVE_UPLOADER_CMD          -> uploader.command
+  GOLIVE_FONT_CDN_BASE         -> style.font_cdn_base
+  GOLIVE_SUPABASE_URL          -> supabase.url (shared by all three layers)
+  GOLIVE_SUPABASE_ANON_KEY     -> supabase anon key value
+  GOLIVE_SUPABASE_SERVICE_KEY  -> supabase service_role key value
+  GOLIVE_S3_ENDPOINT / GOLIVE_S3_BUCKET / GOLIVE_S3_AK / GOLIVE_S3_SK
+                               -> storage.s3 / uploader.s3 defaults
+
+Key material never lives in golive.yaml directly: yaml stores *_env names
+(e.g. ``anon_key_env: GOLIVE_SUPABASE_ANON_KEY``) and the value is read
+from the environment at runtime.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+
+class ConfigError(RuntimeError):
+    """Raised when a config file exists but cannot be parsed."""
+
+
+# ─────────────────────────── section dataclasses ────────────────────────────
+
+@dataclass
+class SupabaseConfig:
+    """Shared Supabase connection block (top-level ``supabase:``)."""
+    url: str = ""
+    anon_key_env: str = "GOLIVE_SUPABASE_ANON_KEY"
+    service_key_env: str = "GOLIVE_SUPABASE_SERVICE_KEY"
+
+    @property
+    def anon_key(self) -> str:
+        return os.environ.get("GOLIVE_SUPABASE_ANON_KEY", "") \
+            or os.environ.get(self.anon_key_env, "")
+
+    @property
+    def service_key(self) -> str:
+        return os.environ.get("GOLIVE_SUPABASE_SERVICE_KEY", "") \
+            or os.environ.get(self.service_key_env, "")
+
+    @property
+    def key(self) -> str:
+        """Best key available for server-side calls (service_role > anon)."""
+        return self.service_key or self.anon_key
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.url and self.key)
+
+
+@dataclass
+class StorageConfig:
+    backend: str = "local"           # local | s3 | supabase
+    # s3 sub-options
+    s3_endpoint: str = ""
+    s3_bucket: str = "golive-sites"
+    s3_prefix: str = ""
+    s3_region: str = ""
+    s3_access_key_env: str = "GOLIVE_S3_AK"
+    s3_secret_key_env: str = "GOLIVE_S3_SK"
+    s3_public_base: str = ""         # optional CDN/public URL prefix
+    # supabase sub-options
+    supabase_bucket: str = "golive-sites"
+
+
+@dataclass
+class RegistryConfig:
+    backend: str = "sqlite"          # sqlite | postgres | supabase
+    postgres_dsn_env: str = "GOLIVE_PG_DSN"
+    supabase_table: str = "golive_sites"
+
+
+@dataclass
+class DataConfig:
+    backend: str = "none"            # none | supabase
+    templates_table: str = "golive_templates"
+    user_id: str = ""                # identity stamped on rows ('' = anonymous)
+
+
+@dataclass
+class AuthConfig:
+    provider: str = "none"           # none | token
+    token: str = ""
+
+
+@dataclass
+class UploaderConfig:
+    command: str = ""
+    s3_endpoint: str = ""
+    s3_bucket: str = ""
+    s3_prefix: str = "img/"
+    s3_region: str = ""
+    s3_access_key_env: str = "GOLIVE_S3_AK"
+    s3_secret_key_env: str = "GOLIVE_S3_SK"
+    s3_public_base: str = ""
+
+
+@dataclass
+class StyleConfig:
+    font_cdn_base: str = ""
+
+
+@dataclass
+class SecurityConfig:
+    extra_rules: list = field(default_factory=list)
+
+
+@dataclass
+class ServerConfig:
+    host: str = "0.0.0.0"
+    port: int = 8787
+    public_base: str = ""            # printed in publish URLs when set
+
+
+@dataclass
+class Config:
+    storage: StorageConfig = field(default_factory=StorageConfig)
+    registry: RegistryConfig = field(default_factory=RegistryConfig)
+    data: DataConfig = field(default_factory=DataConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
+    uploader: UploaderConfig = field(default_factory=UploaderConfig)
+    style: StyleConfig = field(default_factory=StyleConfig)
+    security: SecurityConfig = field(default_factory=SecurityConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
+    supabase: SupabaseConfig = field(default_factory=SupabaseConfig)
+    slug_reserved: list = field(default_factory=list)
+    localize_never: list = field(default_factory=list)
+    source_path: str = ""            # which yaml file was loaded ('' = defaults)
+
+
+# ─────────────────────────────── file lookup ─────────────────────────────────
+
+def _find_config_file(cli_path: Optional[str] = None) -> Optional[Path]:
+    if cli_path:
+        p = Path(cli_path).expanduser()
+        if not p.exists():
+            raise ConfigError(f"config file not found: {p}")
+        return p
+    env_path = os.environ.get("GOLIVE_CONFIG", "").strip()
+    if env_path:
+        p = Path(env_path).expanduser()
+        if not p.exists():
+            raise ConfigError(f"$GOLIVE_CONFIG points to a missing file: {p}")
+        return p
+    cwd_candidate = Path.cwd() / "golive.yaml"
+    if cwd_candidate.exists():
+        return cwd_candidate
+    # avoid importing paths.get_home() (it mkdir's); resolve manually
+    home_env = os.environ.get("GOLIVE_HOME", "").strip()
+    home = Path(home_env).expanduser() if home_env else Path.home() / ".golive"
+    home_candidate = home / "golive.yaml"
+    if home_candidate.exists():
+        return home_candidate
+    return None
+
+
+def _parse_yaml(path: Path) -> dict:
+    try:
+        import yaml
+    except ImportError as e:  # pragma: no cover
+        raise ConfigError("pyyaml is required to read golive.yaml "
+                          "(pip install pyyaml)") from e
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise ConfigError(
+            f"invalid YAML in {path}:\n  {e}\n"
+            f"  Fix the syntax or remove the file to fall back to defaults."
+        ) from e
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{path} must contain a YAML mapping at top level")
+    return raw
+
+
+# ─────────────────────────────── assembly ────────────────────────────────────
+
+def _get(d: dict, *keys, default=None):
+    cur = d
+    for k in keys:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
+
+def _build(raw: dict, source_path: str) -> Config:
+    cfg = Config(source_path=source_path)
+
+    # shared supabase block
+    cfg.supabase.url = str(_get(raw, "supabase", "url", default="") or "")
+    cfg.supabase.anon_key_env = str(_get(raw, "supabase", "anon_key_env",
+                                         default=cfg.supabase.anon_key_env))
+    cfg.supabase.service_key_env = str(_get(raw, "supabase", "service_key_env",
+                                            default=cfg.supabase.service_key_env))
+
+    # storage
+    st = cfg.storage
+    st.backend = str(_get(raw, "storage", "backend", default="local") or "local").lower()
+    st.s3_endpoint = str(_get(raw, "storage", "s3", "endpoint", default="") or "")
+    st.s3_bucket = str(_get(raw, "storage", "s3", "bucket", default=st.s3_bucket))
+    st.s3_prefix = str(_get(raw, "storage", "s3", "prefix", default=""))
+    st.s3_region = str(_get(raw, "storage", "s3", "region", default=""))
+    st.s3_access_key_env = str(_get(raw, "storage", "s3", "access_key_env",
+                                    default=st.s3_access_key_env))
+    st.s3_secret_key_env = str(_get(raw, "storage", "s3", "secret_key_env",
+                                    default=st.s3_secret_key_env))
+    st.s3_public_base = str(_get(raw, "storage", "s3", "public_base", default=""))
+    st.supabase_bucket = str(_get(raw, "storage", "supabase", "bucket",
+                                  default=st.supabase_bucket))
+
+    # registry
+    rg = cfg.registry
+    rg.backend = str(_get(raw, "registry", "backend", default="sqlite") or "sqlite").lower()
+    rg.postgres_dsn_env = str(_get(raw, "registry", "postgres", "dsn_env",
+                                   default=rg.postgres_dsn_env))
+    rg.supabase_table = str(_get(raw, "registry", "supabase", "table",
+                                 default=rg.supabase_table))
+
+    # data layer
+    dt = cfg.data
+    dt.backend = str(_get(raw, "data", "backend", default="none") or "none").lower()
+    dt.templates_table = str(_get(raw, "data", "supabase", "templates_table",
+                                  default=dt.templates_table))
+    dt.user_id = str(_get(raw, "data", "supabase", "user_id", default=""))
+
+    # auth
+    cfg.auth.provider = str(_get(raw, "auth", "provider", default="none") or "none").lower()
+    cfg.auth.token = str(_get(raw, "auth", "token", default="") or "")
+
+    # uploader
+    up = cfg.uploader
+    up.command = str(_get(raw, "uploader", "command", default="") or "")
+    up.s3_endpoint = str(_get(raw, "uploader", "s3", "endpoint", default=""))
+    up.s3_bucket = str(_get(raw, "uploader", "s3", "bucket", default=""))
+    up.s3_prefix = str(_get(raw, "uploader", "s3", "prefix", default=up.s3_prefix))
+    up.s3_region = str(_get(raw, "uploader", "s3", "region", default=""))
+    up.s3_access_key_env = str(_get(raw, "uploader", "s3", "access_key_env",
+                                    default=up.s3_access_key_env))
+    up.s3_secret_key_env = str(_get(raw, "uploader", "s3", "secret_key_env",
+                                    default=up.s3_secret_key_env))
+    up.s3_public_base = str(_get(raw, "uploader", "s3", "public_base", default=""))
+
+    # style / security / server
+    cfg.style.font_cdn_base = str(_get(raw, "style", "font_cdn_base", default="") or "")
+    extra = _get(raw, "security", "extra_rules", default=[])
+    cfg.security.extra_rules = list(extra) if isinstance(extra, (list, tuple)) else []
+    cfg.server.host = str(_get(raw, "server", "host", default="0.0.0.0"))
+    try:
+        cfg.server.port = int(_get(raw, "server", "port", default=8787))
+    except (TypeError, ValueError):
+        raise ConfigError(f"server.port must be an integer "
+                          f"(got {_get(raw, 'server', 'port')!r})")
+    cfg.server.public_base = str(_get(raw, "server", "public_base", default="") or "").rstrip("/")
+
+    reserved = _get(raw, "slug", "reserved", default=[])
+    cfg.slug_reserved = [str(s).lower() for s in reserved] \
+        if isinstance(reserved, (list, tuple)) else []
+    never = _get(raw, "localize", "never", default=[])
+    cfg.localize_never = list(never) if isinstance(never, (list, tuple)) else []
+
+    return cfg
+
+
+def _apply_env_overrides(cfg: Config) -> Config:
+    tok = os.environ.get("GOLIVE_TOKEN", "").strip()
+    if tok:
+        cfg.auth.token = tok
+        cfg.auth.provider = "token"
+    up_cmd = os.environ.get("GOLIVE_UPLOADER_CMD", "").strip()
+    if up_cmd:
+        cfg.uploader.command = up_cmd
+    font = os.environ.get("GOLIVE_FONT_CDN_BASE", "").strip()
+    if font:
+        cfg.style.font_cdn_base = font
+    sb_url = os.environ.get("GOLIVE_SUPABASE_URL", "").strip()
+    if sb_url:
+        cfg.supabase.url = sb_url
+    s3_ep = os.environ.get("GOLIVE_S3_ENDPOINT", "").strip()
+    if s3_ep:
+        cfg.storage.s3_endpoint = cfg.storage.s3_endpoint or s3_ep
+        cfg.uploader.s3_endpoint = cfg.uploader.s3_endpoint or s3_ep
+    s3_bucket = os.environ.get("GOLIVE_S3_BUCKET", "").strip()
+    if s3_bucket:
+        cfg.storage.s3_bucket = s3_bucket
+    return cfg
+
+
+# ─────────────────────────────── public API ──────────────────────────────────
+
+_current: Optional[Config] = None
+
+
+def load_config(cli_path: Optional[str] = None) -> Config:
+    """Load config fresh (no cache). Raises ConfigError on broken files."""
+    path = _find_config_file(cli_path)
+    raw = _parse_yaml(path) if path else {}
+    cfg = _build(raw, str(path) if path else "")
+    return _apply_env_overrides(cfg)
+
+
+def set_config(cfg: Config) -> None:
+    """Install a Config as the process-wide current config (CLI entry).
+
+    Also bridges yaml values into the legacy env read-points (only when
+    the env var is not already set), so pre-config modules pick up
+    golive.yaml without refactoring: GOLIVE_TOKEN / GOLIVE_UPLOADER_CMD /
+    GOLIVE_FONT_CDN_BASE.
+    """
+    global _current
+    _current = cfg
+    if cfg.auth.token and not os.environ.get("GOLIVE_TOKEN"):
+        os.environ["GOLIVE_TOKEN"] = cfg.auth.token
+    if cfg.uploader.command and not os.environ.get("GOLIVE_UPLOADER_CMD"):
+        os.environ["GOLIVE_UPLOADER_CMD"] = cfg.uploader.command
+    if cfg.style.font_cdn_base and not os.environ.get("GOLIVE_FONT_CDN_BASE"):
+        os.environ["GOLIVE_FONT_CDN_BASE"] = cfg.style.font_cdn_base
+
+
+def get_config() -> Config:
+    """Current config; lazily loads defaults if the CLI didn't set one."""
+    global _current
+    if _current is None:
+        try:
+            _current = load_config()
+        except ConfigError as e:
+            print(f"⚠️  golive.yaml 解析失败，已回退默认配置：{e}", file=sys.stderr)
+            _current = Config()
+    return _current
+
+
+def reset_config() -> None:
+    """Testing helper: forget the cached config."""
+    global _current
+    _current = None

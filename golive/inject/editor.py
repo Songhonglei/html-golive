@@ -105,7 +105,9 @@ _JS_TEMPLATE = r"""
   ].join('');
 
   var EDITOR_IDS = ['__golive_editor_fab__', '__golive_editor_toolbar__',
-                    '__golive_editor_status__', '__golive_editor_style__'];
+                    '__golive_editor_status__', '__golive_editor_style__',
+                    '__golive_editor_img__', '__golive_editor_file__',
+                    '__golive_editor_cancel__', '__golive_editor_save__'];
 
   /* ── UI construction ── */
   function _buildUI() {{
@@ -129,14 +131,29 @@ _JS_TEMPLATE = r"""
     cancel.className = 'golive-editor-btn';
     cancel.textContent = '✕ 取消';
     cancel.onclick = _exitEditMode;
+    var img = document.createElement('button');
+    img.id = '__golive_editor_img__';
+    img.className = 'golive-editor-btn';
+    img.textContent = '🖼 图片';
+    img.title = 'Upload an image at the cursor';
+    img.onclick = _pickImage;
     var save = document.createElement('button');
     save.id = '__golive_editor_save__';
     save.className = 'golive-editor-btn';
     save.textContent = '💾 保存';
     save.onclick = _save;
     bar.appendChild(cancel);
+    bar.appendChild(img);
     bar.appendChild(save);
     document.body.appendChild(bar);
+
+    var fileInput = document.createElement('input');
+    fileInput.id = '__golive_editor_file__';
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.style.display = 'none';
+    fileInput.onchange = _onFilePicked;
+    document.body.appendChild(fileInput);
 
     var status = document.createElement('div');
     status.id = '__golive_editor_status__';
@@ -219,6 +236,87 @@ _JS_TEMPLATE = r"""
   }}
 
   /* ── serialization: strip editor artifacts ── */
+  /* ── image upload ── */
+  var _lastRange = null;
+  function _rememberSelection() {{
+    try {{
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount) _lastRange = sel.getRangeAt(0).cloneRange();
+    }} catch (e) {{}}
+  }}
+  function _pickImage() {{
+    _rememberSelection();
+    var f = document.getElementById('__golive_editor_file__');
+    if (f) f.click();
+  }}
+  function _insertImgNode(url) {{
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.maxWidth = '100%';
+    try {{
+      if (_lastRange) {{
+        _lastRange.collapse(false);
+        _lastRange.insertNode(img);
+      }} else {{
+        (document.querySelector('main') || document.body).appendChild(img);
+      }}
+    }} catch (e) {{
+      document.body.appendChild(img);
+    }}
+    _markDirty();
+  }}
+  function _fileToDataURL(file) {{
+    return new Promise(function (resolve, reject) {{
+      var fr = new FileReader();
+      fr.onload = function () {{ resolve(fr.result); }};
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    }});
+  }}
+  function _onFilePicked(ev) {{
+    var file = (ev.target.files && ev.target.files.length) ? ev.target.files[0] : null;
+    ev.target.value = '';   /* allow re-picking the same file */
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {{
+      _showStatus('❌ 图片过大（>8MB）', 'err', 5000); return;
+    }}
+    _showStatus('⏳ 正在上传图片…', 'info', 0);
+    var url = (CFG.apiBase || '') + '/api/sites/'
+              + encodeURIComponent(CFG.slug) + '/upload';
+    fetch(url, {{
+      method: 'POST',
+      credentials: 'include',
+      headers: {{
+        'Authorization': 'Bearer ' + _token(),
+        'X-Editor-User': _user(),
+        'X-Filename': file.name || 'image.png',
+        'Content-Type': file.type || 'application/octet-stream',
+      }},
+      body: file,
+    }})
+    .then(function (r) {{
+      return r.json().catch(function () {{ return {{}}; }}).then(function (j) {{
+        if (r.ok && j.url) return j.url;
+        if (r.status === 501) return null;   /* no uploader -> inline */
+        throw new Error(j.error || ('HTTP ' + r.status));
+      }});
+    }})
+    .then(function (remoteUrl) {{
+      if (remoteUrl) {{
+        _insertImgNode(remoteUrl);
+        _showStatus('✅ 图片已上传', 'ok', 2500);
+      }} else {{
+        return _fileToDataURL(file).then(function (dataUrl) {{
+          _insertImgNode(dataUrl);
+          _showStatus('✅ 图片已内联（未配置图床）', 'ok', 3000);
+        }});
+      }}
+    }})
+    .catch(function (e) {{
+      _showStatus('❌ 图片上传失败：' + e.message, 'err', 6000);
+    }});
+  }}
+
   function _getCleanHTML() {{
     var clone = document.documentElement.cloneNode(true);
     ['contenteditable', 'spellcheck'].forEach(function (attr) {{

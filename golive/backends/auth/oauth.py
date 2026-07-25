@@ -57,6 +57,36 @@ def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _load_or_create_cookie_secret() -> str:
+    """Return a stable cookie-signing secret persisted under GOLIVE_HOME.
+
+    Generated once (0600 file) so signed session cookies survive a server
+    restart without the operator having to set GOLIVE_COOKIE_SECRET. If the
+    home dir is unwritable we fall back to an ephemeral per-process key and
+    warn — sessions then die on restart, but auth still works.
+    """
+    try:
+        from golive.core.paths import get_home
+        path = get_home() / ".cookie_secret"
+        if path.exists():
+            val = path.read_text(encoding="utf-8").strip()
+            if val:
+                return val
+        val = secrets.token_hex(32)
+        path.write_text(val, encoding="utf-8")
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return val
+    except Exception as e:  # noqa: BLE001 — degrade to ephemeral
+        import sys
+        print(f"⚠️  could not persist cookie secret ({e}); using an "
+              f"ephemeral key — sessions will not survive a restart. "
+              f"Set GOLIVE_COOKIE_SECRET to silence this.", file=sys.stderr)
+        return secrets.token_hex(32)
+
+
 class OIDCAuth(AuthProvider):
     """Generic OIDC provider with PKCE + signed session cookies."""
 
@@ -87,10 +117,14 @@ class OIDCAuth(AuthProvider):
         self.scopes = scopes
         self.session_ttl = int(session_ttl)
         self.force_secure_cookie = bool(force_secure_cookie)
-        # cookie secret: explicit > env > ephemeral (warns — sessions die on restart anyway)
-        self._cookie_secret = (cookie_secret
-                               or os.environ.get("GOLIVE_COOKIE_SECRET", "")
-                               or secrets.token_hex(32)).encode("utf-8")
+        # cookie secret precedence: explicit arg > env > persisted file.
+        # The persisted file lives under GOLIVE_HOME so sessions survive a
+        # restart even when the operator never set GOLIVE_COOKIE_SECRET
+        # (falls back to an ephemeral key only if the file is unwritable).
+        _sec = cookie_secret or os.environ.get("GOLIVE_COOKIE_SECRET", "")
+        if not _sec:
+            _sec = _load_or_create_cookie_secret()
+        self._cookie_secret = _sec.encode("utf-8")
         self._discovery: Optional[dict] = None
         self._sessions: dict = {}       # sid -> {sub, email, name, exp}
         self._pending: dict = {}        # state -> {verifier, exp}

@@ -1,0 +1,184 @@
+/* ============================================================
+   CSS风格：Cowork轻科技风（Notion/Linear 风格）
+   字体：Inter (Google Fonts)
+   ============================================================ */
+@import url('https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --cw-bg: #FFFFFF;
+    --cw-surface: #FFFFFF;
+    --cw-card: #FFFFFF;
+    --cw-blue: #2383E2;
+    --cw-green: #0F7B6C;
+    --cw-orange: #D97706;
+    --cw-purple: #7C3AED;
+    --cw-text: #37352F;
+    --cw-muted: #9B9A97;
+    --cw-border: rgba(55,53,47,0.09);
+    --cw-hover: rgba(55,53,47,0.04);
+    --cw-ft: "Inter",ui-sans-serif,"PingFang SC",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--cw-blue);
+    --primary-light: rgba(35,131,226,0.1);
+    --surface: var(--cw-surface);
+    --bg-main: var(--cw-bg);
+    --text-main: var(--cw-text);
+    --text-muted: var(--cw-muted);
+    --border-color: var(--cw-border);
+}
+
+html, body {
+    background-color: var(--cw-bg) !important;
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(35,131,226,0.12) !important; }
+::-webkit-scrollbar { width: 5px !important; background: #F7F6F3 !important; }
+::-webkit-scrollbar-thumb { background: rgba(55,53,47,0.2) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--cw-surface) !important;
+    border: 1px solid var(--cw-border) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+}
+
+[data-role="header"] {
+    background: #fff !important;
+    border-bottom: 1px solid var(--cw-border) !important;
+}
+[data-role="header-logo"] { background: var(--cw-blue) !important; border-radius: 6px !important; }
+[data-role="header-logo"] svg { fill: #fff !important; }
+
+[data-role="header-title"] {
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+}
+[data-role="header-meta"] { color: var(--cw-muted) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.3 !important;
+}
+[data-role="page-title"] em {
+    color: var(--cw-blue) !important;
+    font-style: normal !important;
+    background: rgba(35,131,226,0.07) !important;
+    border-radius: 3px !important;
+}
+[data-role="page-subtitle"] { color: var(--cw-muted) !important; line-height: 1.6 !important; }
+[data-role="page-subtitle"] strong { color: var(--cw-green) !important; font-weight: 500 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--cw-card) !important;
+    border-left: 3px solid var(--cw-green) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+    transition: background 0.15s, box-shadow 0.15s, transform 0.15s !important;
+}
+[data-role="card"]:nth-child(3n+1) { border-left-color: var(--cw-green) !important; }
+[data-role="card"]:nth-child(3n+2) { border-left-color: var(--cw-orange) !important; }
+[data-role="card"]:nth-child(3n+3) { border-left-color: var(--cw-purple) !important; }
+[data-role="card"]:hover {
+    background: var(--cw-hover) !important;
+    transform: translateY(-1px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid var(--cw-border) !important; }
+
+[data-role="card"]:nth-child(3n+1) [data-role="card-badge"] { background: rgba(15,123,108,0.1) !important; color: var(--cw-green) !important; }
+[data-role="card"]:nth-child(3n+2) [data-role="card-badge"] { background: rgba(217,119,6,0.1) !important; color: var(--cw-orange) !important; }
+[data-role="card"]:nth-child(3n+3) [data-role="card-badge"] { background: rgba(124,58,237,0.1) !important; color: var(--cw-purple) !important; }
+[data-role="card-badge"] { border-radius: 50% !important; font-family: var(--cw-ft) !important; font-weight: 700 !important; }
+
+[data-role="item-badge"] {
+    background: rgba(15,123,108,0.1) !important;
+    color: var(--cw-green) !important;
+    border-radius: 4px !important;
+    font-family: var(--cw-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+
+[data-role="card-title"] { color: var(--cw-text) !important; font-family: var(--cw-ft) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--cw-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid var(--cw-border) !important; transition: background 0.1s !important; }
+[data-role="list-item"]:hover { background: var(--cw-hover) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] { color: var(--cw-text) !important; font-family: var(--cw-ft) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--cw-muted) !important; font-family: var(--cw-ft) !important; font-size: 0.84em !important; line-height: 1.55 !important; }
+
+[data-role="footer"] {
+    background: rgba(15,123,108,0.04) !important;
+    border-left: 3px solid var(--cw-green) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong { color: var(--cw-green) !important; font-family: var(--cw-ft) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--cw-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: var(--cw-border) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 6px !important; }
+    [data-role="card"] { border-radius: 4px !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Cowork 协作办公风 — Notion 风·极轻·左边线
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    line-height: 1.65 !important;
+}
+
+[data-role="data-table"] {
+    border: 1px solid var(--cw-border) !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+}
+
+[data-role="table-header"] {
+    background: #F7F6F3 !important;
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.8em !important;
+    letter-spacing: -0.01em !important;
+    border-bottom: 1px solid var(--cw-border) !important;
+    border-top: 2px solid var(--cw-blue) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px solid var(--cw-border) !important;
+    transition: background 0.1s !important;
+}
+[data-role="table-row"]:hover {
+    background: var(--cw-hover) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--cw-text) !important;
+    font-family: var(--cw-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid var(--cw-border) !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

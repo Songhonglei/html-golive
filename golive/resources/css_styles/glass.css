@@ -1,0 +1,157 @@
+/* ============================================================
+   CSS风格：玻璃拟态风 (Glassmorphism)
+   字体：Inter + 系统字体（现代、通透、SaaS 质感）
+   设计语言：彩色渐变背景 + 半透明磨砂卡片（backdrop-filter blur）+
+            细白描边 + 柔和大阴影。卡片"浮"在渐变上，通透有层次。
+            适合现代 SaaS/产品官网/科技活动页。
+   注意：依赖 backdrop-filter（aifin Chrome 支持）；渐变铺在 body 上，
+        容器/卡片半透明才能透出彩色，故 body 背景是渐变非纯色。
+   ============================================================ */
+
+:root {
+    --gl-accent: #6D5EF7;        /* 通透紫蓝（主强调）*/
+    --gl-accent2: #4EC8E8;       /* 青蓝（辅）*/
+    --gl-text: #1F2433;          /* 深靛字（渐变上仍清晰）*/
+    --gl-muted: #5B6072;         /* 灰靛次要文字 */
+    --gl-glass: rgba(255,255,255,0.55);   /* 磨砂玻璃面 */
+    --gl-glass-strong: rgba(255,255,255,0.7);
+    --gl-border: rgba(255,255,255,0.6);
+    --gl-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--gl-accent);
+    --primary-light: rgba(109,94,247,0.14);
+    --surface: var(--gl-glass);
+    --bg-main: #E9E6FB;
+    --text-main: var(--gl-text);
+    --text-muted: var(--gl-muted);
+    --border-color: var(--gl-border);
+}
+
+html, body {
+    background: linear-gradient(135deg,#E6E9FF 0%,#F3E9FF 35%,#E9F7FF 70%,#FFF0F7 100%) !important;
+    background-attachment: fixed !important;
+    color: var(--gl-text) !important;
+    font-family: var(--gl-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(109,94,247,0.22) !important; }
+::-webkit-scrollbar { width: 6px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(109,94,247,0.3) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--gl-glass) !important;
+    backdrop-filter: blur(22px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.5) !important;
+    border: 1px solid var(--gl-border) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 8px 40px rgba(80,70,160,0.16) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,rgba(109,94,247,0.92),rgba(78,200,232,0.92)) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.9) !important; border-radius: 11px !important; }
+[data-role="header-logo"] svg { fill: var(--gl-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--gl-ft) !important; font-weight: 700 !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.78) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--gl-text) !important;
+    font-family: var(--gl-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.015em !important;
+    line-height: 1.22 !important;
+}
+[data-role="page-title"] em { color: var(--gl-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--gl-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--gl-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--gl-glass-strong) !important;
+    backdrop-filter: blur(16px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.4) !important;
+    border: 1px solid rgba(255,255,255,0.7) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 4px 24px rgba(80,70,160,0.12) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 10px 36px rgba(109,94,247,0.22) !important;
+    transform: translateY(-3px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(255,255,255,0.55) !important; }
+
+[data-role="card-badge"] {
+    background: linear-gradient(135deg,#6D5EF7,#4EC8E8) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 10px rgba(109,94,247,0.4) !important;
+}
+[data-role="item-badge"] {
+    background: rgba(109,94,247,0.12) !important;
+    color: var(--gl-accent) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--gl-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--gl-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(255,255,255,0.45) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--gl-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--gl-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(255,255,255,0.5) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-left: 3px solid var(--gl-accent) !important;
+    border-radius: 12px !important;
+}
+[data-role="footer"] strong { color: var(--gl-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--gl-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(255,255,255,0.5) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 16px !important; }
+    [data-role="card"] { border-radius: 14px !important; }
+}
+
+/* === 表格扩展 === 玻璃拟态 — 半透磨砂·细白线 */
+[data-role="card-body"] { color: var(--gl-text) !important; font-family: var(--gl-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(255,255,255,0.6) !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    background: rgba(255,255,255,0.4) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+[data-role="table-header"] {
+    background: rgba(109,94,247,0.12) !important;
+    color: var(--gl-text) !important;
+    font-family: var(--gl-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(255,255,255,0.5) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(255,255,255,0.4) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(109,94,247,0.06) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--gl-text) !important;
+    font-family: var(--gl-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(255,255,255,0.35) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

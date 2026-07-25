@@ -1,0 +1,184 @@
+/* ============================================================
+   CSS风格：Apple 苹果风
+   字体：系统字体栈（无外部引入）
+   ============================================================ */
+
+:root {
+    --ap-bg: #F5F5F7;
+    --ap-surface: rgba(255,255,255,0.88);
+    --ap-card: rgba(255,255,255,0.78);
+    --ap-accent: #0071E3;
+    --ap-text: #1D1D1F;
+    --ap-muted: #86868B;
+    --ap-border: rgba(0,0,0,0.08);
+    --ap-ft: -apple-system,"SF Pro Display","SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--ap-accent);
+    --primary-light: rgba(0,113,227,0.1);
+    --surface: var(--ap-surface);
+    --bg-main: var(--ap-bg);
+    --text-main: var(--ap-text);
+    --text-muted: var(--ap-muted);
+    --border-color: var(--ap-border);
+}
+
+html, body {
+    background-color: var(--ap-bg) !important;
+    color: var(--ap-text) !important;
+    font-family: var(--ap-ft) !important;
+    line-height: 1.55 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(0,113,227,0.2) !important; }
+::-webkit-scrollbar { width: 4px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15) !important; border-radius: 2px !important; }
+
+[data-role="container"] {
+    background: rgba(255,255,255,0.62) !important;
+    backdrop-filter: blur(24px) saturate(1.6) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+    border: 1px solid rgba(255,255,255,0.9) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(0,0,0,0.05) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#1D1D1F,#2D2D2F) !important;
+    border-bottom: none !important;
+}
+
+[data-role="header-logo"] {
+    background: var(--ap-accent) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0,113,227,0.4) !important;
+}
+[data-role="header-logo"] svg { fill: #fff !important; }
+
+[data-role="header-title"] {
+    color: #fff !important;
+    font-family: var(--ap-ft) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+}
+[data-role="header-meta"] { color: rgba(255,255,255,0.55) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--ap-text) !important;
+    font-family: var(--ap-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.2 !important;
+}
+[data-role="page-title"] em { color: var(--ap-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--ap-muted) !important; line-height: 1.6 !important; }
+[data-role="page-subtitle"] strong { color: var(--ap-text) !important; font-weight: 500 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--ap-card) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 0 0 0.5px rgba(0,0,0,0.04) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.1), 0 0 0 0.5px rgba(0,113,227,0.2) !important;
+    transform: translateY(-2px) !important;
+}
+[data-role="card-header"] { border-bottom: 0.5px solid rgba(0,0,0,0.07) !important; }
+
+[data-role="card-badge"] {
+    background: var(--ap-accent) !important;
+    color: #fff !important;
+    border-radius: 50% !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 8px rgba(0,113,227,0.35) !important;
+}
+
+[data-role="item-badge"] {
+    background: rgba(0,113,227,0.08) !important;
+    color: var(--ap-accent) !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+
+[data-role="card-title"] { color: var(--ap-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--ap-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 0.5px solid rgba(0,0,0,0.06) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] { color: var(--ap-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--ap-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(0,113,227,0.05) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-left: 2px solid var(--ap-accent) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong { color: var(--ap-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--ap-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(0,0,0,0.06) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 10px !important; }
+    [data-role="card"] { border-radius: 10px !important; }
+    [data-role="page-title"] { letter-spacing: -0.015em !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Apple 苹果风 — 毛玻璃·极细线·系统字体
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--ap-text) !important;
+    font-family: var(--ap-ft) !important;
+    line-height: 1.6 !important;
+}
+
+[data-role="data-table"] {
+    border: 0.5px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+[data-role="table-header"] {
+    background: rgba(0, 0, 0, 0.04) !important;
+    color: var(--ap-text) !important;
+    font-family: var(--ap-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.8em !important;
+    letter-spacing: -0.01em !important;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.06) !important;
+    transition: background 0.15s !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(0, 113, 227, 0.03) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--ap-text) !important;
+    font-family: var(--ap-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 0.5px solid rgba(0, 0, 0, 0.05) !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

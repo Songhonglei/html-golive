@@ -1,0 +1,143 @@
+/* ============================================================
+   CSS风格：优雅紫梦幻风
+   字体：Inter + 系统字体（优雅、梦幻、高端女性向）
+   设计语言：浅薰衣草/藕白底，品紫强调，柔和紫调阴影，圆角偏大。
+            适合美妆/时尚/AI产品/女性向品牌。
+   ============================================================ */
+
+:root {
+    --dr-bg: #F6F2FB;            /* 极浅薰衣草底 */
+    --dr-surface: #FCFAFE;       /* 容器：近白带紫 */
+    --dr-card: #FFFFFF;          /* 卡片：纯白 */
+    --dr-accent: #8B5CF6;        /* 品紫（主强调）*/
+    --dr-accent2: #C084FC;       /* 浅紫（辅）*/
+    --dr-text: #2E2541;          /* 深紫灰字 */
+    --dr-muted: #7C7295;         /* 灰紫次要文字 */
+    --dr-border: rgba(139,92,246,0.15);
+    --dr-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--dr-accent);
+    --primary-light: rgba(139,92,246,0.12);
+    --surface: var(--dr-surface);
+    --bg-main: var(--dr-bg);
+    --text-main: var(--dr-text);
+    --text-muted: var(--dr-muted);
+    --border-color: var(--dr-border);
+}
+
+html, body {
+    background-color: var(--dr-bg) !important;
+    color: var(--dr-text) !important;
+    font-family: var(--dr-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(139,92,246,0.2) !important; }
+::-webkit-scrollbar { width: 5px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.28) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--dr-surface) !important;
+    border: 1px solid rgba(139,92,246,0.1) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 4px 28px rgba(139,92,246,0.1) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#8B5CF6,#C084FC) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.9) !important; border-radius: 10px !important; }
+[data-role="header-logo"] svg { fill: var(--dr-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--dr-ft) !important; font-weight: 700 !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.75) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--dr-text) !important;
+    font-family: var(--dr-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em { color: var(--dr-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--dr-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--dr-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--dr-card) !important;
+    border: 1px solid rgba(139,92,246,0.1) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 16px rgba(139,92,246,0.08) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 8px 28px rgba(139,92,246,0.2) !important;
+    transform: translateY(-3px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(139,92,246,0.1) !important; }
+
+[data-role="card-badge"] {
+    background: var(--dr-accent) !important;
+    color: #fff !important;
+    border-radius: 50% !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 10px rgba(139,92,246,0.4) !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--dr-accent) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--dr-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--dr-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(139,92,246,0.08) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--dr-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--dr-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(139,92,246,0.07) !important;
+    border-left: 3px solid var(--dr-accent) !important;
+    border-radius: 12px !important;
+}
+[data-role="footer"] strong { color: var(--dr-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--dr-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(139,92,246,0.12) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 14px !important; }
+    [data-role="card"] { border-radius: 12px !important; }
+}
+
+/* === 表格扩展 === 优雅紫 — 紫调线·梦幻配色 */
+[data-role="card-body"] { color: var(--dr-text) !important; font-family: var(--dr-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(139,92,246,0.15) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(139,92,246,0.1) !important;
+    color: var(--dr-text) !important;
+    font-family: var(--dr-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(139,92,246,0.18) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(139,92,246,0.08) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(139,92,246,0.05) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--dr-text) !important;
+    font-family: var(--dr-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(139,92,246,0.05) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

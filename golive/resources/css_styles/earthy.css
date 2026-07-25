@@ -1,0 +1,143 @@
+/* ============================================================
+   CSS风格：大地原木风
+   字体：Inter + 系统字体（温暖、治愈、自然质朴）
+   设计语言：米色/原木底，赤陶橙+橄榄棕强调，温暖柔和阴影，圆角中等。
+            适合生活方式/咖啡/民宿/手作。区别于 ink（文物水墨）与 newspaper（暗红学术）。
+   ============================================================ */
+
+:root {
+    --ea-bg: #F3ECE1;            /* 米色亚麻底 */
+    --ea-surface: #FAF5EC;       /* 容器：暖白 */
+    --ea-card: #FFFDF8;          /* 卡片：奶油白 */
+    --ea-accent: #B5683C;        /* 赤陶橙（主强调）*/
+    --ea-accent2: #8A8B5C;       /* 橄榄棕（辅）*/
+    --ea-text: #3D2E22;          /* 原木深褐字 */
+    --ea-muted: #8A7460;         /* 暖灰褐次要文字 */
+    --ea-border: rgba(61,46,34,0.13);
+    --ea-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--ea-accent);
+    --primary-light: rgba(181,104,60,0.13);
+    --surface: var(--ea-surface);
+    --bg-main: var(--ea-bg);
+    --text-main: var(--ea-text);
+    --text-muted: var(--ea-muted);
+    --border-color: var(--ea-border);
+}
+
+html, body {
+    background-color: var(--ea-bg) !important;
+    color: var(--ea-text) !important;
+    font-family: var(--ea-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(181,104,60,0.2) !important; }
+::-webkit-scrollbar { width: 5px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(61,46,34,0.2) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--ea-surface) !important;
+    border: 1px solid rgba(61,46,34,0.09) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 24px rgba(61,46,34,0.09) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#B5683C,#8A8B5C) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.88) !important; border-radius: 9px !important; }
+[data-role="header-logo"] svg { fill: var(--ea-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--ea-ft) !important; font-weight: 700 !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.72) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--ea-text) !important;
+    font-family: var(--ea-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em { color: var(--ea-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--ea-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--ea-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--ea-card) !important;
+    border: 1px solid rgba(61,46,34,0.08) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 14px rgba(61,46,34,0.07) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 6px 22px rgba(181,104,60,0.18) !important;
+    transform: translateY(-2px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(61,46,34,0.09) !important; }
+
+[data-role="card-badge"] {
+    background: var(--ea-accent) !important;
+    color: #fff !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 8px rgba(181,104,60,0.3) !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--ea-accent) !important;
+    border-radius: 7px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--ea-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--ea-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(61,46,34,0.08) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--ea-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--ea-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(181,104,60,0.07) !important;
+    border-left: 3px solid var(--ea-accent) !important;
+    border-radius: 10px !important;
+}
+[data-role="footer"] strong { color: var(--ea-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--ea-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(61,46,34,0.11) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 12px !important; }
+    [data-role="card"] { border-radius: 11px !important; }
+}
+
+/* === 表格扩展 === 大地原木 — 暖褐线·治愈配色 */
+[data-role="card-body"] { color: var(--ea-text) !important; font-family: var(--ea-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(61,46,34,0.13) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(181,104,60,0.1) !important;
+    color: var(--ea-text) !important;
+    font-family: var(--ea-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(61,46,34,0.15) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(61,46,34,0.07) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(181,104,60,0.05) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--ea-text) !important;
+    font-family: var(--ea-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(61,46,34,0.05) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

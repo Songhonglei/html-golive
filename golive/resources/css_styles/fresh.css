@@ -1,0 +1,143 @@
+/* ============================================================
+   CSS风格：清新自然绿风
+   字体：Inter + 系统字体（清新、有机、自然）
+   设计语言：浅薄荷/米白底，森林绿强调，柔和绿调阴影，圆角偏大，
+            自然清爽。适合健康/环保/教育/农业。
+   ============================================================ */
+
+:root {
+    --fr-bg: #F1F7F0;            /* 极浅薄荷底 */
+    --fr-surface: #FBFEFA;       /* 容器：近白带绿 */
+    --fr-card: #FFFFFF;          /* 卡片：纯白 */
+    --fr-accent: #2E9E5B;        /* 森林绿（主强调）*/
+    --fr-accent2: #6FB98F;       /* 浅草绿（辅）*/
+    --fr-text: #1F3A29;          /* 深墨绿字 */
+    --fr-muted: #6B8475;         /* 灰绿次要文字 */
+    --fr-border: rgba(46,158,91,0.14);
+    --fr-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--fr-accent);
+    --primary-light: rgba(46,158,91,0.12);
+    --surface: var(--fr-surface);
+    --bg-main: var(--fr-bg);
+    --text-main: var(--fr-text);
+    --text-muted: var(--fr-muted);
+    --border-color: var(--fr-border);
+}
+
+html, body {
+    background-color: var(--fr-bg) !important;
+    color: var(--fr-text) !important;
+    font-family: var(--fr-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(46,158,91,0.2) !important; }
+::-webkit-scrollbar { width: 5px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(46,158,91,0.28) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--fr-surface) !important;
+    border: 1px solid rgba(46,158,91,0.1) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 4px 26px rgba(46,158,91,0.08) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#2E9E5B,#6FB98F) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.9) !important; border-radius: 10px !important; }
+[data-role="header-logo"] svg { fill: var(--fr-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--fr-ft) !important; font-weight: 700 !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.72) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--fr-text) !important;
+    font-family: var(--fr-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em { color: var(--fr-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--fr-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--fr-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--fr-card) !important;
+    border: 1px solid rgba(46,158,91,0.09) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 14px rgba(46,158,91,0.07) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 6px 24px rgba(46,158,91,0.18) !important;
+    transform: translateY(-3px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(46,158,91,0.1) !important; }
+
+[data-role="card-badge"] {
+    background: var(--fr-accent) !important;
+    color: #fff !important;
+    border-radius: 50% !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 8px rgba(46,158,91,0.35) !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--fr-accent) !important;
+    border-radius: 7px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--fr-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--fr-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(46,158,91,0.08) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--fr-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--fr-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(46,158,91,0.07) !important;
+    border-left: 3px solid var(--fr-accent) !important;
+    border-radius: 10px !important;
+}
+[data-role="footer"] strong { color: var(--fr-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--fr-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(46,158,91,0.12) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 14px !important; }
+    [data-role="card"] { border-radius: 12px !important; }
+}
+
+/* === 表格扩展 === 清新绿 — 绿调线·清爽配色 */
+[data-role="card-body"] { color: var(--fr-text) !important; font-family: var(--fr-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(46,158,91,0.14) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(46,158,91,0.1) !important;
+    color: var(--fr-text) !important;
+    font-family: var(--fr-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(46,158,91,0.16) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(46,158,91,0.07) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(46,158,91,0.05) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--fr-text) !important;
+    font-family: var(--fr-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(46,158,91,0.05) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

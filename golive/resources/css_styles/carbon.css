@@ -1,0 +1,145 @@
+/* ============================================================
+   CSS风格：暗色极简风 (Carbon / Developer)
+   字体：Inter + 系统字体（低调、专业、开发者文档向）
+   设计语言：炭灰深底，单一冷调蓝绿强调（克制不张扬），细边框，圆角小。
+            适合开发者文档/技术博客/后台。区别于 cyberpunk(霓虹张扬)与
+            bloomberg(金融橙)——carbon 是"安静的暗色"。
+   注意：深色主题——禁止浅bg深字；table-header 用主色低饱和版+主色文字；
+        card-body 不加 background（保持容器底）。
+   ============================================================ */
+
+:root {
+    --cb-bg: #14161A;            /* 炭灰深底 */
+    --cb-surface: #1A1D23;       /* 容器：略亮炭灰 */
+    --cb-card: #20242B;          /* 卡片：再亮一档 */
+    --cb-accent: #4FB8C4;        /* 冷调蓝绿（主强调，克制）*/
+    --cb-accent2: #6CCFA8;       /* 薄荷绿（辅）*/
+    --cb-text: #D6DAE0;          /* 浅灰字（深底上清晰）*/
+    --cb-muted: #8A929E;         /* 灰蓝次要文字 */
+    --cb-border: rgba(255,255,255,0.09);
+    --cb-ft: "Inter","SF Mono","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--cb-accent);
+    --primary-light: rgba(79,184,196,0.15);
+    --surface: var(--cb-surface);
+    --bg-main: var(--cb-bg);
+    --text-main: var(--cb-text);
+    --text-muted: var(--cb-muted);
+    --border-color: var(--cb-border);
+}
+
+html, body {
+    background-color: var(--cb-bg) !important;
+    color: var(--cb-text) !important;
+    font-family: var(--cb-ft) !important;
+    line-height: 1.65 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(79,184,196,0.3) !important; }
+::-webkit-scrollbar { width: 6px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--cb-surface) !important;
+    border: 1px solid var(--cb-border) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#1A1D23,#252A32) !important;
+    border-bottom: 1px solid var(--cb-border) !important;
+}
+[data-role="header-logo"] { background: var(--cb-accent) !important; border-radius: 7px !important; }
+[data-role="header-logo"] svg { fill: #14161A !important; }
+[data-role="header-title"] { color: var(--cb-text) !important; font-family: var(--cb-ft) !important; font-weight: 600 !important; }
+[data-role="header-meta"] { color: var(--cb-muted) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--cb-text) !important;
+    font-family: var(--cb-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em { color: var(--cb-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--cb-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--cb-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--cb-card) !important;
+    border: 1px solid var(--cb-border) !important;
+    border-radius: 9px !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
+    transition: border-color 0.2s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    border-color: rgba(79,184,196,0.5) !important;
+    transform: translateY(-2px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid var(--cb-border) !important; }
+
+[data-role="card-badge"] {
+    background: var(--cb-accent) !important;
+    color: #14161A !important;
+    border-radius: 7px !important;
+    font-weight: 700 !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--cb-accent) !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--cb-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--cb-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid var(--cb-border) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--cb-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--cb-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(79,184,196,0.07) !important;
+    border-left: 3px solid var(--cb-accent) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong { color: var(--cb-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--cb-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: var(--cb-border) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 8px !important; }
+    [data-role="card"] { border-radius: 8px !important; }
+}
+
+/* === 表格扩展 === Carbon — 深底细线·主色表头(暗色对比度安全) */
+[data-role="card-body"] { color: var(--cb-text) !important; font-family: var(--cb-ft) !important; line-height: 1.65 !important; }
+[data-role="data-table"] {
+    border: 1px solid var(--cb-border) !important;
+    border-radius: 9px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(79,184,196,0.14) !important;
+    color: var(--cb-accent) !important;
+    font-family: var(--cb-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid var(--cb-border) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid var(--cb-border) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(79,184,196,0.06) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--cb-text) !important;
+    font-family: var(--cb-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid var(--cb-border) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

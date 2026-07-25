@@ -1,0 +1,142 @@
+/* ============================================================
+   CSS风格：莫兰迪高级灰风
+   字体：Inter + 系统字体（低饱和、高级灰、留白克制）
+   设计语言：低饱和大地灰调（灰蓝/灰绿/藕粉），柔和阴影，圆角中等，
+            无强对比，整体安静高级。强调色为灰调蓝绿（莫兰迪青）。
+   ============================================================ */
+
+:root {
+    --mo-bg: #E8E4DD;            /* 暖灰米底 */
+    --mo-surface: #F4F1EC;       /* 容器：更亮的灰白 */
+    --mo-card: #FBFAF7;          /* 卡片：近白暖灰 */
+    --mo-accent: #7C8B7E;        /* 莫兰迪灰绿（主强调）*/
+    --mo-accent2: #9A8C82;       /* 莫兰迪灰褐（辅）*/
+    --mo-text: #4A453E;          /* 灰褐深字（非纯黑）*/
+    --mo-muted: #94897C;         /* 灰调次要文字 */
+    --mo-border: rgba(74,69,62,0.12);
+    --mo-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--mo-accent);
+    --primary-light: rgba(124,139,126,0.14);
+    --surface: var(--mo-surface);
+    --bg-main: var(--mo-bg);
+    --text-main: var(--mo-text);
+    --text-muted: var(--mo-muted);
+    --border-color: var(--mo-border);
+}
+
+html, body {
+    background-color: var(--mo-bg) !important;
+    color: var(--mo-text) !important;
+    font-family: var(--mo-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(124,139,126,0.22) !important; }
+::-webkit-scrollbar { width: 5px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(74,69,62,0.18) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--mo-surface) !important;
+    border: 1px solid rgba(74,69,62,0.08) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 24px rgba(74,69,62,0.07) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(135deg,#7C8B7E,#9A8C82) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.85) !important; border-radius: 9px !important; }
+[data-role="header-logo"] svg { fill: var(--mo-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--mo-ft) !important; font-weight: 600 !important; letter-spacing: 0.01em !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.7) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--mo-text) !important;
+    font-family: var(--mo-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em { color: var(--mo-accent) !important; font-style: normal !important; }
+[data-role="page-subtitle"] { color: var(--mo-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--mo-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--mo-card) !important;
+    border: 1px solid rgba(74,69,62,0.07) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 14px rgba(74,69,62,0.06) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 6px 22px rgba(124,139,126,0.16) !important;
+    transform: translateY(-2px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(74,69,62,0.08) !important; }
+
+[data-role="card-badge"] {
+    background: var(--mo-accent) !important;
+    color: #fff !important;
+    border-radius: 9px !important;
+    font-weight: 700 !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--mo-accent) !important;
+    border-radius: 7px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--mo-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--mo-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(74,69,62,0.07) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--mo-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--mo-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(124,139,126,0.08) !important;
+    border-left: 3px solid var(--mo-accent) !important;
+    border-radius: 10px !important;
+}
+[data-role="footer"] strong { color: var(--mo-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--mo-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(74,69,62,0.1) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 12px !important; }
+    [data-role="card"] { border-radius: 11px !important; }
+}
+
+/* === 表格扩展 === 莫兰迪 — 灰调线·安静配色 */
+[data-role="card-body"] { color: var(--mo-text) !important; font-family: var(--mo-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(74,69,62,0.12) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(124,139,126,0.12) !important;
+    color: var(--mo-text) !important;
+    font-family: var(--mo-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(74,69,62,0.14) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(74,69,62,0.07) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(124,139,126,0.06) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--mo-text) !important;
+    font-family: var(--mo-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(74,69,62,0.05) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

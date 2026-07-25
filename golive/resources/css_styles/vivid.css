@@ -1,0 +1,152 @@
+/* ============================================================
+   CSS风格：活力渐变风 (Vivid Gradient)
+   字体：Inter + 系统字体（潮流、年轻、大胆）
+   设计语言：浅底 + 大胆紫粉橙渐变强调（Stripe/Linear 风），渐变 header/badge，
+            彩色光晕阴影，圆角中大。适合创业/活动/年轻品牌/产品发布页。
+   注意：浅色主题；渐变只用于 header/badge/强调元素，正文区保持浅底深字保证可读。
+   ============================================================ */
+
+:root {
+    --vv-bg: #FBF9FF;            /* 极浅紫白底 */
+    --vv-surface: #FFFFFF;       /* 容器：纯白 */
+    --vv-card: #FFFFFF;          /* 卡片：纯白 */
+    --vv-accent: #7C3AED;        /* 主紫（强调，渐变起点）*/
+    --vv-accent2: #EC4899;       /* 品粉（渐变中点）*/
+    --vv-accent3: #F97316;       /* 活力橙（渐变终点）*/
+    --vv-text: #1E1B2E;          /* 深靛字 */
+    --vv-muted: #6B6480;         /* 灰靛次要文字 */
+    --vv-border: rgba(124,58,237,0.14);
+    --vv-grad: linear-gradient(120deg,#7C3AED 0%,#EC4899 55%,#F97316 100%);
+    --vv-ft: "Inter","PingFang SC","Helvetica Neue",sans-serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--vv-accent);
+    --primary-light: rgba(124,58,237,0.12);
+    --surface: var(--vv-surface);
+    --bg-main: var(--vv-bg);
+    --text-main: var(--vv-text);
+    --text-muted: var(--vv-muted);
+    --border-color: var(--vv-border);
+}
+
+html, body {
+    background-color: var(--vv-bg) !important;
+    color: var(--vv-text) !important;
+    font-family: var(--vv-ft) !important;
+    line-height: 1.6 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(124,58,237,0.2) !important; }
+::-webkit-scrollbar { width: 6px !important; background: transparent !important; }
+::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.32) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--vv-surface) !important;
+    border: 1px solid rgba(124,58,237,0.1) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 8px 36px rgba(124,58,237,0.12) !important;
+}
+
+[data-role="header"] {
+    background: var(--vv-grad) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(255,255,255,0.92) !important; border-radius: 11px !important; }
+[data-role="header-logo"] svg { fill: var(--vv-accent) !important; }
+[data-role="header-title"] { color: #fff !important; font-family: var(--vv-ft) !important; font-weight: 700 !important; }
+[data-role="header-meta"] { color: rgba(255,255,255,0.82) !important; font-size: 0.8em !important; }
+
+[data-role="page-title"] {
+    color: var(--vv-text) !important;
+    font-family: var(--vv-ft) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.2 !important;
+}
+[data-role="page-title"] em {
+    background: var(--vv-grad) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    font-style: normal !important;
+}
+[data-role="page-subtitle"] { color: var(--vv-muted) !important; line-height: 1.65 !important; }
+[data-role="page-subtitle"] strong { color: var(--vv-accent) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--vv-card) !important;
+    border: 1px solid rgba(124,58,237,0.1) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 20px rgba(124,58,237,0.08) !important;
+    transition: box-shadow 0.25s, transform 0.2s !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 10px 32px rgba(236,72,153,0.2) !important;
+    transform: translateY(-3px) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(124,58,237,0.1) !important; }
+
+[data-role="card-badge"] {
+    background: var(--vv-grad) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 12px rgba(124,58,237,0.4) !important;
+}
+[data-role="item-badge"] {
+    background: var(--primary-light) !important;
+    color: var(--vv-accent) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+}
+[data-role="card-title"] { color: var(--vv-text) !important; font-weight: 600 !important; line-height: 1.4 !important; }
+[data-role="card-label"] { color: var(--vv-muted) !important; font-size: 0.78em !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(124,58,237,0.08) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+[data-role="item-title"] { color: var(--vv-text) !important; font-weight: 500 !important; line-height: 1.45 !important; }
+[data-role="item-desc"] { color: var(--vv-muted) !important; font-size: 0.84em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(124,58,237,0.06) !important;
+    border-left: 3px solid var(--vv-accent) !important;
+    border-radius: 12px !important;
+}
+[data-role="footer"] strong { color: var(--vv-accent) !important; font-weight: 600 !important; }
+[data-role="footer"] p { color: var(--vv-muted) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: rgba(124,58,237,0.12) !important; }
+
+@media (max-width: 768px) {
+    [data-role="container"] { border-radius: 16px !important; }
+    [data-role="card"] { border-radius: 13px !important; }
+}
+
+/* === 表格扩展 === 活力渐变 — 紫调线·潮流配色 */
+[data-role="card-body"] { color: var(--vv-text) !important; font-family: var(--vv-ft) !important; line-height: 1.6 !important; }
+[data-role="data-table"] {
+    border: 1px solid rgba(124,58,237,0.14) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-role="table-header"] {
+    background: rgba(124,58,237,0.1) !important;
+    color: var(--vv-accent) !important;
+    font-family: var(--vv-ft) !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+    border-bottom: 1px solid rgba(124,58,237,0.18) !important;
+}
+[data-role="table-row"] { border-bottom: 1px solid rgba(124,58,237,0.08) !important; transition: background 0.15s !important; }
+[data-role="table-row"]:hover { background: rgba(124,58,237,0.05) !important; }
+[data-role="table-row"]:last-child { border-bottom: none !important; }
+[data-role="table-cell"] {
+    color: var(--vv-text) !important;
+    font-family: var(--vv-ft) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid rgba(124,58,237,0.05) !important;
+}
+[data-role="table-cell"]:last-child { border-right: none !important; }

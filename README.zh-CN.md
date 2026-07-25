@@ -32,6 +32,9 @@ golive serve
 - [Docker](#docker)
 - [路线图](#路线图)
 
+> 📖 **完整用户手册**：[docs/manual.md](docs/manual.md)（英文）—— 按任务组织
+> 的全功能指南：发布、在线编辑、权限、数据、安全、身份登录、迁移、FAQ。
+
 ## 为什么选 html-golive
 
 - **一条命令，一个 URL。** 不用构建、不用写服务端、不用云账号。

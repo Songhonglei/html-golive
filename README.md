@@ -32,6 +32,10 @@ golive serve
 - [Docker](#docker)
 - [Roadmap](#roadmap)
 
+> 📖 **Full user manual**: [docs/manual.md](docs/manual.md) — every feature,
+> organised by task (publishing, editor, access control, data, security,
+> identity, migration, FAQ).
+
 ## Why html-golive
 
 - **One command, one URL.** No build step, no server code, no cloud

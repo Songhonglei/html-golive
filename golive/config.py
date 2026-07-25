@@ -305,13 +305,32 @@ def _build(raw: dict, source_path: str) -> Config:
     cfg.auth.provider = str(_get(raw, "auth", "provider", default="none") or "none").lower()
     cfg.auth.token = str(_get(raw, "auth", "token", default="") or "")
     au = cfg.auth
-    au.oidc_issuer = str(_get(raw, "auth", "oidc", "issuer", default="") or "").rstrip("/")
+    # OIDC preset: fills public fields (issuer template, scopes) for a
+    # named IdP; explicit auth.oidc.* below always override the preset.
+    _preset_name = str(_get(raw, "auth", "oidc", "preset", default="") or "").strip()
+    _preset: dict = {}
+    if _preset_name:
+        from golive.backends.auth.presets import resolve_preset
+        try:
+            _preset = resolve_preset(
+                _preset_name,
+                domain=str(_get(raw, "auth", "oidc", "domain", default="") or ""),
+                tenant=str(_get(raw, "auth", "oidc", "tenant", default="") or ""),
+                realm=str(_get(raw, "auth", "oidc", "realm", default="") or ""),
+            )
+        except ValueError as e:
+            raise ConfigError(str(e))
+    au.oidc_issuer = str(
+        _get(raw, "auth", "oidc", "issuer", default="")
+        or _preset.get("issuer", "")
+    ).rstrip("/")
     au.oidc_client_id = str(_get(raw, "auth", "oidc", "client_id", default="") or "")
     au.oidc_client_secret_env = str(_get(raw, "auth", "oidc", "client_secret_env",
                                          default=au.oidc_client_secret_env))
     au.oidc_redirect_uri = str(_get(raw, "auth", "oidc", "redirect_uri", default="") or "")
     au.oidc_scopes = str(_get(raw, "auth", "oidc", "scopes",
-                              default=au.oidc_scopes) or au.oidc_scopes)
+                              default=_preset.get("scopes", "") or au.oidc_scopes)
+                         or _preset.get("scopes", "") or au.oidc_scopes)
     try:
         au.oidc_session_ttl = int(_get(raw, "auth", "oidc", "session_ttl",
                                        default=au.oidc_session_ttl))

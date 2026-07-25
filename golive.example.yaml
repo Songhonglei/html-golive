@@ -80,6 +80,16 @@ auth:
   #    discovery document. client_secret NEVER lives here: set the env var
   #    named by client_secret_env (default GOLIVE_OIDC_CLIENT_SECRET).
   # oidc:
+  #   # ── Quickest: use a preset (fills issuer + scopes for you) ──────
+  #   #   preset: google        # then only client_id + secret env needed
+  #   #   preset: auth0         # + domain: your-tenant.us.auth0.com
+  #   #   preset: okta          # + domain: your-org.okta.com
+  #   #   preset: azure         # + tenant: <tenant-id> | organizations | common
+  #   #   preset: keycloak      # + your own issuer: (preset only sets scopes)
+  #   #   preset: authentik     # + your own issuer:
+  #   # client_id: golive
+  #   #
+  #   # ── Or configure fully by hand ─────────────────────────────────
   #   # Example A — Google
   #   issuer: https://accounts.google.com
   #   client_id: 1234567890-abc.apps.googleusercontent.com

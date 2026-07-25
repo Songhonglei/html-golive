@@ -7,6 +7,8 @@ clone_fetcher.py — 抓取引擎
   fetch_site(url, url_type, use_headless=False) -> dict
 """
 
+from __future__ import annotations
+
 import base64
 import mimetypes
 import os

@@ -15,6 +15,8 @@ Public API:
   ai_review(candidates, html) -> NotImplemented stub (M3)
 """
 
+from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path

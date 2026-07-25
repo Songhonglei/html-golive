@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-audit_log.py — html-go-live 本地审计日志模块
+audit_log.py — golive 本地审计日志模块
 
-日志路径：{workspace}/.log/html-go-live/（workspace 由 workspace_resolver 解析）
-  - html-go-live.log       当日日志（不存在时自动创建）
-  - html-go-live.YYYY-MM-DD.log  历史日志（懒触发按天归档）
+日志路径：$GOLIVE_HOME/logs/
+  - golive.log             当日日志（不存在时自动创建）
+  - golive.YYYY-MM-DD.log  历史日志（懒触发按天归档）
   - errors.log             失败记录汇总，90天有效期，不自动删除
 
 用法：
     # 方式一：直接调用
-    from audit_log import log_call
+    from golive.core.audit_log import log_call
     log_call(
-        operation="htmlToDoc",
-        endpoint="https://...",
+        operation="publish",
+        endpoint="local",
         params={"name": "xxx", "htmlSize": 1024},
         success=True,
         duration_ms=800,
@@ -20,10 +20,12 @@ audit_log.py — html-go-live 本地审计日志模块
     )
 
     # 方式二：上下文管理器（自动计时，异常自动记录后继续上抛）
-    with AuditLogger("createTemplate", endpoint=BASE_URL, params={...}) as ctx:
-        result = post(...)
+    with AuditLogger("publish", endpoint="local", params={...}) as ctx:
+        result = do_publish(...)
         ctx.set_result(result)
 """
+
+from __future__ import annotations
 
 import datetime
 import json

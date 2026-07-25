@@ -5,6 +5,8 @@ clone_patcher.py — HTML 克隆后处理补丁器
 只依赖标准库，不需要 bs4。
 """
 
+from __future__ import annotations
+
 import re
 import sys
 from datetime import datetime, timezone

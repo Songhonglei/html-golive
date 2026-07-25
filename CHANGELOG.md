@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] - 2026-07-25
+
+### Added
+- 8 more built-in CSS styles — newspaper, bloomberg, ink, steampunk,
+  palace, cyberpunk, xhs, xhs-fun — bringing the total to 19. Web fonts
+  are loaded from Google Fonts (CSS2 API).
+- `GOLIVE_FONT_CDN_BASE` env / `style.font_cdn_base` config: swap the
+  `fonts.googleapis.com` prefix for a custom font mirror at injection
+  time (e.g. `fonts.loli.net` or a self-hosted service).
+- Custom image uploader: `GOLIVE_UPLOADER_CMD` env /
+  `uploader.command` config runs any CLI (`mytool upload {file}`) to
+  upload bundled images and reference the returned URL; failures fall
+  back to base64 inlining so publishes never break. Native S3 uploader
+  reserved for M2.
+
+### Fixed
+- `from __future__ import annotations` added to modules using PEP 604
+  unions, restoring the documented Python 3.9 compatibility.
+- tar.gz extraction now guards against path-traversal members
+  (`filter="data"` on Python ≥ 3.12, manual check on older versions).
+- Preview panel style labels are now sourced from the canonical
+  `STYLE_MAP` (new styles show up automatically).
+
 ## [0.1.0] - 2026-07-25
 
 First public release — "M1 core": zero-config single-machine deployment.

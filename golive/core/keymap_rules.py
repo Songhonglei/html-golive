@@ -13,6 +13,8 @@ keymap_rules.py — 中文 chart_name → 业务 key 规则映射
 如果需要更高质量的命名，用户可通过 --bi-key-map 显式指定。
 """
 
+from __future__ import annotations
+
 # 域前缀（业务域）—— 出现在 chart_name 里就给个英文前缀
 # 顺序无关，只匹配第一个命中的
 DOMAIN_PREFIX: list[tuple[str, str]] = [

@@ -14,21 +14,21 @@ css_style_enhancer.py — CSS 风格增强模块
   python3 css_style_enhancer.py --clean
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 # data-role 自动标注模块（bs4 缺失时降级）
 try:
     from golive.core.data_role_tagger import tag_html as _tag_html
 except Exception:
     _tag_html = None
-import shutil
-import sys
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 
 STYLES_DIR = Path(__file__).parent.parent / "resources" / "css_styles"
 from golive.core.paths import get_data_dir as _get_data_dir

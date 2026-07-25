@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "html-golive"
-version = "0.1.0"
+version = "0.1.1"
 description = "Self-hosted one-command HTML deployment — Vercel-lite for your intranet."
 readme = "README.md"
 requires-python = ">=3.9"

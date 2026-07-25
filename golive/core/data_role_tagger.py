@@ -63,6 +63,8 @@ data-role 语义标签：
   divider      — 分隔线
 """
 
+from __future__ import annotations
+
 import re
 from bs4 import BeautifulSoup, Tag
 

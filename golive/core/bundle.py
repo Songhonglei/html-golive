@@ -15,6 +15,8 @@ bundle.py — 将多文件 Web 项目打包成单个自包含 HTML 文件。
   python3 bundle.py --dir ./my-project --no-image-upload  # 图片降级为 Base64
 """
 
+from __future__ import annotations
+
 import argparse
 import base64
 import json

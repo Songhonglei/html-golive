@@ -19,6 +19,8 @@ Behaviour:
     never fail because an uploader misbehaves
 """
 
+from __future__ import annotations
+
 import os
 import shlex
 import subprocess

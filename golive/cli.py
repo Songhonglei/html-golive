@@ -61,7 +61,17 @@ def _load_source_html(source: str, entry: str = "") -> str:
             else:
                 import tarfile
                 with tarfile.open(p) as tf:
-                    tf.extractall(tmp_dir)
+                    try:
+                        tf.extractall(tmp_dir, filter="data")  # Py>=3.12 / backports
+                    except TypeError:  # older Python: manual traversal guard
+                        base = tmp_dir.resolve()
+                        for m in tf.getmembers():
+                            target = (base / m.name).resolve()
+                            if not str(target).startswith(str(base)):
+                                print(f"❌ 压缩包含非法路径成员：{m.name}",
+                                      file=sys.stderr)
+                                sys.exit(1)
+                        tf.extractall(tmp_dir)
             # single top-level dir? descend
             children = [c for c in tmp_dir.iterdir() if not c.name.startswith("__MACOSX")]
             root = children[0] if len(children) == 1 and children[0].is_dir() else tmp_dir

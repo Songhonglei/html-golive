@@ -11,6 +11,8 @@ preview_server.py - golive 本地预览服务
     golive preview --site <id|slug> [--css-style minimal]
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import http.server

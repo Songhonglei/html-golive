@@ -3,8 +3,7 @@
 > **Self-hosted one-command HTML deployment — Vercel-lite for your intranet.**
 
 Turn any HTML file, project folder or zip archive into a shareable URL on
-your own machine, NAS, VPS or intranet server. Zero config to start: local
-storage + SQLite registry + built-in HTTP server.
+your own machine, NAS, VPS or intranet server.
 
 ```bash
 pip install html-golive
@@ -12,60 +11,109 @@ pip install html-golive
 golive publish report.html --name "Q3 Report" --slug q3
 # ✅ Published → http://localhost:8787/q3
 
-golive serve            # start the built-in server
+golive serve
+```
+
+**Zero config to start** — local storage + SQLite + built-in server.
+**Grows with you** — swap in Supabase or any S3-compatible backend
+(MinIO / Tencent COS / Aliyun OSS / Volcengine TOS) with one yaml file.
+
+---
+
+## Table of contents
+
+- [Why html-golive](#why-html-golive)
+- [Quickstart](#quickstart)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Data layer](#data-layer-give-static-pages-a-database)
+- [Security scanning](#security-scanning)
+- [Docker](#docker)
+- [Roadmap](#roadmap)
+
+## Why html-golive
+
+- **One command, one URL.** No build step, no server code, no cloud
+  account. `golive publish` → share the link.
+- **Everything becomes a single file.** Folders and zips are bundled —
+  CSS/JS inlined, images compressed and embedded (or uploaded through
+  your own image host).
+- **Static pages, real data.** Publish a plain HTML file that reads and
+  writes a real database via `window.TemplateAPI` /
+  `window.SupabaseAPI` — no backend code required.
+- **Own your stack.** Runs entirely on your infrastructure. No outbound
+  calls at publish/serve time ([details](#network-behavior)).
+- **Production habits built in.** Slug collision checks, 10-snapshot
+  rollback, credential/PII scanning on every publish, audit log.
+
+## Quickstart
+
+### 1 · Install
+
+```bash
+pip install html-golive              # core
+pip install 'html-golive[image]'     # + image compression (Pillow)
+pip install 'html-golive[s3]'        # + S3-compatible backends (boto3)
+```
+
+### 2 · Publish
+
+```bash
+golive publish index.html --name Demo --slug demo
+golive publish ./my-project/ --slug app      # folder → bundled single HTML
+golive publish site.zip                      # zip / tar.gz work too
+golive publish page.html --style apple       # apply one of 19 CSS styles
+```
+
+### 3 · Serve
+
+```bash
+golive serve --port 8787
+# → http://<your-host>:8787/demo
+```
+
+### Everyday commands
+
+```bash
+golive list                                  # all published sites
+golive publish new.html --update demo        # overwrite update
+golive rollback demo --dry-run               # inspect snapshots, then --yes
+golive preview draft.html                    # live preview + style panel
+golive clone https://example.com --save-only # snapshot a public page
+golive styles                                # list the 19 CSS styles
+golive doctor                                # environment health check
 ```
 
 ## Features
 
-| Feature | Status |
-|---|---|
-| Publish single HTML / directory / zip | ✅ v0.1 |
-| Asset bundling (CSS/JS/images inlined into one file) | ✅ v0.1 |
-| Base64 image compression (`--compress`, Pillow) | ✅ v0.1 |
-| 19 built-in CSS beautification styles (`--style`) | ✅ v0.1 |
-| Short slugs with reserved-word & collision checks | ✅ v0.1 |
-| Rollback (10 snapshots per site) | ✅ v0.1 |
-| Security scan (credentials / PII rules, YAML-extensible) | ✅ v0.1 |
-| Website cloning (`golive clone <url>`, headless option) | ✅ v0.1 |
-| Live preview with style-switch panel (`golive preview`) | ✅ v0.1 |
-| Built-in static server + JSON API (`golive serve`) | ✅ v0.1 |
-| Health check (`golive doctor`) | ✅ v0.1 |
-| `golive.yaml` config loader (env-first, `--config`) | ✅ v0.2 |
-| Data layer: Supabase/PostgREST backed `window.TemplateAPI` / `window.SupabaseAPI` | ✅ v0.2 |
-| Supabase backends: storage bucket + registry table + data layer | ✅ v0.2 |
-| S3-compatible storage & image uploader (MinIO/COS/OSS/TOS) | ✅ v0.2 |
-| Migration checker for intranet-built pages (`golive migrate-check`) | ✅ v0.2 |
-| Docker Compose deployment (+ optional MinIO profile) | ✅ v0.2 |
-| In-browser inline editor with save API | 🚧 M3 |
-| Watermark & optional LLM security review | 🚧 M3 |
-| Token / OAuth auth providers | 🚧 M3 (token basics already in v0.1 serve mode) |
+**Publishing & content**
+- Single HTML / directory / zip / tar.gz publishing with asset bundling
+- 19 built-in CSS beautification styles (`--style`, custom font CDN via
+  `GOLIVE_FONT_CDN_BASE`)
+- Image compression (`--compress`) and pluggable image upload
+  (`GOLIVE_UPLOADER_CMD` command template, or native S3 uploader)
+- Website cloning (`golive clone <url>`) with static snapshot mode
 
-## Quickstart
+**Operations**
+- Short slugs with reserved-word and collision checks
+- Rollback with 10 snapshots per site
+- Built-in static server with JSON API and health endpoint
+- Live preview with hot reload and style-switch panel
+- `golive doctor` environment diagnostics, audit log
 
-```bash
-# 1. install
-pip install html-golive          # add [image] extra for compression:
-                                 # pip install 'html-golive[image]'
+**Data & backends** *(v0.2)*
+- `window.TemplateAPI` / `window.SupabaseAPI` injection — static pages
+  get a real database with zero backend code
+- Storage / registry / data backends: local + SQLite (default),
+  Supabase (one project covers all three), S3-compatible object storage
+- `golive migrate-check` — port pages from other golive deployments
+- Docker Compose deployment (+ optional MinIO profile)
 
-# 2. publish anything
-golive publish index.html --name Demo --slug demo
-golive publish ./my-project/ --slug app      # folder → bundled single HTML
-golive publish site.zip                      # zip/tar.gz works too
-
-# 3. serve
-golive serve --port 8787
-# → http://<your-host>:8787/demo
-
-# manage
-golive list
-golive publish new.html --update demo        # overwrite update
-golive rollback demo --dry-run               # inspect snapshots
-golive rollback demo --yes                   # restore latest snapshot
-golive clone https://example.com --save-only # clone a public page
-golive preview draft.html                    # live preview w/ hot reload
-golive styles                                # list CSS styles
-golive doctor                                # health check
-```
+**Safety**
+- Credential / PII scanning on every publish (YAML-extensible rules)
+- Path-traversal-hardened server and archive extraction
+- Token-protected management API (`GOLIVE_TOKEN`)
 
 ## Architecture
 
@@ -96,62 +144,76 @@ All data lives under `GOLIVE_HOME` (default `~/.golive/`):
 
 ## Configuration
 
-Everything works with zero config. Optional knobs:
+Everything works with zero config. Two layers of knobs, **env always
+wins over yaml**:
 
-- `GOLIVE_HOME` — data directory (default `~/.golive/`)
-- `GOLIVE_TOKEN` — when set, `/api/sites` requires
-  `Authorization: Bearer <token>` (or `X-Golive-Token`)
-- `GOLIVE_FONT_CDN_BASE` — replace the `https://fonts.googleapis.com`
-  prefix in injected CSS styles with your own font mirror
-  (e.g. `https://fonts.loli.net` or a self-hosted font service)
-- `GOLIVE_UPLOADER_CMD` — custom image-upload command template
-  (e.g. `mytool upload {file}`); when set, bundled images are uploaded
-  through it instead of being inlined as base64 — see
-  [docs/backends.md](docs/backends.md#imageuploader)
-- `FIRECRAWL_API_KEY` — optional fallback fetcher for `golive clone`
-  when a page is heavily JS-rendered; unset by default (no external
-  calls unless you configure it)
-- `golive.yaml` — backend selection & rule extensions, see
-  [golive.example.yaml](golive.example.yaml). Lookup order:
-  `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
-  `$GOLIVE_HOME/golive.yaml`; env vars always win over yaml
-- `GOLIVE_SUPABASE_URL` / `GOLIVE_SUPABASE_ANON_KEY` /
-  `GOLIVE_SUPABASE_SERVICE_KEY` — Supabase backends
-  ([docs/backends.md](docs/backends.md))
-- `GOLIVE_S3_AK` / `GOLIVE_S3_SK` — S3 backends
-  (`pip install 'html-golive[s3]'`)
+### golive.yaml (backend selection)
 
-**Network behavior**: golive makes no outbound calls at publish/serve time.
-Exceptions: `golive clone <url>` fetches the target page; `golive preview`
-downloads a one-time Tailwind CSS cache from `cdn.tailwindcss.com` on first
-run (fails silently and degrades if offline); injected styles reference
-public font CDNs (override with `GOLIVE_FONT_CDN_BASE`); your own
-`GOLIVE_UPLOADER_CMD`, if configured.
+Lookup order: `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
+`$GOLIVE_HOME/golive.yaml`. Full annotated example:
+[golive.example.yaml](golive.example.yaml) · backend combinations:
+[docs/backends.md](docs/backends.md)
 
-## Security scanning
+### Environment variables
 
-Every publish is scanned against built-in rules (API keys, private keys,
-database connection strings, PII patterns). Strong hits block the publish;
-weak hits warn. Extend rules with your own YAML file, or bypass a false
-positive with `--skip-scan`.
+| Variable | Purpose |
+|---|---|
+| `GOLIVE_HOME` | data directory (default `~/.golive/`) |
+| `GOLIVE_TOKEN` | protect `/api/sites` (Bearer or `X-Golive-Token`) |
+| `GOLIVE_FONT_CDN_BASE` | swap `fonts.googleapis.com` for your font mirror |
+| `GOLIVE_UPLOADER_CMD` | image-upload command template (`mytool up {file}`) |
+| `GOLIVE_SUPABASE_URL` / `_ANON_KEY` / `_SERVICE_KEY` | Supabase backends |
+| `GOLIVE_S3_AK` / `GOLIVE_S3_SK` | S3-compatible backends |
+| `FIRECRAWL_API_KEY` | optional JS-heavy-page fallback for `golive clone` |
 
-## Data layer (v0.2)
+### Network behavior
 
-Give static pages real persistence backed by your own Supabase project —
-no server code:
+golive makes **no outbound calls** at publish/serve time. Exceptions:
+`golive clone <url>` fetches the target page; `golive preview` downloads
+a one-time Tailwind cache from `cdn.tailwindcss.com` on first run (fails
+silently offline); injected styles reference public font CDNs
+(override with `GOLIVE_FONT_CDN_BASE`); your own uploader command and
+configured backends.
+
+## Data layer: give static pages a database
+
+Backed by your own Supabase project — no server code:
 
 ```bash
-golive db init --print-sql              # create tables in Supabase SQL editor
+golive db init --print-sql              # paste into Supabase SQL editor
 golive publish app.html --data-model myapp_v1
 ```
 
-Pages call `window.TemplateAPI` (namespaced record store: list / listAll /
-get / create / update / delete / sort / upsert) or `window.SupabaseAPI`
-(direct table access: query / insert / update / delete). Signatures are
-stable contracts — pages built on other golive deployments run unchanged.
-Full guide with RLS warnings: [docs/data-layer.md](docs/data-layer.md).
-Moving pages off an intranet deployment? `golive migrate-check page.html`
-reports anything deployment-specific ([guide](docs/migrate-from-intranet.md)).
+Your page then simply calls:
+
+```js
+// namespaced record store
+await TemplateAPI.upsert({ templateName: 'vote:alice', templateContent: {n: 1} });
+const { total, list } = await TemplateAPI.listAll();
+
+// or direct table access
+const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
+```
+
+API signatures are **stable contracts** — pages built on any golive
+deployment run unchanged on yours. Guide with RLS security notes:
+[docs/data-layer.md](docs/data-layer.md).
+
+> **Note**: if no data backend is configured, `--data-model` publishes
+> still succeed — the page gets a stub API that raises a clear
+> "data backend not configured" error at call time (a warning is also
+> printed at publish time).
+
+Porting pages from another deployment?
+`golive migrate-check page.html` reports anything deployment-specific
+([migration guide](docs/migrate-from-intranet.md)).
+
+## Security scanning
+
+Every publish is scanned against built-in rules — API keys, private
+keys, database connection strings, PII patterns. Strong hits block the
+publish; weak hits warn. Extend with your own YAML rules, or bypass a
+false positive with `--skip-scan`. Details: [docs/security.md](docs/security.md)
 
 ## Docker
 
@@ -165,8 +227,8 @@ docker compose --profile minio up -d        # + local S3 stack for images
 - ~~**M1 — core**: publish/serve/rollback, styles, clone, preview, scan~~ ✅ v0.1
 - ~~**M2 — data layer**: Supabase backend trio, TemplateAPI/SupabaseAPI
   injection, S3 adapters, migrate-check, Docker Compose~~ ✅ v0.2
-- **M3 — editing & beyond**: in-browser inline editor with versioned save API,
-  watermarking, optional OpenAI-compatible LLM security review, OAuth.
+- **M3 — editing & beyond**: in-browser inline editor with versioned save
+  API, watermarking, optional OpenAI-compatible LLM security review, OAuth.
 
 ## License
 

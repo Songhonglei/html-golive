@@ -3,8 +3,7 @@
 > **自部署的一键 HTML 发布工具 —— 你的内网 Vercel-lite。**
 
 一条命令把 HTML 文件、项目文件夹或压缩包变成可分享的 URL，跑在你自己的
-电脑、NAS、VPS 或内网服务器上。零配置起步：本地存储 + SQLite 注册表 +
-内置 HTTP 服务。
+电脑、NAS、VPS 或内网服务器上。
 
 ```bash
 pip install html-golive
@@ -12,62 +11,123 @@ pip install html-golive
 golive publish report.html --name "季度报告" --slug q3
 # ✅ 发布成功 → http://localhost:8787/q3
 
-golive serve            # 启动内置服务
+golive serve
+```
+
+**零配置起步** —— 本地存储 + SQLite + 内置服务。
+**随需生长** —— 一个 yaml 即可切换 Supabase 或任意 S3 兼容后端
+（MinIO / 腾讯 COS / 阿里 OSS / 火山 TOS）。
+
+---
+
+## 目录
+
+- [为什么选 html-golive](#为什么选-html-golive)
+- [快速开始](#快速开始)
+- [功能](#功能)
+- [架构](#架构)
+- [配置](#配置)
+- [数据层](#数据层给静态页面一个数据库)
+- [安全扫描](#安全扫描)
+- [Docker](#docker)
+- [路线图](#路线图)
+
+## 为什么选 html-golive
+
+- **一条命令，一个 URL。** 不用构建、不用写服务端、不用云账号。
+  `golive publish` → 直接分享链接。
+- **一切皆单文件。** 目录和压缩包自动打包——CSS/JS 内联、图片压缩内嵌
+  （或走你自己的图床上传）。
+- **静态页面，真实数据。** 纯 HTML 页面通过 `window.TemplateAPI` /
+  `window.SupabaseAPI` 读写真实数据库，零服务端代码。
+- **技术栈完全自主。** 全部跑在你自己的基础设施上，发布/托管时零外呼
+  （[详情](#网络行为)）。
+- **生产习惯内建。** 短域名冲突校验、10 快照回滚、每次发布凭证/隐私
+  扫描、审计日志。
+
+## 快速开始
+
+### 1 · 安装
+
+```bash
+pip install html-golive              # 核心
+pip install 'html-golive[image]'     # + 图片压缩（Pillow）
+pip install 'html-golive[s3]'        # + S3 兼容后端（boto3）
+```
+
+### 2 · 发布
+
+```bash
+golive publish index.html --name Demo --slug demo
+golive publish ./my-project/ --slug app      # 目录 → 打包为单 HTML
+golive publish site.zip                      # zip / tar.gz 同样支持
+golive publish page.html --style apple       # 套用 19 种 CSS 风格之一
+```
+
+### 3 · 启动服务
+
+```bash
+golive serve --port 8787
+# → http://<你的主机>:8787/demo
+```
+
+### 日常命令
+
+```bash
+golive list                                  # 所有已发布站点
+golive publish new.html --update demo        # 覆盖更新
+golive rollback demo --dry-run               # 查看快照，确认后 --yes
+golive preview draft.html                    # 热更新预览 + 风格面板
+golive clone https://example.com --save-only # 克隆公网页面
+golive styles                                # 查看 19 种 CSS 风格
+golive doctor                                # 环境体检
 ```
 
 ## 功能
 
-| 功能 | 状态 |
-|---|---|
-| 发布单 HTML / 目录 / 压缩包 | ✅ v0.1 |
-| 资源打包（CSS/JS/图片内联为单文件） | ✅ v0.1 |
-| base64 图片压缩（`--compress`，需 Pillow） | ✅ v0.1 |
-| 19 种内置 CSS 美化风格（`--style`） | ✅ v0.1 |
-| 短域名（保留字 + 占用双重校验） | ✅ v0.1 |
-| 回滚（每站点保留 10 份快照） | ✅ v0.1 |
-| 安全扫描（凭证/个人信息规则，YAML 可扩展） | ✅ v0.1 |
-| 网页克隆（`golive clone <url>`，支持无头浏览器） | ✅ v0.1 |
-| 实时预览 + 风格切换面板（`golive preview`） | ✅ v0.1 |
-| 内置静态服务 + JSON API（`golive serve`） | ✅ v0.1 |
-| 健康检查（`golive doctor`） | ✅ v0.1 |
-| `golive.yaml` 配置加载（env 优先，`--config`） | ✅ v0.2 |
-| 数据层：Supabase/PostgREST 驱动的 `window.TemplateAPI` / `window.SupabaseAPI` | ✅ v0.2 |
-| Supabase 后端三件套：存储 bucket + 注册表 + 数据层 | ✅ v0.2 |
-| S3 兼容存储与图床（MinIO/COS/OSS/TOS） | ✅ v0.2 |
-| 内网页面迁移检查（`golive migrate-check`） | ✅ v0.2 |
-| Docker Compose 部署（含可选 MinIO profile） | ✅ v0.2 |
-| 浏览器在线编辑器 + 保存 API | 🚧 M3 |
-| 水印 + 可选 LLM 安全复核 | 🚧 M3 |
-| Token / OAuth 鉴权 | 🚧 M3（serve 模式的 token 基础能力 v0.1 已有） |
+**发布与内容**
+- 单 HTML / 目录 / zip / tar.gz 发布，资源自动打包
+- 19 种内置 CSS 美化风格（`--style`，`GOLIVE_FONT_CDN_BASE`
+  自定义字体源）
+- 图片压缩（`--compress`）+ 可插拔图床（`GOLIVE_UPLOADER_CMD`
+  命令模板，或原生 S3 上传器）
+- 网页克隆（`golive clone <url>`），支持静态快照模式
 
-## 快速开始
+**运维**
+- 短域名保留字 + 占用双重校验
+- 每站点 10 份快照回滚
+- 内置静态服务，带 JSON API 与健康检查端点
+- 热更新实时预览 + 风格切换面板
+- `golive doctor` 环境诊断、审计日志
 
-```bash
-# 1. 安装
-pip install html-golive              # 需要图片压缩时：
-                                     # pip install 'html-golive[image]'
+**数据与后端** *(v0.2)*
+- `window.TemplateAPI` / `window.SupabaseAPI` 注入——静态页面零服务端
+  代码获得真实数据库
+- 存储 / 注册表 / 数据三层后端：local + SQLite（默认）、Supabase
+  （一个项目装下三层）、S3 兼容对象存储
+- `golive migrate-check` —— 从其他 golive 部署迁移页面
+- Docker Compose 部署（含可选 MinIO profile）
 
-# 2. 发布
-golive publish index.html --name Demo --slug demo
-golive publish ./my-project/ --slug app      # 目录 → 打包为单 HTML
-golive publish site.zip                      # zip/tar.gz 同样支持
+**安全**
+- 每次发布凭证/隐私信息扫描（YAML 可扩展规则）
+- 服务端与压缩包解压均做路径穿越防护
+- 管理 API token 保护（`GOLIVE_TOKEN`）
 
-# 3. 启动服务
-golive serve --port 8787
-# → http://<你的主机>:8787/demo
+## 架构
 
-# 管理
-golive list
-golive publish new.html --update demo        # 覆盖更新
-golive rollback demo --dry-run               # 查看快照
-golive rollback demo --yes                   # 回滚到最新快照
-golive clone https://example.com --save-only # 克隆公网页面
-golive preview draft.html                    # 热更新实时预览
-golive styles                                # 查看 CSS 风格
-golive doctor                                # 环境体检
 ```
-
-## 数据目录
+┌────────────── golive core（纯逻辑） ──────────────────────┐
+│ 打包 / 图片压缩 / CSS 风格 / 克隆 / 预览 /                │
+│ 安全扫描 / 短域名校验                                     │
+└──────┬──────────────────┬──────────────────┬──────────────┘
+  StorageBackend    RegistryBackend     DataBackend
+  站点 HTML/资源     站点元信息          TemplateAPI/SupabaseAPI
+       │                  │                  │
+  local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
+  supabase storage
+       │
+  AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oauth（M3）
+```
 
 所有数据存放在 `GOLIVE_HOME`（默认 `~/.golive/`）：
 
@@ -82,56 +142,70 @@ golive doctor                                # 环境体检
 
 ## 配置
 
-零配置即可使用。可选项：
+零配置即可使用。两层配置，**环境变量永远覆盖 yaml**：
 
-- `GOLIVE_HOME` — 数据目录（默认 `~/.golive/`）
-- `GOLIVE_TOKEN` — 设置后 `/api/sites` 需要
-  `Authorization: Bearer <token>`（或 `X-Golive-Token`）请求头
-- `GOLIVE_FONT_CDN_BASE` — 将注入 CSS 风格中的
-  `https://fonts.googleapis.com` 前缀替换为自定义字体镜像
-  （如国内镜像 `https://fonts.loli.net` 或企业自建字体服务）
-- `GOLIVE_UPLOADER_CMD` — 自定义图片上传命令模板
-  （如 `mytool upload {file}`）；设置后打包图片走该命令上传，
-  不再 base64 内联，详见 [docs/backends.md](docs/backends.md#imageuploader)
-- `FIRECRAWL_API_KEY` — `golive clone` 的可选降级抓取通道（针对重 JS
-  渲染页面）；默认不设置、不产生任何外部调用
-- `golive.yaml` — 后端选型与规则扩展，见
-  [golive.example.yaml](golive.example.yaml)。查找顺序：
-  `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
-  `$GOLIVE_HOME/golive.yaml`；环境变量永远覆盖 yaml 同项
-- `GOLIVE_SUPABASE_URL` / `GOLIVE_SUPABASE_ANON_KEY` /
-  `GOLIVE_SUPABASE_SERVICE_KEY` — Supabase 后端
-  （详见 [docs/backends.md](docs/backends.md)）
-- `GOLIVE_S3_AK` / `GOLIVE_S3_SK` — S3 后端
-  （`pip install 'html-golive[s3]'`）
+### golive.yaml（后端选型）
 
-**网络行为说明**：golive 在发布/托管时不产生任何外呼。例外：`golive clone
-<url>` 抓取目标页面；`golive preview` 首次运行会从 `cdn.tailwindcss.com`
-下载一次性 Tailwind 缓存（离线时静默降级）；注入的 CSS 风格引用公网字体
-CDN（可用 `GOLIVE_FONT_CDN_BASE` 替换）；以及你自己配置的
-`GOLIVE_UPLOADER_CMD`。
+查找顺序：`--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
+`$GOLIVE_HOME/golive.yaml`。完整注释样例：
+[golive.example.yaml](golive.example.yaml) · 后端组合实例：
+[docs/backends.md](docs/backends.md)
 
-## 安全扫描
+### 环境变量
 
-每次发布都会按内置规则扫描（API key、私钥、数据库连接串、个人信息等）。
-强特征命中直接阻断发布；弱特征命中仅告警。可用自己的 YAML 文件扩展规则，
-确认误报时可用 `--skip-scan` 跳过。
+| 变量 | 用途 |
+|---|---|
+| `GOLIVE_HOME` | 数据目录（默认 `~/.golive/`） |
+| `GOLIVE_TOKEN` | 保护 `/api/sites`（Bearer 或 `X-Golive-Token`） |
+| `GOLIVE_FONT_CDN_BASE` | 替换 `fonts.googleapis.com` 为自有字体镜像 |
+| `GOLIVE_UPLOADER_CMD` | 图片上传命令模板（`mytool up {file}`） |
+| `GOLIVE_SUPABASE_URL` / `_ANON_KEY` / `_SERVICE_KEY` | Supabase 后端 |
+| `GOLIVE_S3_AK` / `GOLIVE_S3_SK` | S3 兼容后端 |
+| `FIRECRAWL_API_KEY` | `golive clone` 重 JS 页面的可选降级通道 |
 
-## 数据层（v0.2）
+### 网络行为
 
-静态页面接上你自己的 Supabase 项目即可获得完整读写能力，无需写服务端：
+golive 在发布/托管时**不产生任何外呼**。例外：`golive clone <url>`
+抓取目标页面；`golive preview` 首次运行从 `cdn.tailwindcss.com` 下载
+一次性 Tailwind 缓存（离线时静默降级）；注入的 CSS 风格引用公网字体
+CDN（可用 `GOLIVE_FONT_CDN_BASE` 替换）；以及你自己配置的图床命令
+与后端。
+
+## 数据层：给静态页面一个数据库
+
+接上你自己的 Supabase 项目即可，无需写服务端：
 
 ```bash
 golive db init --print-sql              # 建表 SQL 粘到 Supabase SQL Editor
 golive publish app.html --data-model myapp_v1
 ```
 
-页面里直接调 `window.TemplateAPI`（命名空间化记录存储：list / listAll /
-get / create / update / delete / sort / upsert）或 `window.SupabaseAPI`
-（直连表操作：query / insert / update / delete）。签名是稳定契约——在
-其他 golive 部署上开发的页面零改动可跑。完整指南（含 RLS 安全须知）：
-[docs/data-layer.md](docs/data-layer.md)。从内网部署迁移页面：先跑
-`golive migrate-check page.html`（[迁移指南](docs/migrate-from-intranet.md)）。
+页面里直接调用：
+
+```js
+// 命名空间化记录存储
+await TemplateAPI.upsert({ templateName: 'vote:alice', templateContent: {n: 1} });
+const { total, list } = await TemplateAPI.listAll();
+
+// 或直连表操作
+const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
+```
+
+API 签名是**稳定契约**——在任何 golive 部署上开发的页面，换个部署零改
+动可跑。完整指南（含 RLS 安全须知）：[docs/data-layer.md](docs/data-layer.md)。
+
+> **说明**：未配置 data backend 时 `--data-model` 发布依然成功——页面
+> 注入的是 stub API，调用时报清晰的"data backend 未配置"错误（发布时
+> 也会打印警告提示）。
+
+从其他部署迁移页面？先跑 `golive migrate-check page.html`，它会报告
+所有部署专属引用（[迁移指南](docs/migrate-from-intranet.md)）。
+
+## 安全扫描
+
+每次发布都按内置规则扫描——API key、私钥、数据库连接串、个人信息等。
+强特征命中直接阻断发布；弱特征命中仅告警。可用自己的 YAML 扩展规则，
+确认误报时 `--skip-scan` 跳过。详见 [docs/security.md](docs/security.md)
 
 ## Docker
 

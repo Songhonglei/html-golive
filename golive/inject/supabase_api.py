@@ -259,15 +259,43 @@ def generate_js(supabase_url: str = "", anon_key: str = "",
     rest_url = supabase_url + "/rest/v1" if supabase_url else ""
     project_display = supabase_url.split("//")[-1] if supabase_url else "(unconfigured)"
     js_code = _JS_TEMPLATE.format(
-        supabase_url_json=_json.dumps(supabase_url, ensure_ascii=False),
-        rest_url_json=_json.dumps(rest_url, ensure_ascii=False),
-        anon_key_json=_json.dumps(anon_key or "", ensure_ascii=False),
-        user_json=_json.dumps(user, ensure_ascii=False),
-        table_prefix_json=_json.dumps(table_prefix or "", ensure_ascii=False),
-        project_display=project_display,
-        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        supabase_url_json=_json_for_script(supabase_url),
+        rest_url_json=_json_for_script(rest_url),
+        anon_key_json=_json_for_script(anon_key or ""),
+        user_json=_json_for_script(user),
+        table_prefix_json=_json_for_script(table_prefix or ""),
+        project_display=_safe_comment(project_display),
+        generated_at=_safe_comment(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
     )
     return f'<script id="{SUPABASE_SCRIPT_ID}">\n{js_code}\n</script>'
+
+
+def _json_for_script(value) -> str:
+    """JSON-encode a value for safe inlining inside an HTML <script> block.
+
+    Same rules as golive.inject.template_api._json_for_script — escape
+    ``</script>``, ``<!--`` and U+2028/U+2029 which json.dumps leaves alone.
+    """
+    s = _json.dumps(value, ensure_ascii=False)
+    s = re.sub(r"</(script)", r"<\\/\1", s, flags=re.IGNORECASE)
+    s = s.replace("<!--", "<\\!--")
+    s = s.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    return s
+
+
+def _safe_comment(s: str) -> str:
+    """Neutralise a value pasted verbatim into a JS line comment / banner.
+
+    Same rules as golive.inject.template_api._safe_comment.
+    """
+    if s is None:
+        return ""
+    s = str(s)
+    s = re.sub(r"</\s*script\b[^>]*>?", "<\\/script>", s, flags=re.IGNORECASE)
+    s = s.replace("*/", "* /")
+    s = s.replace("\r", " ").replace("\n", " ") \
+         .replace("\u2028", " ").replace("\u2029", " ")
+    return s
 
 
 def generate_js_from_config(cfg=None) -> str:

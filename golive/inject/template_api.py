@@ -353,18 +353,65 @@ def generate_js(model_code: str, data_version: str = "1.0.0",
     if not codes:
         raise ValueError("modelCode list is empty after splitting")
 
+    # Anything embedded verbatim into the JS body (not inside a JSON string)
+    # MUST be neutralised so it cannot close the <script> element or open
+    # a JS block-comment early. This covers modelCodes / data_version /
+    # generated_at, which appear in the leading banner comment.
     js_code = _JS_TEMPLATE.format(
-        model_codes_json=_json.dumps(codes, ensure_ascii=False),
-        first_model_code_json=_json.dumps(codes[0], ensure_ascii=False),
-        model_codes_display=",".join(codes),
-        data_version=data_version,
-        generated_at=generated_at,
-        rest_url_json=_json.dumps(rest_url.rstrip("/"), ensure_ascii=False),
-        anon_key_json=_json.dumps(anon_key, ensure_ascii=False),
-        table_json=_json.dumps(table, ensure_ascii=False),
-        user_id_json=_json.dumps(user_id, ensure_ascii=False),
+        model_codes_json=_json_for_script(codes),
+        first_model_code_json=_json_for_script(codes[0]),
+        model_codes_display=_safe_comment(",".join(codes)),
+        data_version=_safe_comment(data_version),
+        generated_at=_safe_comment(generated_at),
+        rest_url_json=_json_for_script(rest_url.rstrip("/")),
+        anon_key_json=_json_for_script(anon_key),
+        table_json=_json_for_script(table),
+        user_id_json=_json_for_script(user_id),
     )
     return f'<script id="{TEMPLATE_SCRIPT_ID}">\n{js_code}\n</script>'
+
+
+def _json_for_script(value) -> str:
+    """JSON-encode a value for safe inlining inside an HTML <script> block.
+
+    The HTML parser closes a <script> as soon as it sees the literal
+    ``</script>`` (case-insensitive) regardless of JS quoting. Standard
+    ``json.dumps`` does not escape this. We also escape ``<!--`` and
+    the JS line terminators U+2028 / U+2029 which are valid JS but not
+    JSON quoted by default.
+    """
+    s = _json.dumps(value, ensure_ascii=False)
+    # HTML parser terminates a <script> as soon as it sees </script followed
+    # by whitespace / '>' / '/' — we insert a backslash after "</" to break
+    # the token without changing the string value at runtime.
+    s = re.sub(r"</(script)", r"<\\/\1", s, flags=re.IGNORECASE)
+    s = s.replace("<!--", "<\\!--")
+    s = s.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    return s
+
+
+def _safe_comment(s: str) -> str:
+    """Neutralise a value pasted verbatim into a JS line comment / banner.
+
+    Blocks three escapes:
+      1. ``</script>`` (any case) closes the enclosing <script> element
+      2. ``*/`` closes a block comment early
+      3. newline/CR/LS/PS terminates the single-line comment, letting the
+         next characters run as code
+    We replace them with visually equivalent, harmless variants.
+    """
+    if s is None:
+        return ""
+    s = str(s)
+    # 1. break the closing tag — HTML parser accepts </script...>, </SCRIPT  >,
+    #    </Script foo>, etc. — so match </script followed by any tag body.
+    s = re.sub(r"</\s*script\b[^>]*>?", "<\\/script>", s, flags=re.IGNORECASE)
+    # 2. break block-comment terminator
+    s = s.replace("*/", "* /")
+    # 3. collapse line terminators (JS line terminators: \n \r \u2028 \u2029)
+    s = s.replace("\r", " ").replace("\n", " ") \
+         .replace("\u2028", " ").replace("\u2029", " ")
+    return s
 
 
 def generate_js_from_config(model_code: str, data_version: str = "1.0.0",

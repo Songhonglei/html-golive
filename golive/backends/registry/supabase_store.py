@@ -20,6 +20,8 @@ RLS note: with a service_role key RLS is bypassed (server-side use only).
 With an anon key you must add policies that allow the operations you need.
 """
 
+from __future__ import annotations
+
 import datetime
 import uuid
 from typing import Optional

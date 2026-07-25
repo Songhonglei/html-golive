@@ -184,5 +184,57 @@ class TestJsSyntaxSanity(unittest.TestCase):
         self._balance(supabase_api.generate_js("", ""))  # stub mode
 
 
+class TestScriptContextEscape(unittest.TestCase):
+    """Regression: config-provided values must never break out of the
+    injected <script> element. The HTML parser closes <script> on the
+    literal string </script> regardless of JS quoting."""
+
+    EVIL_CASES = [
+        "x</script><img src=x onerror=alert(1)>",
+        "X</SCRIPT ><b>",
+        "a</Script foo>",
+        "<!-- comment injection",
+        "line\u2028sep",
+        "*/ break */ block",
+    ]
+
+    def _assert_no_early_close(self, tag: str):
+        """Only one </script> allowed, and it must be the last few chars."""
+        lowered = tag.lower()
+        first = lowered.find("</script")
+        last = lowered.rfind("</script>")
+        # exactly one closing tag, sitting at the very end (allow trailing \n)
+        self.assertEqual(first, last,
+                         f"early </script> at {first} (last {last})")
+        self.assertGreater(last, len(tag) - 15, "unexpected trailing content")
+
+    def test_template_api_modelcode(self):
+        for evil in self.EVIL_CASES:
+            tag = template_api.generate_js(
+                model_code=evil, rest_url="https://x/rest/v1",
+                anon_key="k", table="t", user_id="")
+            self._assert_no_early_close(tag)
+
+    def test_template_api_urls_and_keys(self):
+        for evil in self.EVIL_CASES:
+            tag = template_api.generate_js(
+                model_code="mc", rest_url=evil,
+                anon_key=evil, table=evil, user_id=evil)
+            self._assert_no_early_close(tag)
+
+    def test_supabase_api_url_and_key(self):
+        for evil in self.EVIL_CASES:
+            tag = supabase_api.generate_js(
+                supabase_url=evil, anon_key=evil, table_prefix=evil)
+            self._assert_no_early_close(tag)
+
+    def test_supabase_api_user_dict(self):
+        for evil in self.EVIL_CASES:
+            tag = supabase_api.generate_js(
+                supabase_url="https://x.co", anon_key="k",
+                user={"name": evil, "email": evil})
+            self._assert_no_early_close(tag)
+
+
 if __name__ == "__main__":
     unittest.main()

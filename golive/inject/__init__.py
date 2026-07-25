@@ -13,6 +13,8 @@ Script element ids (also used by migrate-check detection):
   template-data-layer / supabase-data-layer
 """
 
+from __future__ import annotations
+
 TEMPLATE_SCRIPT_ID = "template-data-layer"
 SUPABASE_SCRIPT_ID = "supabase-data-layer"
 

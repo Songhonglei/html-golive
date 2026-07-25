@@ -1,0 +1,55 @@
+# golive.yaml — configuration example
+#
+# Everything is optional: with no config file golive runs in zero-config
+# mode (local storage + SQLite registry + built-in server).
+#
+# Config file lookup order:
+#   1. --config <path>
+#   2. ./golive.yaml
+#   3. $GOLIVE_HOME/golive.yaml
+
+# ── storage backend ──────────────────────────────────────────────────────────
+storage:
+  backend: local          # local (v0.1) | s3 (coming in M2)
+  # s3:                   # coming in M2
+  #   endpoint: https://s3.example.com
+  #   bucket: golive-sites
+  #   access_key_env: GOLIVE_S3_AK
+  #   secret_key_env: GOLIVE_S3_SK
+
+# ── registry backend ─────────────────────────────────────────────────────────
+registry:
+  backend: sqlite         # sqlite (v0.1) | postgres (M2) | supabase (M2)
+  # supabase:             # coming in M2
+  #   url: https://xyz.supabase.co
+  #   anon_key_env: GOLIVE_SUPABASE_ANON_KEY
+
+# ── data layer (window.TemplateAPI / window.SupabaseAPI) ────────────────────
+data:
+  backend: none           # none (v0.1) | supabase (coming in M2)
+
+# ── auth (serve-mode write ops & /api/sites) ────────────────────────────────
+auth:
+  provider: none          # none | token   (oauth coming in M3)
+  # token: ""             # or set env GOLIVE_TOKEN
+
+# ── server ───────────────────────────────────────────────────────────────────
+server:
+  host: 0.0.0.0
+  port: 8787
+
+# ── slug rules ───────────────────────────────────────────────────────────────
+slug:
+  reserved: []            # extra reserved slugs, e.g. [internal, beta]
+
+# ── resource localization ────────────────────────────────────────────────────
+localize:
+  never: []               # extra never-localize domains
+
+# ── security scanning ────────────────────────────────────────────────────────
+security:
+  extra_rules: []         # extra rule YAML files, same schema as built-in
+  # llm:                  # optional AI review — coming in M3
+  #   base_url: https://api.openai.com/v1
+  #   api_key_env: GOLIVE_LLM_KEY
+  #   model: gpt-4o-mini

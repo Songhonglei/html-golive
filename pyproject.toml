@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "html-golive"
+version = "0.1.0"
+description = "Self-hosted one-command HTML deployment — Vercel-lite for your intranet."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Songhonglei" }]
+keywords = ["html", "deploy", "static-site", "self-hosted", "intranet"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+]
+dependencies = [
+    "requests>=2.25",
+    "beautifulsoup4>=4.9",
+    "pyyaml>=5.4",
+]
+
+[project.optional-dependencies]
+image = ["Pillow>=9.0"]
+
+[project.urls]
+Homepage = "https://github.com/Songhonglei/html-golive"
+Issues = "https://github.com/Songhonglei/html-golive/issues"
+
+[project.scripts]
+golive = "golive.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["golive*"]
+
+[tool.setuptools.package-data]
+"golive" = ["resources/css_styles/*.css"]
+"golive.security" = ["rules.yaml"]

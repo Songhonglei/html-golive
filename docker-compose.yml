@@ -1,0 +1,10 @@
+# docker-compose.yml — placeholder
+#
+# Docker Compose deployment (nginx/caddy front + optional MinIO + optional
+# Supabase) lands in M2. For now run golive directly:
+#
+#   pip install html-golive
+#   golive serve --port 8787
+#
+version: "3.8"
+services: {}

@@ -1,10 +1,67 @@
-# docker-compose.yml — placeholder
+# docker-compose.yml — golive serve + optional local S3 stack
 #
-# Docker Compose deployment (nginx/caddy front + optional MinIO + optional
-# Supabase) lands in M2. For now run golive directly:
+# Quick start:
+#   docker compose up -d golive
+#   docker compose exec golive golive publish /data/demo.html --name Demo
 #
-#   pip install html-golive
-#   golive serve --port 8787
+# With a local S3 (MinIO) for image hosting:
+#   docker compose --profile minio up -d
 #
-version: "3.8"
-services: {}
+# Supabase users: run the official Supabase docker stack separately
+# (https://supabase.com/docs/guides/self-hosting/docker) and point
+# golive at it via environment variables below / golive.yaml.
+# See docs/backends.md for full backend combos.
+
+services:
+  golive:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - golive-data:/data
+      # optional: mount your golive.yaml
+      # - ./golive.yaml:/app/golive.yaml:ro
+    environment:
+      GOLIVE_HOME: /data
+      # GOLIVE_TOKEN: change-me                       # protect /api/sites
+      # GOLIVE_SUPABASE_URL: https://xyz.supabase.co  # Supabase backends
+      # GOLIVE_SUPABASE_ANON_KEY: ...
+      # GOLIVE_SUPABASE_SERVICE_KEY: ...
+      # GOLIVE_S3_ENDPOINT: http://minio:9000         # S3 backends (minio profile)
+      # GOLIVE_S3_AK: golive
+      # GOLIVE_S3_SK: golive-secret
+    restart: unless-stopped
+
+  # ── optional: local S3-compatible object store ────────────────────────────
+  minio:
+    image: minio/minio:latest
+    profiles: ["minio"]
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: golive
+      MINIO_ROOT_PASSWORD: golive-secret
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  # one-shot bucket bootstrap for the minio profile
+  minio-init:
+    image: minio/mc:latest
+    profiles: ["minio"]
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 golive golive-secret &&
+      mc mb -p local/golive-sites local/golive-img &&
+      mc anonymous set download local/golive-sites &&
+      mc anonymous set download local/golive-img;
+      exit 0"
+
+volumes:
+  golive-data:
+  minio-data:

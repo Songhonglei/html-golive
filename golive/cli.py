@@ -610,6 +610,13 @@ def main(argv=None) -> int:
     p = sub.add_parser("styles", help="列出内置 CSS 风格")
     p.set_defaults(func=cmd_styles)
 
+    # migrate-check
+    p = sub.add_parser("migrate-check",
+                       help="扫描 HTML，报告内网专属引用（迁移前检查）")
+    p.add_argument("file", help="要检查的 HTML 文件")
+    p.set_defaults(func=lambda a: __import__(
+        "golive.core.migrate_check", fromlist=["run"]).run(a.file))
+
     # db
     p = sub.add_parser("db", help="数据库表初始化（输出建表 SQL）")
     p.add_argument("db_action", choices=["init"], help="init：输出建表 SQL")

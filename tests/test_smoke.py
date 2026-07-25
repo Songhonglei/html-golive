@@ -71,5 +71,82 @@ class TestSecurityScanner(unittest.TestCase):
         self.assertFalse(result.blocked)
 
 
+class TestCssStyles(unittest.TestCase):
+    def test_19_styles_present_and_loadable(self):
+        from golive.core.css_style_enhancer import STYLE_MAP, load_css
+
+        self.assertEqual(len(STYLE_MAP), 19)
+        for key in STYLE_MAP:
+            css = load_css(key)
+            self.assertTrue(css.strip(), f"{key}.css is empty")
+            self.assertNotIn("xhscdn", css)
+
+    def test_font_cdn_base_swap(self):
+        from golive.core.css_style_enhancer import apply_font_cdn_base
+
+        src = "@import url('https://fonts.googleapis.com/css2?family=Cinzel');"
+        out = apply_font_cdn_base(src, "https://fonts.loli.net")
+        self.assertIn("https://fonts.loli.net/css2?family=Cinzel", out)
+        self.assertNotIn("googleapis", out)
+        # empty base → unchanged
+        self.assertEqual(apply_font_cdn_base(src, ""), src)
+
+
+class TestCommandUploader(unittest.TestCase):
+    def test_upload_success(self):
+        from golive.backends.images.command import CommandUploader
+
+        up = CommandUploader("printf https://example.com/x.png#{file}")
+        url = up.upload(b"\x89PNG", "x.png")
+        self.assertTrue(url.startswith("https://example.com/x.png#"))
+
+    def test_upload_failure_raises(self):
+        from golive.backends.images.base import UploadError
+        from golive.backends.images.command import CommandUploader
+
+        # command outputs no URL
+        up = CommandUploader("printf no-url-here {file}")
+        with self.assertRaises(UploadError):
+            up.upload(b"data", "a.png")
+        # non-zero exit
+        up2 = CommandUploader("false {file}")
+        with self.assertRaises(UploadError):
+            up2.upload(b"data", "a.png")
+
+    def test_template_validation_and_factory(self):
+        from golive.backends.images.command import CommandUploader, get_uploader
+
+        with self.assertRaises(ValueError):
+            CommandUploader("no-placeholder-cmd")
+
+        old = os.environ.pop("GOLIVE_UPLOADER_CMD", None)
+        try:
+            self.assertIsNone(get_uploader())
+            os.environ["GOLIVE_UPLOADER_CMD"] = "printf https://e.com/u {file}"
+            self.assertIsNotNone(get_uploader())
+        finally:
+            os.environ.pop("GOLIVE_UPLOADER_CMD", None)
+            if old is not None:
+                os.environ["GOLIVE_UPLOADER_CMD"] = old
+
+    def test_bundler_falls_back_to_base64_on_failure(self):
+        import tempfile as _tf
+        from pathlib import Path as _P
+
+        from golive.backends.images.command import CommandUploader
+        from golive.core.bundle import Bundler
+
+        with _tf.TemporaryDirectory() as d:
+            root = _P(d)
+            (root / "index.html").write_text(
+                '<html><body><img src="pix.png"></body></html>', encoding="utf-8")
+            (root / "pix.png").write_bytes(b"\x89PNG\r\n\x1a\n123")
+
+            bad = CommandUploader("false {file}")  # always fails
+            b = Bundler(root, uploader=bad, use_image_upload=True)
+            html = b.bundle(root / "index.html")
+            self.assertIn("data:image/png;base64,", html)  # graceful fallback
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,9 @@ Scans HTML for external resources (script/link/img/@import/url()) and
 localizes them so the published page has no runtime dependency on
 third-party CDNs:
 
-  - With an ``uploader`` callable (M2 ImageUploader backend):
+  - With an ``uploader`` (ImageUploader instance or legacy callable):
     download -> upload -> replace URL.
-  - Without an uploader (M1 default): download -> inline as base64
+  - Without an uploader (default): download -> inline as base64
     data URI (small resources only).
 
 A configurable ``never_localize`` list (domains that must stay remote,
@@ -108,14 +108,27 @@ def _guess_mime(url: str) -> str:
 
 
 def _upload_bytes(data: bytes, ext: str, uploader):
-    """uploader signature: uploader(local_path) -> cdn_url. Returns None on failure."""
+    """Upload raw bytes via an uploader; returns URL or None on failure.
+
+    uploader may be:
+      * an ImageUploader instance — ``uploader.upload(bytes, name) -> url``
+      * a legacy callable        — ``uploader(local_path) -> url``
+    """
     if uploader is None:
         return None
     try:
+        if hasattr(uploader, "upload"):
+            return uploader.upload(data, f"asset{ext}")
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        return uploader(tmp_path)
+        try:
+            return uploader(tmp_path)
+        finally:
+            try:
+                Path(tmp_path).unlink()
+            except OSError:
+                pass
     except Exception:
         return None
 

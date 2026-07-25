@@ -60,15 +60,23 @@ def detect_framework_project(project_dir: Path):
 def bundle_project(project_dir: Path, entry_html=None) -> str:
     """Bundle a multi-file project directory into a single HTML string.
 
-    All assets are inlined (images as base64 data URIs)."""
+    When an image uploader is configured (env GOLIVE_UPLOADER_CMD),
+    images are uploaded and referenced by URL; otherwise all assets are
+    inlined (images as base64 data URIs)."""
     warning = detect_framework_project(project_dir)
     if warning:
         print(warning, file=sys.stderr)
         sys.exit(1)
 
+    from golive.backends.images.command import get_uploader
     from golive.core.bundle import Bundler, find_entry_interactive
 
-    bundler = Bundler(project_dir, uploader=None, use_image_upload=False)
+    uploader = get_uploader()
+    if uploader is not None:
+        print("📤 已启用自定义图片上传（GOLIVE_UPLOADER_CMD）", file=sys.stderr)
+
+    bundler = Bundler(project_dir, uploader=uploader,
+                      use_image_upload=uploader is not None)
 
     entry_path = None
     if entry_html:

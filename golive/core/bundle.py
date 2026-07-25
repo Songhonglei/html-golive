@@ -904,10 +904,15 @@ if __name__ == "__main__":
         print(f"错误：不是有效目录：{args.dir}", file=sys.stderr)
         sys.exit(1)
 
-    # 图床上传：M1 不提供（ImageUploader backend 在 M2 引入），图片一律 Base64 内联
-    uploader = None
+    # 图床上传：配置了 GOLIVE_UPLOADER_CMD 时启用，否则 Base64 内联
+    if args.no_image_upload:
+        uploader = None
+    else:
+        from golive.backends.images.command import get_uploader
+        uploader = get_uploader()
 
-    bundler = Bundler(base_dir, uploader=uploader, use_image_upload=not args.no_image_upload)
+    bundler = Bundler(base_dir, uploader=uploader,
+                      use_image_upload=uploader is not None)
 
     entry = None
     if args.entry:

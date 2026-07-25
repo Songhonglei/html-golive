@@ -22,7 +22,7 @@ golive serve            # start the built-in server
 | Publish single HTML / directory / zip | ✅ v0.1 |
 | Asset bundling (CSS/JS/images inlined into one file) | ✅ v0.1 |
 | Base64 image compression (`--compress`, Pillow) | ✅ v0.1 |
-| 11 built-in CSS beautification styles (`--style`) | ✅ v0.1 |
+| 19 built-in CSS beautification styles (`--style`) | ✅ v0.1 |
 | Short slugs with reserved-word & collision checks | ✅ v0.1 |
 | Rollback (10 snapshots per site) | ✅ v0.1 |
 | Security scan (credentials / PII rules, YAML-extensible) | ✅ v0.1 |
@@ -98,6 +98,13 @@ Everything works with zero config. Optional knobs:
 - `GOLIVE_HOME` — data directory (default `~/.golive/`)
 - `GOLIVE_TOKEN` — when set, `/api/sites` requires
   `Authorization: Bearer <token>` (or `X-Golive-Token`)
+- `GOLIVE_FONT_CDN_BASE` — replace the `https://fonts.googleapis.com`
+  prefix in injected CSS styles with your own font mirror
+  (e.g. `https://fonts.loli.net` or a self-hosted font service)
+- `GOLIVE_UPLOADER_CMD` — custom image-upload command template
+  (e.g. `mytool upload {file}`); when set, bundled images are uploaded
+  through it instead of being inlined as base64 — see
+  [docs/backends.md](docs/backends.md#imageuploader)
 - `golive.yaml` — backend selection & rule extensions, see
   [golive.example.yaml](golive.example.yaml) (most fields land in M2)
 

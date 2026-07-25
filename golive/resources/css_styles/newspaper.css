@@ -1,0 +1,317 @@
+/* Fonts served from Google Fonts (override host via GOLIVE_FONT_CDN_BASE) */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,400&display=swap');
+
+/* ============================================================
+   CSS风格：Newspaper 报纸风
+   字体：Playfair Display + Noto Serif SC（Google Fonts，可用 GOLIVE_FONT_CDN_BASE 换镜像源）
+   ============================================================ */
+
+:root {
+    --np-bg: #F2EFE3;
+    --np-surface: #EAE6D8;
+    --np-card: #F7F4EC;
+    --np-ink: #1A1208;
+    --np-accent: #8B1A1A;
+    --np-muted: #6B5C48;
+    --np-border: rgba(26,18,8,0.15);
+    --np-rule: rgba(26,18,8,0.18);
+    --np-serif: "Playfair Display", "Noto Serif SC", "Source Han Serif CN", Georgia, serif;
+    --np-body: "Noto Serif SC", "Source Han Serif CN", "STSong", Georgia, serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--np-accent);
+    --primary-light: rgba(139,26,26,0.1);
+    --surface: var(--np-surface);
+    --bg-main: var(--np-bg);
+    --text-main: var(--np-ink);
+    --text-muted: var(--np-muted);
+    --border-color: var(--np-border);
+}
+
+/* ── 全局 ── */
+html, body {
+    background-color: var(--np-bg) !important;
+    color: var(--np-ink) !important;
+    font-family: var(--np-body) !important;
+    line-height: 1.8 !important;
+    -webkit-font-smoothing: antialiased !important;
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23F2EFE3'/%3E%3Crect width='1' height='1' x='0' y='0' fill='rgba(26%2C18%2C8%2C0.03)'/%3E%3Crect width='1' height='1' x='2' y='2' fill='rgba(26%2C18%2C8%2C0.02)'/%3E%3C/svg%3E") !important;
+    background-size: 4px 4px !important;
+}
+
+::selection {
+    background: rgba(139,26,26,0.18) !important;
+    color: var(--np-ink) !important;
+}
+
+::-webkit-scrollbar { width: 6px !important; background: var(--np-bg) !important; }
+::-webkit-scrollbar-thumb { background: rgba(26,18,8,0.2) !important; border-radius: 0 !important; }
+
+/* ── 外层容器 ── */
+[data-role="container"] {
+    background: var(--np-surface) !important;
+    border: 2px solid rgba(26,18,8,0.2) !important;
+    border-radius: 2px !important;
+    box-shadow: 4px 4px 0 rgba(26,18,8,0.08), 8px 8px 0 rgba(26,18,8,0.04) !important;
+}
+
+/* ── 顶栏 ── */
+[data-role="header"] {
+    background: var(--np-ink) !important;
+    border-bottom: 3px double rgba(255,255,255,0.12) !important;
+}
+
+[data-role="header-logo"] {
+    background: var(--np-accent) !important;
+    border-radius: 2px !important;
+}
+[data-role="header-logo"] svg { fill: #FFFFFF !important; }
+
+[data-role="header-title"] {
+    color: #FFFFFF !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.05em !important;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3) !important;
+}
+
+[data-role="header-meta"] {
+    color: rgba(255,255,255,0.5) !important;
+    font-size: 0.76em !important;
+    font-style: italic !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ── 页面主标题 ── */
+[data-role="page-title"] {
+    color: var(--np-ink) !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.01em !important;
+    border-bottom: 3px solid var(--np-ink) !important;
+    text-shadow: 1px 1px 0 rgba(255,255,255,0.6) !important;
+    line-height: 1.25 !important;
+}
+[data-role="page-title"] em {
+    color: var(--np-accent) !important;
+    font-style: italic !important;
+}
+
+[data-role="page-subtitle"] {
+    color: var(--np-muted) !important;
+    font-style: italic !important;
+    border-bottom: 1px solid var(--np-rule) !important;
+    line-height: 1.7 !important;
+}
+[data-role="page-subtitle"] strong { color: var(--np-ink) !important; font-weight: 700 !important; }
+
+/* ── 卡片 ── */
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--np-card) !important;
+    border-top: 3px solid var(--np-ink) !important;
+    border-radius: 1px !important;
+    box-shadow: 2px 2px 0 rgba(26,18,8,0.06), 4px 4px 0 rgba(26,18,8,0.03) !important;
+    transition: border-top-color 0.2s, box-shadow 0.2s, transform 0.15s !important;
+}
+[data-role="card"]:hover {
+    border-top-color: var(--np-accent) !important;
+    box-shadow: 3px 3px 0 rgba(26,18,8,0.1), 6px 6px 0 rgba(26,18,8,0.05) !important;
+    transform: translateY(-1px) !important;
+}
+
+[data-role="card-header"] { border-bottom: 1px solid var(--np-rule) !important; }
+
+[data-role="card-badge"] {
+    background: var(--np-accent) !important;
+    color: #FFFFFF !important;
+    border-radius: 1px !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.02em !important;
+    box-shadow: 1px 1px 0 rgba(0,0,0,0.2) !important;
+}
+
+[data-role="card-title"] {
+    color: var(--np-ink) !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em !important;
+    line-height: 1.35 !important;
+}
+[data-role="card-label"] {
+    color: var(--np-muted) !important;
+    font-size: 0.76em !important;
+    font-style: italic !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ── 列表条目 ── */
+[data-role="list-item"] {
+    border-bottom: 1px solid var(--np-rule) !important;
+    transition: background 0.15s !important;
+}
+[data-role="list-item"]:hover { background: rgba(26,18,8,0.03) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] {
+    color: var(--np-ink) !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+}
+[data-role="item-desc"] {
+    color: var(--np-muted) !important;
+    font-style: italic !important;
+    font-size: 0.83em !important;
+    line-height: 1.7 !important;
+}
+
+/* ── 底部 ── */
+[data-role="footer"] {
+    background: rgba(26,18,8,0.04) !important;
+    border-top: 1px solid var(--np-rule) !important;
+    border-left: 4px solid var(--np-accent) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong {
+    color: var(--np-ink) !important;
+    font-family: "Playfair Display", serif !important;
+    font-weight: 700 !important;
+}
+[data-role="footer"] p {
+    color: var(--np-muted) !important;
+    font-style: italic !important;
+    line-height: 1.8 !important;
+}
+
+[data-role="divider"] {
+    border-color: var(--np-rule) !important;
+    border-style: double !important;
+}
+
+/* ── 补全：item-badge ── */
+[data-role="item-badge"] {
+    background: rgba(139,26,26,0.1) !important;
+    color: var(--np-accent) !important;
+    border-radius: 1px !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 700 !important;
+    font-size: 0.78em !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* ── 补全：确认 item-title/item-desc 字体 ── */
+[data-role="item-title"] {
+    font-family: "Playfair Display", "Noto Serif SC", Georgia, serif !important;
+}
+[data-role="item-desc"] {
+    font-family: "Noto Serif SC", "Source Han Serif CN", "STSong", Georgia, serif !important;
+}
+
+/* ── 移动端响应式 ── */
+@media (max-width: 768px) {
+    [data-role="header-title"] {
+        font-size: 0.92em !important;
+        letter-spacing: 0.03em !important;
+    }
+    [data-role="page-title"] {
+        font-size: 1.3em !important;
+        letter-spacing: -0.005em !important;
+    }
+    [data-role="page-subtitle"] {
+        font-size: 0.85em !important;
+    }
+    [data-role="card-title"] {
+        font-size: 0.93em !important;
+    }
+    [data-role="item-title"] {
+        font-size: 0.93em !important;
+    }
+    [data-role="item-desc"] {
+        font-size: 0.8em !important;
+    }
+    [data-role="footer"] p {
+        font-size: 0.82em !important;
+    }
+}
+
+/* ── 补充：item-badge ── */
+[data-role="item-badge"] {
+    background: var(--np-accent) !important;
+    color: #FFFFFF !important;
+    border-radius: 1px !important;
+    font-family: "Playfair Display",Georgia,serif !important;
+    font-weight: 900 !important;
+    font-size: 0.8em !important;
+}
+/* ── 补充：item-title/item-desc 字体确认 ── */
+[data-role="item-title"] { font-family: "Playfair Display",Georgia,serif !important; }
+[data-role="item-desc"] { font-family: "Noto Serif SC","STSong",Georgia,serif !important; font-style: italic !important; }
+
+/* ── 补充：card transition ── */
+[data-role="card"] { transition: border-top-color 0.2s, box-shadow 0.2s, transform 0.15s !important; }
+
+/* ── 移动端 ── */
+@media (max-width: 768px) {
+    [data-role="page-title"] { font-size: 0.95em !important; letter-spacing: -0.005em !important; }
+    [data-role="container"] { border-radius: 1px !important; }
+    [data-role="card"] { border-radius: 1px !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Newspaper 报纸风 — 墨色表头·Playfair·双线边框
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--np-ink) !important;
+    font-family: var(--np-body) !important;
+    line-height: 1.8 !important;
+}
+
+[data-role="data-table"] {
+    border: 2px solid rgba(26, 18, 8, 0.25) !important;
+    border-radius: 1px !important;
+    overflow: hidden !important;
+    box-shadow: 2px 2px 0 rgba(26, 18, 8, 0.06) !important;
+}
+
+[data-role="table-header"] {
+    background: var(--np-ink) !important;
+    color: #FFFFFF !important;
+    font-family: "Playfair Display", Georgia, serif !important;
+    font-weight: 900 !important;
+    font-size: 0.82em !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    border-bottom: 3px double rgba(255, 255, 255, 0.2) !important;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px solid var(--np-rule) !important;
+    transition: background 0.12s !important;
+}
+[data-role="table-row"]:nth-child(even) {
+    background: rgba(26, 18, 8, 0.025) !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(139, 26, 26, 0.04) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--np-ink) !important;
+    font-family: var(--np-body) !important;
+    font-size: 0.88em !important;
+    border-right: 1px solid var(--np-rule) !important;
+    line-height: 1.7 !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

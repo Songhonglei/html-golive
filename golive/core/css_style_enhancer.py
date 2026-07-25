@@ -3,7 +3,7 @@
 css_style_enhancer.py — CSS 风格增强模块
 
 功能：
-  1. 将 11 种 CSS 风格注入到 HTML 文件，替换现有样式类 CSS
+  1. 将 19 种 CSS 风格注入到 HTML 文件，替换现有样式类 CSS
   2. 注入前自动备份原始 HTML（可恢复）
   3. 更新注册表 cssStyle 字段（JSON 格式）
 
@@ -35,20 +35,49 @@ from golive.core.paths import get_data_dir as _get_data_dir
 BACKUP_DIR = _get_data_dir() / "css_style_backup"
 BACKUP_INDEX_FILE = BACKUP_DIR / "backup_index.json"
 
-# ── 字体预加载映射（风格 → Google Fonts 镜像 URL）──────────────────────
+# ── 字体源（默认 Google Fonts，可用 GOLIVE_FONT_CDN_BASE 整体切换镜像）──────
+GOOGLE_FONTS_HOST = "https://fonts.googleapis.com"
+
+_GF = GOOGLE_FONTS_HOST + "/css2?"
+_INTER = _GF + "family=Inter:wght@400;500;600;700&display=swap"
+
+# ── 字体预加载映射（风格 → 字体 CSS URL）────────────────────────────────
 FONT_PRELOADS: dict[str, str] = {
-    "minimal": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "cowork": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "morandi": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "fresh": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "earthy": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "glass": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "dreamy": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "macaron": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "carbon": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
-    "vivid": "https://fonts.font.im/css2?family=Inter:wght@400;500;600;700&display=swap",
+    "minimal": _INTER,
+    "cowork": _INTER,
+    "morandi": _INTER,
+    "fresh": _INTER,
+    "earthy": _INTER,
+    "glass": _INTER,
+    "dreamy": _INTER,
+    "macaron": _INTER,
+    "carbon": _INTER,
+    "vivid": _INTER,
+    "xhs": _GF + "family=Noto+Sans+SC:wght@400;500;700&display=swap",
+    "xhs-fun": _GF + "family=Noto+Sans+SC:wght@400;500;700&display=swap",
+    "newspaper": _GF + "family=Noto+Serif+SC:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,400&display=swap",
+    "ink": _GF + "family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+QingKe+HuangYou&display=swap",
+    "steampunk": _GF + "family=Cinzel:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap",
+    "bloomberg": _GF + "family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap",
+    "palace": _GF + "family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&display=swap",
+    "cyberpunk": _GF + "family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap",
     # apple 用系统字体，不需要预加载
 }
+
+
+def apply_font_cdn_base(text: str, base: str | None = None) -> str:
+    """将文本中的 Google Fonts 前缀替换为用户自定义字体 CDN。
+
+    base 为 None 时读取环境变量 GOLIVE_FONT_CDN_BASE；空值时原样返回。
+    纯函数（显式传 base 时无副作用），便于测试。
+    """
+    if base is None:
+        base = os.environ.get("GOLIVE_FONT_CDN_BASE", "")
+    base = base.strip().rstrip("/")
+    if not base:
+        return text
+    return text.replace(GOOGLE_FONTS_HOST, base)
+
 
 BACKUP_TTL_DAYS = 90
 
@@ -64,6 +93,14 @@ STYLE_MAP = {
     "macaron":    "马卡龙粉彩风",
     "carbon":     "暗色极简风",
     "vivid":      "活力渐变风",
+    "newspaper":  "报纸杂志风",
+    "bloomberg":  "Bloomberg 终端风",
+    "ink":        "水墨卷轴风",
+    "steampunk":  "蒸汽朋克风",
+    "palace":     "故宫风",
+    "cyberpunk":  "赛博科技风",
+    "xhs":        "小红书简洁风",
+    "xhs-fun":    "小红书趣味风",
 }
 
 
@@ -75,14 +112,14 @@ def list_styles() -> None:
 
 
 def load_css(style_key: str) -> str:
-    """读取指定风格的 CSS 内容。"""
+    """读取指定风格的 CSS 内容（应用 GOLIVE_FONT_CDN_BASE 字体源替换）。"""
     css_file = STYLES_DIR / f"{style_key}.css"
     if not css_file.exists():
         raise ValueError(
             f"CSS 风格文件不存在：{css_file}\n"
             f"可用风格：{', '.join(STYLE_MAP.keys())}"
         )
-    return css_file.read_text(encoding="utf-8")
+    return apply_font_cdn_base(css_file.read_text(encoding="utf-8"))
 
 
 # ── 备份索引 I/O ──
@@ -440,8 +477,8 @@ def inject_css(html: str, css: str, style_key: str) -> str:
         f'</style>'
     )
 
-    # Step 2.5: 字体预加载（幂等：已有 fonts.font.im 则跳过）
-    _preload_url = FONT_PRELOADS.get(style_key or "")
+    # Step 2.5: 字体预加载（幂等：已有 preload 则跳过；应用自定义字体 CDN 前缀）
+    _preload_url = apply_font_cdn_base(FONT_PRELOADS.get(style_key or "", ""))
     if _preload_url and 'rel="preload"' not in html:
         _preload_tag = (
             f'<link rel="preload" href="{_preload_url}" '

@@ -1,0 +1,308 @@
+/* Fonts served from Google Fonts (override host via GOLIVE_FONT_CDN_BASE) */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+QingKe+HuangYou&display=swap');
+
+/* ============================================================
+   CSS风格：Ink 水墨风
+   字体：Noto Serif SC + ZCOOL QingKe HuangYou（Google Fonts，可用 GOLIVE_FONT_CDN_BASE 换镜像源）
+   ============================================================ */
+
+:root {
+    --ik-bg: #F4F1E8;
+    --ik-surface: #EDE8DC;
+    --ik-card: #FAF8F3;
+    --ik-ink: #1C1C1C;
+    --ik-accent: #3D2B1A;
+    --ik-red: #8B1C2A;
+    --ik-muted: #7A6A58;
+    --ik-border: rgba(28,28,28,0.12);
+    --ik-wash: rgba(61,43,26,0.05);
+    --ik-serif: "Noto Serif SC", "ZCOOL QingKe HuangYou", "Source Han Serif CN", "STSong", Georgia, serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--ik-accent);
+    --primary-light: rgba(61,43,26,0.1);
+    --surface: var(--ik-surface);
+    --bg-main: var(--ik-bg);
+    --text-main: var(--ik-ink);
+    --text-muted: var(--ik-muted);
+    --border-color: var(--ik-border);
+}
+
+/* ── 全局 ── */
+html, body {
+    background-color: var(--ik-bg) !important;
+    color: var(--ik-ink) !important;
+    font-family: var(--ik-serif) !important;
+    line-height: 1.9 !important;
+    -webkit-font-smoothing: antialiased !important;
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Ccircle cx='60' cy='60' r='55' fill='none' stroke='rgba(28%2C28%2C28%2C0.03)' stroke-width='0.5'/%3E%3Ccircle cx='60' cy='60' r='35' fill='none' stroke='rgba(28%2C28%2C28%2C0.02)' stroke-width='0.5'/%3E%3Ccircle cx='60' cy='60' r='15' fill='none' stroke='rgba(28%2C28%2C28%2C0.02)' stroke-width='0.5'/%3E%3C/svg%3E") !important;
+    background-size: 120px 120px !important;
+}
+
+::selection {
+    background: rgba(139,28,42,0.15) !important;
+    color: var(--ik-accent) !important;
+}
+
+::-webkit-scrollbar { width: 6px !important; background: var(--ik-bg) !important; }
+::-webkit-scrollbar-thumb { background: rgba(28,28,28,0.2) !important; border-radius: 3px !important; }
+
+/* ── 外层容器 ── */
+[data-role="container"] {
+    background: var(--ik-surface) !important;
+    border: 1px solid rgba(28,28,28,0.14) !important;
+    border-radius: 4px !important;
+    box-shadow: 4px 4px 24px rgba(28,28,28,0.08), -1px -1px 8px rgba(28,28,28,0.03) !important;
+}
+
+/* ── 顶栏 ── */
+[data-role="header"] {
+    background: var(--ik-accent) !important;
+    border-bottom: none !important;
+}
+[data-role="header"]::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    height: 2px !important;
+    background: linear-gradient(90deg, transparent, rgba(139,28,42,0.6) 30%, rgba(139,28,42,0.8) 50%, rgba(139,28,42,0.6) 70%, transparent) !important;
+}
+
+[data-role="header-logo"] {
+    background: var(--ik-red) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 10px rgba(139,28,42,0.35), inset 0 1px 2px rgba(255,255,255,0.1) !important;
+}
+[data-role="header-logo"] svg { fill: #F4F1E8 !important; }
+
+[data-role="header-title"] {
+    color: #F4F1E8 !important;
+    font-family: "ZCOOL QingKe HuangYou", var(--ik-serif) !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.14em !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
+}
+
+[data-role="header-meta"] {
+    color: rgba(244,241,232,0.55) !important;
+    font-size: 0.8em !important;
+    font-style: italic !important;
+    letter-spacing: 0.06em !important;
+}
+
+/* ── 页面主标题 ── */
+[data-role="page-title"] {
+    color: var(--ik-accent) !important;
+    font-family: "ZCOOL QingKe HuangYou", var(--ik-serif) !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.08em !important;
+    border-bottom: 1px solid rgba(28,28,28,0.15) !important;
+    text-shadow: 1px 1px 0 rgba(244,241,232,0.8) !important;
+}
+[data-role="page-title"] em {
+    color: var(--ik-red) !important;
+    font-style: normal !important;
+}
+
+[data-role="page-subtitle"] {
+    color: var(--ik-muted) !important;
+    font-style: italic !important;
+    line-height: 1.8 !important;
+}
+[data-role="page-subtitle"] strong { color: var(--ik-accent) !important; font-weight: 600 !important; }
+
+/* ── 卡片 ── */
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--ik-card) !important;
+    border-top: 2.5px solid var(--ik-accent) !important;
+    border-radius: 4px !important;
+    box-shadow: 2px 3px 10px rgba(28,28,28,0.07), 0 1px 2px rgba(28,28,28,0.04) !important;
+    transition:, box-shadow 0.2s, transform 0.15s !important;
+}
+[data-role="card"]:hover {
+    border-top-color: var(--ik-red) !important;
+    box-shadow: 3px 5px 16px rgba(28,28,28,0.12) !important;
+    transform: translateY(-1px) !important;
+}
+
+[data-role="card-header"] { border-bottom: 1px solid rgba(28,28,28,0.09) !important; }
+
+[data-role="card-badge"] {
+    background: var(--ik-red) !important;
+    color: #F4F1E8 !important;
+    border-radius: 3px !important;
+    box-shadow: 0 1px 4px rgba(139,28,42,0.25) !important;
+    font-weight: 700 !important;
+    font-family: var(--ik-serif) !important;
+    letter-spacing: 0.04em !important;
+}
+
+[data-role="card-title"] {
+    color: var(--ik-accent) !important;
+    font-family: var(--ik-serif) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+}
+[data-role="card-label"] {
+    color: var(--ik-muted) !important;
+    font-size: 0.78em !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ── 列表条目 ── */
+[data-role="list-item"] {
+    border-bottom: 1px solid rgba(28,28,28,0.07) !important;
+    transition: background 0.15s !important;
+}
+[data-role="list-item"]:hover { background: rgba(61,43,26,0.04) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] {
+    color: var(--ik-ink) !important;
+    font-family: var(--ik-serif) !important;
+    font-weight: 600 !important;
+    line-height: 1.5 !important;
+}
+[data-role="item-desc"] {
+    color: var(--ik-muted) !important;
+    font-size: 0.84em !important;
+    line-height: 1.75 !important;
+}
+
+/* ── 底部 ── */
+[data-role="footer"] {
+    background: var(--ik-wash) !important;
+    border-left: 3px solid var(--ik-red) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong {
+    color: var(--ik-accent) !important;
+    font-family: var(--ik-serif) !important;
+}
+[data-role="footer"] p {
+    color: var(--ik-muted) !important;
+    font-style: italic !important;
+    line-height: 1.85 !important;
+}
+
+[data-role="divider"] {
+    border-color: rgba(28,28,28,0.1) !important;
+    border-style: dashed !important;
+}
+
+/* ── 补全：item-title / item-desc 字体 ── */
+[data-role="item-title"] {
+    font-family: var(--ik-serif) !important;
+}
+[data-role="item-desc"] {
+    font-family: var(--ik-serif) !important;
+}
+
+/* ── 移动端响应式 ── */
+@media (max-width: 768px) {
+    [data-role="header-title"] {
+        font-size: 0.94em !important;
+        letter-spacing: 0.07em !important;
+    }
+    [data-role="page-title"] {
+        font-size: 1.3em !important;
+        letter-spacing: 0.04em !important;
+    }
+    [data-role="page-subtitle"] {
+        font-size: 0.86em !important;
+    }
+    [data-role="card"] {
+        border-radius: 3px !important;
+    }
+    [data-role="card-title"] {
+        font-size: 0.94em !important;
+        letter-spacing: 0.02em !important;
+    }
+    [data-role="item-title"] {
+        font-size: 0.92em !important;
+        letter-spacing: 0.01em !important;
+    }
+    [data-role="item-desc"] {
+        font-size: 0.8em !important;
+        line-height: 1.65 !important;
+    }
+    [data-role="footer"] p {
+        font-size: 0.82em !important;
+    }
+}
+
+/* ── 补充：item-badge ── */
+[data-role="item-badge"] {
+    background: var(--ik-accent) !important;
+    color: #F4F1E8 !important;
+    border-radius: 3px !important;
+    font-family: var(--ik-serif) !important;
+    font-weight: 700 !important;
+    font-size: 0.78em !important;
+}
+/* ── 补充：item-title/item-desc 字体确认 ── */
+[data-role="item-title"] { font-family: var(--ik-serif) !important; }
+[data-role="item-desc"] { font-family: var(--ik-serif) !important; }
+
+/* ── 移动端 ── */
+@media (max-width: 768px) {
+    [data-role="header-title"] { letter-spacing: 0.08em !important; font-size: 0.93em !important; }
+    [data-role="page-title"] { letter-spacing: 0.04em !important; }
+    [data-role="container"] { border-radius: 3px !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Ink 水墨风 — 宣纸色·宋体·虚线·墨韵
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--ik-ink) !important;
+    font-family: var(--ik-serif) !important;
+    line-height: 1.9 !important;
+}
+
+[data-role="data-table"] {
+    border: 1px solid rgba(28, 28, 28, 0.18) !important;
+    border-radius: 4px !important;
+    overflow: hidden !important;
+    box-shadow: 2px 2px 8px rgba(28, 28, 28, 0.06) !important;
+}
+
+[data-role="table-header"] {
+    background: rgba(61, 43, 26, 0.08) !important;
+    color: var(--ik-accent) !important;
+    font-family: var(--ik-serif) !important;
+    font-weight: 700 !important;
+    font-size: 0.84em !important;
+    letter-spacing: 0.06em !important;
+    border-bottom: 2px solid rgba(28, 28, 28, 0.2) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px dashed rgba(28, 28, 28, 0.1) !important;
+    transition: background 0.15s !important;
+}
+[data-role="table-row"]:nth-child(even) {
+    background: rgba(61, 43, 26, 0.03) !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(139, 28, 42, 0.04) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--ik-ink) !important;
+    font-family: var(--ik-serif) !important;
+    font-size: 0.88em !important;
+    border-right: 1px dashed rgba(28, 28, 28, 0.09) !important;
+    line-height: 1.8 !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

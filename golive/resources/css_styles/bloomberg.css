@@ -1,0 +1,208 @@
+/* Fonts served from Google Fonts (override host via GOLIVE_FONT_CDN_BASE) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
+
+/* ============================================================
+   CSS风格：Bloomberg 彭博终端风
+   字体：IBM Plex Sans + IBM Plex Mono（Google Fonts，可用 GOLIVE_FONT_CDN_BASE 换镜像源）
+   ============================================================ */
+:root {
+    --bl-bg: #0A0A0A;
+    --bl-surface: #111111;
+    --bl-card: #161616;
+    --bl-accent: #FF6600;
+    --bl-green: #00CC44;
+    --bl-text: #E8E8E8;
+    --bl-muted: #666666;
+    --bl-border: #2A2A2A;
+    --bl-fs: "IBM Plex Sans","PingFang SC",sans-serif;
+    --bl-fm: "IBM Plex Mono","Courier New",monospace;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--bl-accent);
+    --primary-light: rgba(255,102,0,0.15);
+    --surface: var(--bl-surface);
+    --bg-main: var(--bl-bg);
+    --text-main: var(--bl-text);
+    --text-muted: var(--bl-muted);
+    --border-color: var(--bl-border);
+}
+
+html, body {
+    background-color: var(--bl-bg) !important;
+    color: var(--bl-text) !important;
+    font-family: var(--bl-fs) !important;
+    line-height: 1.5 !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+::selection { background: rgba(255,102,0,0.2) !important; color: var(--bl-accent) !important; }
+::-webkit-scrollbar { width: 4px !important; background: #050505 !important; }
+::-webkit-scrollbar-thumb { background: rgba(255,102,0,0.3) !important; border-radius: 1px !important; }
+
+[data-role="container"] {
+    background: var(--bl-surface) !important;
+    border: 1px solid var(--bl-border) !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+}
+
+[data-role="header"] {
+    background: var(--bl-accent) !important;
+    border-bottom: none !important;
+}
+[data-role="header-logo"] { background: rgba(0,0,0,0.25) !important; border-radius: 2px !important; }
+[data-role="header-logo"] svg { fill: #fff !important; }
+
+[data-role="header-title"] {
+    color: #fff !important;
+    font-family: var(--bl-fs) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+}
+[data-role="header-meta"] {
+    color: rgba(255,255,255,0.7) !important;
+    font-family: var(--bl-fm) !important;
+    font-size: 0.76em !important;
+    letter-spacing: 0.04em !important;
+}
+
+[data-role="page-title"] {
+    color: var(--bl-accent) !important;
+    font-family: var(--bl-fs) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.03em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid var(--bl-accent) !important;
+    line-height: 1.3 !important;
+}
+[data-role="page-title"] em { color: var(--bl-green) !important; font-style: normal !important; }
+[data-role="page-subtitle"] {
+    color: var(--bl-muted) !important;
+    font-family: var(--bl-fm) !important;
+    font-size: 0.85em !important;
+    letter-spacing: 0.02em !important;
+    line-height: 1.6 !important;
+}
+[data-role="page-subtitle"] strong { color: var(--bl-text) !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--bl-card) !important;
+    border-top: 2px solid var(--bl-accent) !important;
+    border-radius: 2px !important;
+    transition:, background 0.15s !important;
+}
+[data-role="card"]:hover {
+    background: #1A1A1A !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid var(--bl-border) !important; }
+
+[data-role="card-badge"] {
+    background: transparent !important;
+    color: var(--bl-accent) !important;
+    border: 1px solid rgba(255,102,0,0.45) !important;
+    border-radius: 2px !important;
+    font-family: var(--bl-fm) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+}
+
+[data-role="item-badge"] {
+    background: transparent !important;
+    color: var(--bl-accent) !important;
+    border: 1px solid rgba(255,102,0,0.3) !important;
+    border-radius: 2px !important;
+    font-family: var(--bl-fm) !important;
+    font-size: 0.76em !important;
+    font-weight: 600 !important;
+}
+
+[data-role="card-title"] {
+    color: var(--bl-text) !important;
+    font-family: var(--bl-fs) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+    line-height: 1.4 !important;
+}
+[data-role="card-label"] {
+    color: var(--bl-muted) !important;
+    font-family: var(--bl-fm) !important;
+    font-size: 0.76em !important;
+    letter-spacing: 0.04em !important;
+}
+
+[data-role="list-item"] { border-bottom: 1px solid var(--bl-border) !important; transition: background 0.1s !important; }
+[data-role="list-item"]:hover { background: rgba(255,255,255,0.02) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] { color: var(--bl-text) !important; font-family: var(--bl-fs) !important; font-weight: 500 !important; line-height: 1.4 !important; }
+[data-role="item-desc"] { color: var(--bl-muted) !important; font-family: var(--bl-fm) !important; font-size: 0.82em !important; line-height: 1.6 !important; }
+
+[data-role="footer"] {
+    background: rgba(255,102,0,0.05) !important;
+    border-left: 2px solid var(--bl-accent) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong { color: var(--bl-accent) !important; font-family: var(--bl-fs) !important; font-weight: 700 !important; }
+[data-role="footer"] p { color: var(--bl-muted) !important; font-family: var(--bl-fm) !important; line-height: 1.65 !important; }
+[data-role="divider"] { border-color: var(--bl-border) !important; }
+
+@media (max-width: 768px) {
+    [data-role="header-title"] { font-size: 0.92em !important; letter-spacing: 0.04em !important; }
+    [data-role="page-title"] { font-size: 0.95em !important; letter-spacing: 0.01em !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Bloomberg 彭博终端风 — 深色·方角·等宽字·橙色
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--bl-text) !important;
+    font-family: var(--bl-fs) !important;
+    line-height: 1.55 !important;
+}
+
+[data-role="data-table"] {
+    border: 1px solid var(--bl-border) !important;
+    border-radius: 2px !important;
+    overflow: hidden !important;
+}
+
+[data-role="table-header"] {
+    background: #1A1A1A !important;
+    color: var(--bl-accent) !important;
+    font-family: var(--bl-fm) !important;
+    font-weight: 600 !important;
+    font-size: 0.78em !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid var(--bl-accent) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px solid var(--bl-border) !important;
+    transition: background 0.1s !important;
+}
+[data-role="table-row"]:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02) !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(255, 102, 0, 0.05) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--bl-text) !important;
+    font-family: var(--bl-fm) !important;
+    font-size: 0.84em !important;
+    border-right: 1px solid var(--bl-border) !important;
+    letter-spacing: 0.02em !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

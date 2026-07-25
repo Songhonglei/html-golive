@@ -22,7 +22,7 @@ golive serve            # 启动内置服务
 | 发布单 HTML / 目录 / 压缩包 | ✅ v0.1 |
 | 资源打包（CSS/JS/图片内联为单文件） | ✅ v0.1 |
 | base64 图片压缩（`--compress`，需 Pillow） | ✅ v0.1 |
-| 11 种内置 CSS 美化风格（`--style`） | ✅ v0.1 |
+| 19 种内置 CSS 美化风格（`--style`） | ✅ v0.1 |
 | 短域名（保留字 + 占用双重校验） | ✅ v0.1 |
 | 回滚（每站点保留 10 份快照） | ✅ v0.1 |
 | 安全扫描（凭证/个人信息规则，YAML 可扩展） | ✅ v0.1 |
@@ -84,6 +84,12 @@ golive doctor                                # 环境体检
 - `GOLIVE_HOME` — 数据目录（默认 `~/.golive/`）
 - `GOLIVE_TOKEN` — 设置后 `/api/sites` 需要
   `Authorization: Bearer <token>`（或 `X-Golive-Token`）请求头
+- `GOLIVE_FONT_CDN_BASE` — 将注入 CSS 风格中的
+  `https://fonts.googleapis.com` 前缀替换为自定义字体镜像
+  （如国内镜像 `https://fonts.loli.net` 或企业自建字体服务）
+- `GOLIVE_UPLOADER_CMD` — 自定义图片上传命令模板
+  （如 `mytool upload {file}`）；设置后打包图片走该命令上传，
+  不再 base64 内联，详见 [docs/backends.md](docs/backends.md#imageuploader)
 - `golive.yaml` — 后端选型与规则扩展，见
   [golive.example.yaml](golive.example.yaml)（大部分字段 M2 生效）
 

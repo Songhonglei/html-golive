@@ -28,6 +28,26 @@ registry:
 data:
   backend: none           # none (v0.1) | supabase (coming in M2)
 
+# ── CSS style fonts ──────────────────────────────────────────────────────────
+style:
+  # Replace the https://fonts.googleapis.com prefix in injected CSS styles
+  # with a custom mirror (e.g. https://fonts.loli.net or a self-hosted
+  # font service). Env GOLIVE_FONT_CDN_BASE takes precedence.
+  font_cdn_base: ""       # empty = Google Fonts (default)
+
+# ── image uploader (bundling) ────────────────────────────────────────────────
+uploader:
+  # Shell command template for uploading bundled images to your own
+  # image host. golive writes each image to a temp file, substitutes
+  # {file}, runs the command, and takes the last stdout line as the URL.
+  # On failure the image silently falls back to base64 inlining.
+  # Env GOLIVE_UPLOADER_CMD takes precedence.
+  # Examples:
+  #   command: "mytool upload {file}"
+  #   command: "aws s3 cp {file} s3://bucket/img/ --acl public-read && echo https://cdn.example.com/img/{name}"
+  command: ""             # empty = base64 inline (default)
+  # s3:                   # native S3 uploader — coming in M2
+
 # ── auth (serve-mode write ops & /api/sites) ────────────────────────────────
 auth:
   provider: none          # none | token   (oauth coming in M3)

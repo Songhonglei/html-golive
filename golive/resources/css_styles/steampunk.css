@@ -1,0 +1,215 @@
+/* Fonts served from Google Fonts (override host via GOLIVE_FONT_CDN_BASE) */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap');
+
+/* ============================================================
+   CSS风格：Steampunk 蒸汽朋克
+   字体：Cinzel + IM Fell English（Google Fonts，可用 GOLIVE_FONT_CDN_BASE 换镜像源）
+   ============================================================ */
+:root {
+    --sp-bg: #1A120A;
+    --sp-surface: #221608;
+    --sp-card: #1C1308;
+    --sp-brass: #B8860B;
+    --sp-copper: #B87333;
+    --sp-gold: #D4A017;
+    --sp-text: #E8D8B0;
+    --sp-muted: #907860;
+    --sp-border: rgba(184,134,11,0.28);
+    --sp-ft: "Cinzel","Palatino Linotype",Georgia,serif;
+    --sp-fb: "IM Fell English","Palatino Linotype","STSong",Georgia,serif;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--sp-brass);
+    --primary-light: rgba(184,134,11,0.15);
+    --surface: var(--sp-surface);
+    --bg-main: var(--sp-bg);
+    --text-main: var(--sp-text);
+    --text-muted: var(--sp-muted);
+    --border-color: var(--sp-border);
+}
+
+html, body {
+    background-color: var(--sp-bg) !important;
+    color: var(--sp-text) !important;
+    font-family: var(--sp-fb) !important;
+    line-height: 1.85 !important;
+    -webkit-font-smoothing: antialiased !important;
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Ccircle cx='40' cy='40' r='36' fill='none' stroke='rgba(184%2C134%2C11%2C0.06)' stroke-width='1.5'/%3E%3Ccircle cx='40' cy='40' r='26' fill='none' stroke='rgba(184%2C134%2C11%2C0.04)' stroke-width='1'/%3E%3Ccircle cx='40' cy='40' r='4' fill='rgba(184%2C134%2C11%2C0.07)'/%3E%3Cline x1='40' y1='4' x2='40' y2='76' stroke='rgba(184%2C134%2C11%2C0.04)' stroke-width='1'/%3E%3Cline x1='4' y1='40' x2='76' y2='40' stroke='rgba(184%2C134%2C11%2C0.04)' stroke-width='1'/%3E%3C/svg%3E") !important;
+    background-size: 80px 80px !important;
+}
+
+::selection { background: rgba(184,134,11,0.22) !important; color: var(--sp-gold) !important; }
+::-webkit-scrollbar { width: 6px !important; background: var(--sp-bg) !important; }
+::-webkit-scrollbar-thumb { background: rgba(184,134,11,0.3) !important; border-radius: 3px !important; }
+
+[data-role="container"] {
+    background: var(--sp-surface) !important;
+    border: 2px solid rgba(184,134,11,0.35) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 0 0 1px rgba(184,115,51,0.15), 0 8px 32px rgba(0,0,0,0.65), inset 0 0 40px rgba(0,0,0,0.28) !important;
+}
+
+[data-role="header"] {
+    background: linear-gradient(180deg,#2A1C08 0%,#1A120A 100%) !important;
+    border-bottom: 2px solid var(--sp-brass) !important;
+}
+
+[data-role="header-logo"] {
+    background: radial-gradient(circle at 40% 40%,var(--sp-copper),#7A4A1A) !important;
+    border-radius: 50% !important;
+    border: 1px solid rgba(184,134,11,0.45) !important;
+    box-shadow: 0 0 10px rgba(184,115,51,0.4), inset 0 1px 2px rgba(255,255,255,0.1) !important;
+}
+[data-role="header-logo"] svg { fill: var(--sp-gold) !important; }
+
+[data-role="header-title"] {
+    color: var(--sp-gold) !important;
+    font-family: var(--sp-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.1em !important;
+    text-shadow: 0 0 12px rgba(184,134,11,0.45) !important;
+}
+[data-role="header-meta"] {
+    color: var(--sp-muted) !important;
+    font-family: var(--sp-fb) !important;
+    font-size: 0.8em !important;
+    font-style: italic !important;
+}
+
+[data-role="page-title"] {
+    color: var(--sp-brass) !important;
+    font-family: var(--sp-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em !important;
+    text-shadow: 0 0 16px rgba(184,134,11,0.3) !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+    line-height: 1.35 !important;
+}
+[data-role="page-title"] em { color: var(--sp-copper) !important; font-style: italic !important; }
+[data-role="page-subtitle"] { color: var(--sp-muted) !important; font-family: var(--sp-fb) !important; font-style: italic !important; line-height: 1.8 !important; }
+[data-role="page-subtitle"] strong { color: var(--sp-text) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--sp-card) !important;
+    border-top: 2px solid rgba(212,160,23,0.5) !important;
+    border-radius: 5px !important;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.55), 0 0 0 1px rgba(184,115,51,0.08) !important;
+    transition:, box-shadow 0.2s !important;
+}
+[data-role="card"]::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important; left: 10% !important; right: 10% !important;
+    height: 1px !important;
+    background: linear-gradient(90deg,transparent,var(--sp-gold) 40%,var(--sp-gold) 60%,transparent) !important;
+    opacity: 0.45 !important;
+}
+[data-role="card"]:hover {
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.28), 0 4px 20px rgba(184,134,11,0.1), 0 0 0 1px rgba(184,115,51,0.15) !important;
+}
+[data-role="card-header"] { border-bottom: 1px solid rgba(184,134,11,0.15) !important; }
+
+[data-role="card-badge"] {
+    background: linear-gradient(135deg,rgba(184,115,51,0.3),rgba(184,115,51,0.12)) !important;
+    color: var(--sp-gold) !important;
+    border: 1px solid var(--sp-brass) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 6px rgba(184,134,11,0.2), inset 0 1px 1px rgba(255,255,255,0.07) !important;
+    font-family: var(--sp-ft) !important;
+    font-weight: 700 !important;
+}
+
+[data-role="item-badge"] {
+    background: rgba(184,115,51,0.1) !important;
+    color: var(--sp-copper) !important;
+    border: 1px solid rgba(184,115,51,0.3) !important;
+    border-radius: 3px !important;
+    font-family: var(--sp-fb) !important;
+    font-style: italic !important;
+    font-weight: 600 !important;
+    font-size: 0.82em !important;
+}
+
+[data-role="card-title"] { color: var(--sp-text) !important; font-family: var(--sp-fb) !important; font-weight: 600 !important; letter-spacing: 0.03em !important; line-height: 1.5 !important; }
+[data-role="card-label"] { color: var(--sp-muted) !important; font-family: var(--sp-fb) !important; font-size: 0.78em !important; font-style: italic !important; }
+
+[data-role="list-item"] { border-bottom: 1px solid rgba(184,134,11,0.1) !important; transition: background 0.15s !important; }
+[data-role="list-item"]:hover { background: rgba(184,134,11,0.03) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] { color: var(--sp-text) !important; font-family: var(--sp-fb) !important; font-weight: 600 !important; line-height: 1.5 !important; }
+[data-role="item-desc"] { color: var(--sp-muted) !important; font-family: var(--sp-fb) !important; font-style: italic !important; font-size: 0.84em !important; line-height: 1.8 !important; }
+
+[data-role="footer"] {
+    background: rgba(184,134,11,0.06) !important;
+    border-left: 2px solid var(--sp-copper) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong { color: var(--sp-gold) !important; font-family: var(--sp-ft) !important; text-shadow: 0 0 6px rgba(184,134,11,0.3) !important; }
+[data-role="footer"] p { color: var(--sp-muted) !important; font-family: var(--sp-fb) !important; font-style: italic !important; line-height: 1.85 !important; }
+[data-role="divider"] { border-color: rgba(184,134,11,0.15) !important; border-style: dashed !important; }
+
+@media (max-width: 768px) {
+    [data-role="header-title"] { letter-spacing: 0.06em !important; font-size: 0.92em !important; }
+    [data-role="page-title"] { letter-spacing: 0.03em !important; font-size: 0.94em !important; }
+    [data-role="container"] { border-radius: 4px !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Steampunk 蒸汽朋克 — 深色·黄铜边框·Cinzel·虚线
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--sp-text) !important;
+    font-family: var(--sp-fb) !important;
+    line-height: 1.85 !important;
+}
+
+[data-role="data-table"] {
+    border: 2px solid rgba(184, 134, 11, 0.35) !important;
+    border-radius: 5px !important;
+    overflow: hidden !important;
+    box-shadow: 0 0 0 1px rgba(184, 115, 51, 0.12), 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+[data-role="table-header"] {
+    background: linear-gradient(180deg, rgba(184, 134, 11, 0.18), rgba(184, 134, 11, 0.1)) !important;
+    color: var(--sp-gold) !important;
+    font-family: var(--sp-ft) !important;
+    font-weight: 700 !important;
+    font-size: 0.8em !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border-bottom: 2px solid rgba(184, 134, 11, 0.4) !important;
+    text-shadow: 0 0 8px rgba(184, 134, 11, 0.4) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px dashed rgba(184, 134, 11, 0.12) !important;
+    transition: background 0.15s !important;
+}
+[data-role="table-row"]:nth-child(even) {
+    background: rgba(184, 134, 11, 0.03) !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(184, 115, 51, 0.07) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--sp-text) !important;
+    font-family: var(--sp-fb) !important;
+    font-size: 0.88em !important;
+    border-right: 1px dashed rgba(184, 134, 11, 0.12) !important;
+    letter-spacing: 0.02em !important;
+    line-height: 1.75 !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

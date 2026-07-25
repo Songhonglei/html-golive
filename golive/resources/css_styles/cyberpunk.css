@@ -1,0 +1,269 @@
+/* Fonts served from Google Fonts (override host via GOLIVE_FONT_CDN_BASE) */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap');
+
+/* ============================================================
+   CSS风格：Cyberpunk 赛博朋克
+   字体：Rajdhani + Share Tech Mono（Google Fonts，可用 GOLIVE_FONT_CDN_BASE 换镜像源）
+   ============================================================ */
+:root {
+    --cp-bg: #050812;
+    --cp-surface: #080e1c;
+    --cp-card: #060b18;
+    --cp-glow: #00F0FF;
+    --cp-purple: #BD00FF;
+    --cp-text: #C8E8F0;
+    --cp-muted: #4A6A7A;
+    --cp-border: rgba(0,240,255,0.2);
+    --cp-ft: "Rajdhani","PingFang SC",sans-serif;
+    --cp-fm: "Share Tech Mono","Courier New",monospace;
+
+    /* ── 语义变量别名 ── */
+    --primary: var(--cp-glow);
+    --primary-light: rgba(0,240,255,0.1);
+    --surface: var(--cp-surface);
+    --bg-main: var(--cp-bg);
+    --text-main: var(--cp-text);
+    --text-muted: var(--cp-muted);
+    --border-color: var(--cp-border);
+}
+
+html, body {
+    background-color: var(--cp-bg) !important;
+    color: var(--cp-text) !important;
+    font-family: var(--cp-ft) !important;
+    line-height: 1.7 !important;
+    -webkit-font-smoothing: antialiased !important;
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V18L28 2l28 16v32z' fill='none' stroke='rgba(0%2C240%2C255%2C0.06)' stroke-width='1'/%3E%3C/svg%3E"),
+        linear-gradient(rgba(0,240,255,0.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,240,255,0.025) 1px,transparent 1px) !important;
+    background-size: 56px 100px,28px 28px,28px 28px !important;
+}
+
+::selection { background: rgba(0,240,255,0.2) !important; color: var(--cp-glow) !important; }
+::-webkit-scrollbar { width: 5px !important; background: var(--cp-bg) !important; }
+::-webkit-scrollbar-thumb { background: rgba(0,240,255,0.25) !important; border-radius: 2px !important; }
+
+[data-role="container"] {
+    background: var(--cp-surface) !important;
+    border: 1px solid rgba(0,240,255,0.12) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 60px rgba(0,240,255,0.05), 0 8px 40px rgba(0,0,0,0.75) !important;
+}
+
+[data-role="header"] {
+    background: #030610 !important;
+    border-bottom: 1px solid rgba(0,240,255,0.2) !important;
+}
+[data-role="header"]::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    height: 1px !important;
+    background: linear-gradient(90deg,transparent,var(--cp-glow) 40%,var(--cp-glow) 60%,transparent) !important;
+    opacity: 0.4 !important;
+}
+
+[data-role="header-logo"] {
+    background: var(--cp-glow) !important;
+    border-radius: 3px !important;
+    box-shadow: 0 0 12px rgba(0,240,255,0.5) !important;
+}
+[data-role="header-logo"] svg { fill: #050812 !important; }
+
+[data-role="header-title"] {
+    color: var(--cp-glow) !important;
+    font-family: var(--cp-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.12em !important;
+    text-shadow: 0 0 16px rgba(0,240,255,0.7) !important;
+}
+
+[data-role="header-meta"] {
+    color: var(--cp-muted) !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.78em !important;
+}
+
+[data-role="page-title"] {
+    color: var(--cp-text) !important;
+    font-family: var(--cp-ft) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-shadow: 0 0 20px rgba(0,240,255,0.2) !important;
+    line-height: 1.3 !important;
+}
+[data-role="page-title"] em {
+    color: var(--cp-glow) !important;
+    font-style: normal !important;
+    text-shadow: 0 0 14px rgba(0,240,255,0.7) !important;
+}
+
+[data-role="page-subtitle"] {
+    color: var(--cp-muted) !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.88em !important;
+    line-height: 1.7 !important;
+}
+[data-role="page-subtitle"] strong { color: var(--cp-glow) !important; font-weight: 600 !important; }
+
+[data-role="card-grid"] { background: transparent !important; }
+
+[data-role="card"] {
+    background: var(--cp-card) !important;
+    border-radius: 3px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,240,255,0.05) !important;
+    transition:, box-shadow 0.2s, transform 0.15s !important;
+}
+[data-role="card"]::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important; right: 0 !important;
+    height: 1px !important;
+    background: linear-gradient(90deg,transparent,var(--cp-glow) 50%,transparent) !important;
+    opacity: 0.35 !important;
+    border-radius: 3px 3px 0 0 !important;
+}
+[data-role="card"]:hover {
+    box-shadow: 0 4px 28px rgba(0,240,255,0.12), 0 8px 40px rgba(0,0,0,0.6) !important;
+    transform: translateY(-2px) !important;
+}
+
+[data-role="card-header"] { border-bottom: 1px solid rgba(0,240,255,0.1) !important; }
+
+[data-role="card-badge"] {
+    background: rgba(189,0,255,0.15) !important;
+    color: var(--cp-purple) !important;
+    border: 1px solid rgba(189,0,255,0.4) !important;
+    border-radius: 2px !important;
+    font-family: var(--cp-fm) !important;
+    font-weight: 700 !important;
+    box-shadow: 0 0 8px rgba(189,0,255,0.15) !important;
+}
+
+[data-role="item-badge"] {
+    background: transparent !important;
+    color: var(--cp-glow) !important;
+    border: 1px solid rgba(0,240,255,0.3) !important;
+    border-radius: 2px !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.78em !important;
+    font-weight: 700 !important;
+}
+
+[data-role="card-title"] {
+    color: var(--cp-text) !important;
+    font-family: var(--cp-ft) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+    line-height: 1.4 !important;
+}
+[data-role="card-label"] {
+    color: var(--cp-muted) !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.76em !important;
+    letter-spacing: 0.06em !important;
+}
+
+[data-role="list-item"] {
+    border-bottom: 1px solid rgba(0,240,255,0.08) !important;
+    transition: background 0.15s !important;
+}
+[data-role="list-item"]:hover { background: rgba(0,240,255,0.03) !important; }
+[data-role="list-item"]:last-child { border-bottom: none !important; }
+
+[data-role="item-title"] {
+    color: var(--cp-text) !important;
+    font-family: var(--cp-ft) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.4 !important;
+}
+[data-role="item-desc"] {
+    color: var(--cp-muted) !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.82em !important;
+    line-height: 1.65 !important;
+}
+
+[data-role="footer"] {
+    background: rgba(0,240,255,0.03) !important;
+    border-left: 2px solid var(--cp-glow) !important;
+    border-radius: 8px !important;
+}
+[data-role="footer"] strong {
+    color: var(--cp-glow) !important;
+    font-family: var(--cp-ft) !important;
+    text-shadow: 0 0 8px rgba(0,240,255,0.4) !important;
+}
+[data-role="footer"] p {
+    color: var(--cp-muted) !important;
+    font-family: var(--cp-fm) !important;
+    line-height: 1.7 !important;
+}
+
+[data-role="divider"] { border-color: rgba(0,240,255,0.1) !important; }
+
+@media (max-width: 768px) {
+    [data-role="header-title"] { letter-spacing: 0.06em !important; font-size: 0.95em !important; }
+    [data-role="page-title"] { letter-spacing: 0.02em !important; font-size: 0.95em !important; }
+    [data-role="card"] { border-radius: 2px !important; }
+    [data-role="item-desc"] { font-size: 0.78em !important; }
+}
+
+/* ============================================================
+   === 表格扩展 === [data-role: card-body / data-table / table-header / table-row / table-cell]
+   风格：Cyberpunk 赛博朋克 — 深色·霓虹·青色辉光
+   ============================================================ */
+
+[data-role="card-body"] {
+    color: var(--cp-text) !important;
+    font-family: var(--cp-ft) !important;
+    line-height: 1.7 !important;
+}
+
+[data-role="data-table"] {
+    border: 1px solid rgba(0, 240, 255, 0.15) !important;
+    border-radius: 3px !important;
+    overflow: hidden !important;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.04) !important;
+}
+
+[data-role="table-header"] {
+    background: rgba(0, 240, 255, 0.06) !important;
+    color: var(--cp-glow) !important;
+    font-family: var(--cp-fm) !important;
+    font-weight: 700 !important;
+    font-size: 0.8em !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.3) !important;
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.5) !important;
+}
+
+[data-role="table-row"] {
+    border-bottom: 1px solid rgba(0, 240, 255, 0.06) !important;
+    border-left: 2px solid transparent !important;
+    transition: background 0.15s, border-left-color 0.15s !important;
+}
+[data-role="table-row"]:nth-child(even) {
+    background: rgba(0, 240, 255, 0.02) !important;
+}
+[data-role="table-row"]:hover {
+    background: rgba(0, 240, 255, 0.05) !important;
+    border-left-color: rgba(0, 240, 255, 0.4) !important;
+}
+[data-role="table-row"]:last-child {
+    border-bottom: none !important;
+}
+
+[data-role="table-cell"] {
+    color: var(--cp-text) !important;
+    font-family: var(--cp-fm) !important;
+    font-size: 0.84em !important;
+    border-right: 1px solid rgba(0, 240, 255, 0.07) !important;
+    letter-spacing: 0.02em !important;
+}
+[data-role="table-cell"]:last-child {
+    border-right: none !important;
+}

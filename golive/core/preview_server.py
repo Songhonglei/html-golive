@@ -76,7 +76,8 @@ def _load_css(style_key: str) -> str:
     smap = _get_style_map()
     p = smap.get(style_key)
     if p and p.exists():
-        return p.read_text(encoding="utf-8")
+        from golive.core.css_style_enhancer import apply_font_cdn_base
+        return apply_font_cdn_base(p.read_text(encoding="utf-8"))
     return ""
 
 
@@ -195,19 +196,8 @@ def _inject_for_preview(html: str, style_key: str | None) -> str:
     return html
 
 
-STYLE_LABELS = {
-    "apple":     "Apple 质感风",
-    "cowork":    "轻科技协作风",
-    "minimal":   "极简优雅风",
-    "morandi":   "莫兰迪高级灰风",
-    "fresh":     "清新自然绿风",
-    "earthy":    "大地原木风",
-    "glass":     "玻璃拟态风",
-    "dreamy":    "优雅紫梦幻风",
-    "macaron":   "马卡龙粉彩风",
-    "carbon":    "暗色极简风",
-    "vivid":     "活力渐变风",
-}
+# 风格中文标签（单一事实源：css_style_enhancer.STYLE_MAP）
+from golive.core.css_style_enhancer import STYLE_MAP as STYLE_LABELS
 
 
 def _build_panel_js(current_style: str | None) -> str:

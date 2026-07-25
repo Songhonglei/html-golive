@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-07-26
+
+Docs, identity presets, and editor polish.
+
+### Added
+- **OIDC provider presets** (`golive/backends/auth/presets.py`): set
+  `auth.oidc.preset: google | auth0 | okta | azure | keycloak | authentik`
+  to auto-fill the issuer template and default scopes — supply only
+  `client_id` and the secret env. `auth0`/`okta` take `domain:`, `azure`
+  takes `tenant:`. Explicit `auth.oidc.*` fields always override a preset;
+  presets contain only public, non-secret values.
+- **Editor image upload button**: the online editor toolbar now has a
+  🖼 image button that uploads via `POST /api/sites/<slug>/upload` (raw
+  body + `X-Filename`), inserting the returned URL at the cursor. When no
+  image host is configured (HTTP 501) it gracefully inlines the image as a
+  data URL instead.
+- **Full user manual** (`docs/manual.md`): a task-oriented guide covering
+  all features (publishing, personalisation, styles, cloning, editor,
+  access control, data layer, Supabase, doctor, logs, security, sharing,
+  backends, identity, migration, FAQ), linked from both READMEs.
+
+### Changed
+- **Persistent cookie secret**: when neither `auth.oidc.cookie_secret` nor
+  `GOLIVE_COOKIE_SECRET` is set, the OIDC session-signing key is now
+  generated once and persisted to `GOLIVE_HOME/.cookie_secret` (mode 0600)
+  so sessions survive a restart. Falls back to an ephemeral key with a
+  warning only if the home dir is unwritable. (Closes M3 WARN #1.)
+
 ## [0.3.0] - 2026-07-25
 
 M3 "editing & identity" milestone.

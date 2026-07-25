@@ -263,8 +263,10 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
   S3 适配器、migrate-check、Docker Compose~~ ✅ v0.2
 - ~~**M3 — 编辑与身份**：在线编辑器（版本化保存 API）、水印、OpenAI 兼容
   LLM 安全复核、通用 OIDC~~ ✅ v0.3
-- **M4 — 协作与规模**：共享会话存储（redis）、多人编辑冲突体验、OIDC
-  常见 IdP 快捷预设、基于组的权限。
+- ~~**M4 — 文档与打磨**：OIDC 常见 IdP 快捷预设、编辑器图片上传、cookie
+  密钥持久化、完整用户手册~~ ✅ v0.4
+- **M5 — 协作与规模**：共享会话存储（redis）、多人编辑冲突体验、基于组的
+  权限、后台运营管理门户。
 
 ## 许可证
 

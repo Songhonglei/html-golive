@@ -276,8 +276,10 @@ docker compose --profile minio up -d        # + local S3 stack for images
   injection, S3 adapters, migrate-check, Docker Compose~~ ✅ v0.2
 - ~~**M3 — editing & identity**: inline editor with versioned save API,
   watermarking, OpenAI-compatible LLM security review, generic OIDC~~ ✅ v0.3
-- **M4 — collaboration & scale**: shared session store (redis), multi-user
-  editing conflicts UX, OIDC provider quick-presets, group-based ACLs.
+- ~~**M4 — docs & polish**: OIDC provider presets, editor image upload,
+  persistent cookie secret, full user manual~~ ✅ v0.4
+- **M5 — collaboration & scale**: shared session store (redis), multi-user
+  editing conflicts UX, group-based ACLs, admin operations portal.
 
 ## License
 

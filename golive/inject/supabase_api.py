@@ -270,32 +270,8 @@ def generate_js(supabase_url: str = "", anon_key: str = "",
     return f'<script id="{SUPABASE_SCRIPT_ID}">\n{js_code}\n</script>'
 
 
-def _json_for_script(value) -> str:
-    """JSON-encode a value for safe inlining inside an HTML <script> block.
-
-    Same rules as golive.inject.template_api._json_for_script — escape
-    ``</script>``, ``<!--`` and U+2028/U+2029 which json.dumps leaves alone.
-    """
-    s = _json.dumps(value, ensure_ascii=False)
-    s = re.sub(r"</(script)", r"<\\/\1", s, flags=re.IGNORECASE)
-    s = s.replace("<!--", "<\\!--")
-    s = s.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
-    return s
-
-
-def _safe_comment(s: str) -> str:
-    """Neutralise a value pasted verbatim into a JS line comment / banner.
-
-    Same rules as golive.inject.template_api._safe_comment.
-    """
-    if s is None:
-        return ""
-    s = str(s)
-    s = re.sub(r"</\s*script\b[^>]*>?", "<\\/script>", s, flags=re.IGNORECASE)
-    s = s.replace("*/", "* /")
-    s = s.replace("\r", " ").replace("\n", " ") \
-         .replace("\u2028", " ").replace("\u2029", " ")
-    return s
+# Shared escaping helpers — single source of truth in inject/_escape.py.
+from golive.inject._escape import _json_for_script, _safe_comment  # noqa: E402
 
 
 def generate_js_from_config(cfg=None) -> str:

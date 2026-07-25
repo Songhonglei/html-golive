@@ -31,6 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 image = ["Pillow>=9.0"]
+s3 = ["boto3>=1.26"]
 
 [project.urls]
 Homepage = "https://github.com/Songhonglei/html-golive"

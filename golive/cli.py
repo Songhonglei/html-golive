@@ -88,8 +88,9 @@ def _load_source_html(source: str, entry: str = "") -> str:
 
 
 def cmd_publish(args) -> int:
-    registry = SqliteRegistry()
-    storage = LocalStorage()
+    from golive.backends.factory import get_registry, get_storage
+    registry = get_registry()
+    storage = get_storage()
 
     html = _load_source_html(args.source, args.entry)
 
@@ -157,7 +158,8 @@ def _title_of(html: str) -> str:
 # ═════════════════════════════════ list ═════════════════════════════════════
 
 def cmd_list(args) -> int:
-    sites = SqliteRegistry().list_all()
+    from golive.backends.factory import get_registry
+    sites = get_registry().list_all()
     if not sites:
         print("暂无站点。试试：golive publish <file.html> --name Demo --slug demo")
         return 0
@@ -173,8 +175,9 @@ def cmd_list(args) -> int:
 # ═════════════════════════════════ rollback ═════════════════════════════════
 
 def cmd_rollback(args) -> int:
-    registry = SqliteRegistry()
-    storage = LocalStorage()
+    from golive.backends.factory import get_registry, get_storage
+    registry = get_registry()
+    storage = get_storage()
     site = registry.resolve(args.site)
     if site is None:
         print(f"❌ 未找到站点：{args.site}", file=sys.stderr)
@@ -382,6 +385,99 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+# ═════════════════════════════════ db / data ════════════════════════════════
+
+def cmd_db(args) -> int:
+    """golive db init — print (or apply) backend table schemas."""
+    from golive.backends.data.supabase import CREATE_TABLE_SQL as TPL_SQL
+    from golive.backends.data.supabase import DEFAULT_TABLE as TPL_TABLE
+    from golive.backends.registry.supabase_store import CREATE_TABLE_SQL as REG_SQL
+    from golive.backends.registry.supabase_store import DEFAULT_TABLE as REG_TABLE
+    from golive.config import get_config
+
+    cfg = get_config()
+    reg_table = cfg.registry.supabase_table or REG_TABLE
+    tpl_table = cfg.data.templates_table or TPL_TABLE
+    sql = ("-- golive registry table\n" + REG_SQL.format(table=reg_table)
+           + "\n-- golive data-layer (TemplateAPI) table\n"
+           + TPL_SQL.format(table=tpl_table))
+
+    if args.print_sql or not cfg.supabase.configured:
+        print(sql)
+        if not cfg.supabase.configured:
+            print("\n-- ℹ️  Supabase 未配置：请把上面的 SQL 粘到 Supabase "
+                  "SQL Editor 里执行。", file=sys.stderr)
+        return 0
+
+    # supabase configured & no --print-sql: PostgREST cannot run DDL —
+    # point the user at the SQL editor rather than pretending we can.
+    print(sql)
+    print("\nℹ️  PostgREST 不支持执行 DDL。请把上面的 SQL 粘到 Supabase "
+          "Dashboard → SQL Editor 执行一次即可。", file=sys.stderr)
+    return 0
+
+
+def cmd_data(args) -> int:
+    """golive data <list|get|create|update|delete|upsert> — template rows."""
+    import json as _json
+
+    from golive.backends.factory import get_template_store
+    store = get_template_store()
+    if store is None:
+        print("❌ data backend 未配置。请在 golive.yaml 设置 "
+              "data.backend: supabase 并配置 supabase.url + key。",
+              file=sys.stderr)
+        return 1
+
+    def _load_content(raw):
+        if not raw:
+            return None
+        if raw.startswith("@"):
+            return _json.loads(Path(raw[1:]).read_text(encoding="utf-8"))
+        return _json.loads(raw)
+
+    try:
+        if args.action == "list":
+            data = store.list(args.model_code, name_prefix=args.name,
+                              page_size=args.limit)
+            print(_json.dumps(data, ensure_ascii=False, indent=2, default=str))
+        elif args.action == "get":
+            row = store.get(args.id)
+            if row is None:
+                print(f"❌ 未找到模板：{args.id}", file=sys.stderr)
+                return 1
+            print(_json.dumps(row, ensure_ascii=False, indent=2, default=str))
+        elif args.action == "create":
+            row = store.create(args.model_code, args.name,
+                               content=_load_content(args.content),
+                               description=args.desc)
+            print(f"✅ 已创建：{row.get('id', '?')}")
+        elif args.action == "upsert":
+            row = store.upsert(args.model_code, args.name,
+                               content=_load_content(args.content))
+            print(f"✅ 已写入：{row.get('id', '?')}")
+        elif args.action == "update":
+            patch = {}
+            if args.name:
+                patch["name"] = args.name
+            if args.content:
+                patch["content"] = _load_content(args.content)
+            if args.desc:
+                patch["desc"] = args.desc
+            row = store.update(args.id, patch)
+            print(f"✅ 已更新：{row.get('id', '?')}")
+        elif args.action == "delete":
+            ok = store.delete(args.id)
+            print("✅ 已删除" if ok else "⚠️  记录不存在")
+        else:
+            print(f"❌ 未知操作：{args.action}", file=sys.stderr)
+            return 1
+    except Exception as e:  # noqa: BLE001 — surface backend errors cleanly
+        print(f"❌ 操作失败：{e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 # ═════════════════════════════════ main ═════════════════════════════════════
 
 def main(argv=None) -> int:
@@ -457,6 +553,28 @@ def main(argv=None) -> int:
     # styles
     p = sub.add_parser("styles", help="列出内置 CSS 风格")
     p.set_defaults(func=cmd_styles)
+
+    # db
+    p = sub.add_parser("db", help="数据库表初始化（输出建表 SQL）")
+    p.add_argument("db_action", choices=["init"], help="init：输出建表 SQL")
+    p.add_argument("--print-sql", action="store_true",
+                   help="仅打印 SQL（默认行为，显式标记用）")
+    p.set_defaults(func=cmd_db)
+
+    # data
+    p = sub.add_parser("data", help="数据层（TemplateAPI）行级 CRUD")
+    p.add_argument("action",
+                   choices=["list", "get", "create", "update", "delete",
+                            "upsert"])
+    p.add_argument("--model-code", default="default",
+                   help="modelCode 命名空间（默认 default）")
+    p.add_argument("--id", default="", help="模板 id（get/update/delete）")
+    p.add_argument("--name", default="", help="模板名称")
+    p.add_argument("--content", default="",
+                   help="JSON 内容，或 @file.json 从文件读取")
+    p.add_argument("--desc", default="", help="描述")
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_data)
 
     # doctor
     p = sub.add_parser("doctor", help="环境健康检查")

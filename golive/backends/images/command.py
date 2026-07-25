@@ -106,16 +106,30 @@ def _last_http_url(stdout: str) -> str:
 
 
 def get_uploader(config: dict | None = None):
-    """Factory: CommandUploader when configured, else None (base64 inline).
+    """Factory: pick the configured image uploader, else None (base64).
 
-    Priority: env GOLIVE_UPLOADER_CMD > config['uploader']['command'].
-    Invalid templates warn and return None rather than breaking a publish.
+    Priority:
+      1. env GOLIVE_UPLOADER_CMD           -> CommandUploader
+      2. golive.yaml uploader.command      -> CommandUploader
+      3. golive.yaml uploader.s3.bucket    -> S3Uploader (needs boto3)
+    Invalid config warns and returns None rather than breaking a publish.
     """
     template = os.environ.get("GOLIVE_UPLOADER_CMD", "").strip()
     if not template and config:
         template = str(
             (config.get("uploader") or {}).get("command") or ""
         ).strip()
+    if not template:
+        try:
+            from golive.config import get_config
+            cfg = get_config()
+            template = cfg.uploader.command.strip()
+            if not template and cfg.uploader.s3_bucket:
+                from golive.backends.images.s3 import S3Uploader
+                return S3Uploader()
+        except Exception as e:  # noqa: BLE001 — uploader must never break publish
+            print(f"⚠️  忽略无效的 uploader 配置：{e}", file=sys.stderr)
+            return None
     if not template:
         return None
     try:

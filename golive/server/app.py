@@ -136,9 +136,10 @@ class _ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def make_server(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
+    from golive.backends.factory import get_registry, get_storage
     handler = GoliveHandler
-    handler.registry = SqliteRegistry()
-    handler.storage = LocalStorage()
+    handler.registry = get_registry()
+    handler.storage = get_storage()
     handler.auth = get_auth_provider()
     return _ThreadingServer((host, port), handler)
 

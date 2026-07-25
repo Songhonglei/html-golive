@@ -113,6 +113,9 @@ def cmd_publish(args) -> int:
     if not ok:
         return 1
 
+    # data-layer injection (window.TemplateAPI / window.SupabaseAPI)
+    html = _apply_data_layers(html, args)
+
     # update or create
     if args.update:
         site = registry.resolve(args.update)
@@ -147,6 +150,56 @@ def cmd_publish(args) -> int:
     print(f"   URL:     {_site_url(site, args.port)}")
     print(f"   （若 serve 未启动，运行：golive serve --port {args.port}）")
     return 0
+
+
+def _apply_data_layers(html: str, args) -> str:
+    """Detect TemplateAPI/SupabaseAPI usage and inject the JS data layer.
+
+    Configured data backend  -> real injection (page runs unchanged).
+    No backend configured    -> stub injection with a clear console error
+                                (publish is never blocked) + CLI warning.
+    """
+    from golive.config import get_config
+    from golive.inject import supabase_api, template_api
+
+    cfg = get_config()
+    data_model = getattr(args, "data_model", "") or ""
+
+    uses_tpl = template_api.detect_usage(html) or bool(data_model)
+    uses_sb = supabase_api.detect_usage(html)
+    if not uses_tpl and not uses_sb:
+        return html
+
+    backend_ready = cfg.data.backend == "supabase" and cfg.supabase.configured
+
+    if uses_tpl:
+        model_code = data_model \
+            or template_api.extract_model_code_from_html(html) or "default"
+        if backend_ready:
+            html = template_api.inject_into_html(html, model_code, cfg=cfg)
+            print(f"🧩 已注入 TemplateAPI 数据层（modelCode: {model_code}）")
+        else:
+            html = template_api.inject_into_html(html, model_code, cfg=cfg)
+            print("⚠️  页面使用了 TemplateAPI，但 data backend 未配置 —— "
+                  "已注入 stub（调用会报错并提示配置方法）。\n"
+                  "   配置：golive.yaml 里 data.backend: supabase + "
+                  "supabase.url，env 里 GOLIVE_SUPABASE_ANON_KEY。",
+                  file=sys.stderr)
+
+    if uses_sb:
+        html = supabase_api.inject_into_html(html, cfg=cfg)
+        if cfg.supabase.configured:
+            print("🧩 已注入 SupabaseAPI 数据层")
+            if not cfg.supabase.service_key:
+                pass  # anon key in page is expected; RLS warning in docs
+        else:
+            print("⚠️  页面使用了 SupabaseAPI，但 Supabase 未配置 —— "
+                  "已注入 stub（调用会报错并提示配置方法）。\n"
+                  "   配置：golive.yaml 里 supabase.url + env "
+                  "GOLIVE_SUPABASE_ANON_KEY（注意为表配置 RLS）。",
+                  file=sys.stderr)
+
+    return html
 
 
 def _title_of(html: str) -> str:
@@ -503,6 +556,9 @@ def main(argv=None) -> int:
     p.add_argument("--owner", default="", help="站点负责人标识")
     p.add_argument("--compress", action="store_true", help="自动压缩内联图片")
     p.add_argument("--skip-scan", action="store_true", help="跳过安全扫描")
+    p.add_argument("--data-model", default="",
+                   help="TemplateAPI modelCode（逗号分隔多个）；配置 data backend "
+                        "后自动注入数据层 JS")
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
                    help="URL 提示中的 serve 端口")
     p.set_defaults(func=cmd_publish)

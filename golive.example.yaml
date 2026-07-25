@@ -73,8 +73,56 @@ uploader:
 
 # ── auth (serve-mode write ops & /api/sites) ────────────────────────────────
 auth:
-  provider: none          # none | token   (oauth coming in M3)
+  provider: none          # none | token | oidc
   # token: ""             # prefer env GOLIVE_TOKEN over writing it here
+
+  # ── generic OIDC (M3) — Google / Keycloak / Authentik / any IdP with a
+  #    discovery document. client_secret NEVER lives here: set the env var
+  #    named by client_secret_env (default GOLIVE_OIDC_CLIENT_SECRET).
+  # oidc:
+  #   # Example A — Google
+  #   issuer: https://accounts.google.com
+  #   client_id: 1234567890-abc.apps.googleusercontent.com
+  #   client_secret_env: GOLIVE_OIDC_CLIENT_SECRET
+  #   redirect_uri: https://pages.example.com/auth/callback
+  #
+  #   # Example B — Keycloak (self-hosted)
+  #   # issuer: https://keycloak.example.com/realms/myrealm
+  #   # client_id: golive
+  #   # redirect_uri: http://localhost:8787/auth/callback
+  #
+  #   # Example C — GitHub (via an OIDC bridge like Dex — GitHub's own
+  #   # OAuth is not OIDC; point issuer at your Dex/Authentik instance
+  #   # with a GitHub connector)
+  #   # issuer: https://dex.example.com
+  #   # client_id: golive
+  #   # redirect_uri: http://localhost:8787/auth/callback
+  #
+  #   scopes: "openid email profile"
+  #   session_ttl: 28800                       # seconds (default 8h)
+  #   cookie_secret_env: GOLIVE_COOKIE_SECRET  # HMAC key for session cookies
+  #   force_secure_cookie: false               # true when always behind TLS
+
+# ── online editor (M3) ───────────────────────────────────────────────────────
+# Per-site opt-in: golive publish <file> --enable-editor
+# Save requests need a token (editor.token > auth.token > rejected) AND the
+# claimed identity must be the site owner / a maintainer (when set).
+editor:
+  token: ""               # prefer env GOLIVE_EDITOR_TOKEN over writing it here
+
+# ── watermark (M3) ───────────────────────────────────────────────────────────
+# Identity: OIDC user (auth.provider: oidc) > text below / --watermark <text>
+# > <meta name="golive-watermark" content="..."> in the page.
+# GOLIVE_WATERMARK_OFF=1 disables globally (debug).
+watermark:
+  enabled: false          # true = watermark every publish (or use --watermark)
+  text: ""                # static fallback text, e.g. CONFIDENTIAL
+  opacity: 0.15
+  font_size: 14
+  rotation: -30           # degrees
+  color: "150,150,150"    # rgb
+  cdn_url: ""             # serve the watermark JS from your own CDN
+  report_webhook: ""      # optional: POST {slug,user,ua,ts} per page view
 
 # ── server ───────────────────────────────────────────────────────────────────
 server:
@@ -93,7 +141,12 @@ localize:
 # ── security scanning ────────────────────────────────────────────────────────
 security:
   extra_rules: []         # extra rule YAML files, same schema as built-in
-  # llm:                  # optional AI review — coming in M3
+  # Optional LLM second-pass review of weak hits (M3). Any OpenAI-compatible
+  # Chat Completions endpoint works: OpenAI, Azure OpenAI, Ollama
+  # (http://localhost:11434/v1), OneAPI/new-api gateways, vLLM, LM Studio.
+  # llm:
   #   base_url: https://api.openai.com/v1
-  #   api_key_env: GOLIVE_LLM_KEY
+  #   api_key_env: GOLIVE_LLM_API_KEY   # env var holding the key ('' ok for Ollama)
   #   model: gpt-4o-mini
+  #   timeout: 20                       # seconds; on timeout rule verdicts stand
+  #   strict_mode: false                # true = refuse publish when LLM unset

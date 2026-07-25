@@ -81,7 +81,26 @@ golive preview draft.html                    # 热更新预览 + 风格面板
 golive clone https://example.com --save-only # 克隆公网页面
 golive styles                                # 查看 19 种 CSS 风格
 golive doctor                                # 环境体检
+
+# v0.3 —— 在线编辑与水印
+golive publish page.html --enable-editor --owner you@example.com
+golive maintainer add demo teammate@example.com
+golive publish page.html --watermark "内部资料"
 ```
+
+### 在线编辑（v0.3）
+
+```bash
+export GOLIVE_EDITOR_TOKEN=$(openssl rand -hex 16)
+golive publish report.html --slug q3 --enable-editor --owner you@example.com
+golive serve
+# 打开 http://localhost:8787/q3?editor_token=<token>&editor_user=you@example.com
+# 点右下角 ✏️ → 直接改文字 → 💾 保存（自动先打快照）
+```
+
+保存走与发布完全相同的安全扫描管线，只有站点 owner 和 maintainer
+能改，每次覆盖前自动生成回滚快照。配置 `auth.provider: oidc` 后，
+编辑器直接认登录会话，无需 token 参数。
 
 ## 功能
 
@@ -108,6 +127,19 @@ golive doctor                                # 环境体检
 - `golive migrate-check` —— 从其他 golive 部署迁移页面
 - Docker Compose 部署（含可选 MinIO profile）
 
+**编辑、身份与水印** *(v0.3)*
+- 浏览器在线编辑器（`publish --enable-editor`）：contenteditable 文字
+  编辑，保存 API 复跑完整安全管线、覆盖前先打快照、owner/maintainer
+  权限控制（`golive maintainer add/remove/list`）
+- 页面水印（`--watermark [文本]`）：canvas 平铺身份水印——OIDC 用户 /
+  静态文本 / 页面 meta 标签三选一；可选访问上报 webhook；
+  `GOLIVE_WATERMARK_OFF=1` 全局禁用
+- 通用 **OIDC 登录**（`auth.provider: oidc`）：Google / Keycloak /
+  Authentik 等任意带 discovery 文档的 IdP；PKCE + 签名会话 cookie；
+  管理 API 与编辑器 API 均认会话
+- 可选 **LLM 安全复核**：弱命中送任意 OpenAI 兼容端点二次判定
+  （`security.llm.*`），失败保守降级，支持 `strict_mode` 硬门槛
+
 **安全**
 - 每次发布凭证/隐私信息扫描（YAML 可扩展规则）
 - 服务端与压缩包解压均做路径穿越防护
@@ -126,7 +158,7 @@ golive doctor                                # 环境体检
   local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
   supabase storage
        │
-  AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oauth（M3）
+  AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oidc（通用 OIDC）
 ```
 
 所有数据存放在 `GOLIVE_HOME`（默认 `~/.golive/`）：
@@ -157,6 +189,10 @@ golive doctor                                # 环境体检
 |---|---|
 | `GOLIVE_HOME` | 数据目录（默认 `~/.golive/`） |
 | `GOLIVE_TOKEN` | 保护 `/api/sites`（Bearer 或 `X-Golive-Token`） |
+| `GOLIVE_EDITOR_TOKEN` | 在线编辑器保存令牌（未设则回落 `GOLIVE_TOKEN`） |
+| `GOLIVE_WATERMARK_TEXT` / `GOLIVE_WATERMARK_OFF` | 水印文本 / 全局禁用开关 |
+| `GOLIVE_OIDC_CLIENT_SECRET` / `GOLIVE_COOKIE_SECRET` | OIDC client secret / 会话 cookie HMAC 密钥 |
+| `GOLIVE_LLM_BASE_URL` / `GOLIVE_LLM_MODEL` / `GOLIVE_LLM_API_KEY` | LLM 安全复核端点 |
 | `GOLIVE_FONT_CDN_BASE` | 替换 `fonts.googleapis.com` 为自有字体镜像 |
 | `GOLIVE_UPLOADER_CMD` | 图片上传命令模板（`mytool up {file}`） |
 | `GOLIVE_SUPABASE_URL` / `_ANON_KEY` / `_SERVICE_KEY` | Supabase 后端 |
@@ -204,8 +240,11 @@ API 签名是**稳定契约**——在任何 golive 部署上开发的页面，�
 ## 安全扫描
 
 每次发布都按内置规则扫描——API key、私钥、数据库连接串、个人信息等。
-强特征命中直接阻断发布；弱特征命中仅告警。可用自己的 YAML 扩展规则，
-确认误报时 `--skip-scan` 跳过。详见 [docs/security.md](docs/security.md)
+强特征命中直接阻断发布；弱特征命中仅告警——还可以选配任意 OpenAI 兼容
+LLM 做语义二次判定（`security.llm.base_url`，OpenAI / Azure / Ollama /
+自建网关均可）。未配置时维持纯规则判定；`strict_mode: true` 则"没有 AI
+复核不发布"。可用自己的 YAML 扩展规则，确认误报时 `--skip-scan` 跳过。
+详见 [docs/security.md](docs/security.md)
 
 ## Docker
 
@@ -219,8 +258,10 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 - ~~**M1 — 内核**：发布/托管/回滚、风格、克隆、预览、安全扫描~~ ✅ v0.1
 - ~~**M2 — 数据层**：Supabase 后端三件套、TemplateAPI/SupabaseAPI 注入、
   S3 适配器、migrate-check、Docker Compose~~ ✅ v0.2
-- **M3 — 编辑与进阶**：浏览器在线编辑器（带版本化保存 API）、水印、可选
-  OpenAI 兼容 LLM 安全复核、OAuth。
+- ~~**M3 — 编辑与身份**：在线编辑器（版本化保存 API）、水印、OpenAI 兼容
+  LLM 安全复核、通用 OIDC~~ ✅ v0.3
+- **M4 — 协作与规模**：共享会话存储（redis）、多人编辑冲突体验、OIDC
+  常见 IdP 快捷预设、基于组的权限。
 
 ## 许可证
 

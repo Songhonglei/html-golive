@@ -49,5 +49,47 @@ security:
 
 ## LLM review (M3)
 
-`security.llm` in `golive.yaml` will let you point weak-hit review at any
-OpenAI-compatible endpoint. Unconfigured installs keep pure rule verdicts.
+Weak hits can get a semantic second pass from any **OpenAI-compatible**
+Chat Completions endpoint. Strong hits always block — they are never sent
+to the LLM.
+
+```yaml
+security:
+  llm:
+    base_url: https://api.openai.com/v1
+    api_key_env: GOLIVE_LLM_API_KEY   # env var holding the key
+    model: gpt-4o-mini
+    timeout: 20
+    strict_mode: false
+```
+
+Env overrides: `GOLIVE_LLM_BASE_URL`, `GOLIVE_LLM_MODEL`,
+`GOLIVE_LLM_API_KEY`.
+
+### Policy matrix
+
+| Situation | Behavior |
+|---|---|
+| `base_url` unset (default) | AI layer skipped; rule verdicts stand |
+| `strict_mode: true` + unset | **publish refused** — you asked for "no AI review, no ship" |
+| LLM says `sensitive: true` | hit kept (warn/block per strength) |
+| LLM says `sensitive: false` | hit cleared as a false positive |
+| LLM timeout / HTTP error / unparseable output | conservative fallback: rule hits kept, warning logged |
+
+### What gets sent
+
+Only the masked hit **contexts** (± 30 chars around each keyword) — never
+the full HTML. Contexts are fenced as JSON data and the prompt instructs
+the model to ignore any instructions embedded in them (prompt-injection
+guard); numbers and secret-looking values are partially masked by the
+scanner before they ever reach the LLM.
+
+### base_url compatibility
+
+| Provider | base_url |
+|---|---|
+| OpenAI | `https://api.openai.com/v1` |
+| Azure OpenAI | full deployment URL ending in `/openai/deployments/<name>` (append `api-version` via gateway) — or front it with an OpenAI-compatible proxy |
+| Ollama (local) | `http://localhost:11434/v1` (api key can be empty) |
+| OneAPI / new-api / self-hosted gateways | your gateway URL ending in `/v1` |
+| vLLM / LM Studio | `http://<host>:<port>/v1` |

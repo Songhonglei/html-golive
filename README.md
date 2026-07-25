@@ -83,7 +83,27 @@ golive preview draft.html                    # live preview + style panel
 golive clone https://example.com --save-only # snapshot a public page
 golive styles                                # list the 19 CSS styles
 golive doctor                                # environment health check
+
+# v0.3 — online editing & watermark
+golive publish page.html --enable-editor --owner you@example.com
+golive maintainer add demo teammate@example.com
+golive publish page.html --watermark "CONFIDENTIAL"
 ```
+
+### Online editing (v0.3)
+
+```bash
+export GOLIVE_EDITOR_TOKEN=$(openssl rand -hex 16)
+golive publish report.html --slug q3 --enable-editor --owner you@example.com
+golive serve
+# open http://localhost:8787/q3?editor_token=<token>&editor_user=you@example.com
+# click ✏️ → edit text inline → 💾 save (snapshot taken automatically)
+```
+
+Saves go through the same security scanner as publishes, are limited to
+the site owner + maintainers, and every overwrite is preceded by a
+rollback snapshot. With `auth.provider: oidc` the editor accepts the
+login session instead of the token+header pair.
 
 ## Features
 
@@ -110,6 +130,21 @@ golive doctor                                # environment health check
 - `golive migrate-check` — port pages from other golive deployments
 - Docker Compose deployment (+ optional MinIO profile)
 
+**Editing, identity & watermarking** *(v0.3)*
+- In-browser inline editor (`publish --enable-editor`): contenteditable
+  text editing with a save API that re-runs the full security pipeline,
+  snapshots before every overwrite, and enforces owner/maintainer ACLs
+  (`golive maintainer add/remove/list`)
+- Page watermarking (`--watermark [text]`): canvas-tiled identity
+  watermark — OIDC user, static text, or page meta tag; optional
+  view-report webhook; `GOLIVE_WATERMARK_OFF=1` kill switch
+- Generic **OIDC login** (`auth.provider: oidc`): Google / Keycloak /
+  Authentik / any discovery-document IdP; PKCE + signed session cookies;
+  sessions accepted by the management and editor APIs
+- Optional **LLM security review** of weak scan hits via any
+  OpenAI-compatible endpoint (`security.llm.*`), with a conservative
+  degrade path and a `strict_mode` gate
+
 **Safety**
 - Credential / PII scanning on every publish (YAML-extensible rules)
 - Path-traversal-hardened server and archive extraction
@@ -128,7 +163,7 @@ golive doctor                                # environment health check
   local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
   supabase storage
        │
-  AuthProvider: none (default) / token (GOLIVE_TOKEN) / oauth (M3)
+  AuthProvider: none (default) / token (GOLIVE_TOKEN) / oidc (generic OIDC)
 ```
 
 All data lives under `GOLIVE_HOME` (default `~/.golive/`):
@@ -160,6 +195,10 @@ Lookup order: `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
 |---|---|
 | `GOLIVE_HOME` | data directory (default `~/.golive/`) |
 | `GOLIVE_TOKEN` | protect `/api/sites` (Bearer or `X-Golive-Token`) |
+| `GOLIVE_EDITOR_TOKEN` | online-editor save token (falls back to `GOLIVE_TOKEN`) |
+| `GOLIVE_WATERMARK_TEXT` / `GOLIVE_WATERMARK_OFF` | watermark text / global kill switch |
+| `GOLIVE_OIDC_CLIENT_SECRET` / `GOLIVE_COOKIE_SECRET` | OIDC client secret / session-cookie HMAC key |
+| `GOLIVE_LLM_BASE_URL` / `GOLIVE_LLM_MODEL` / `GOLIVE_LLM_API_KEY` | LLM security review endpoint |
 | `GOLIVE_FONT_CDN_BASE` | swap `fonts.googleapis.com` for your font mirror |
 | `GOLIVE_UPLOADER_CMD` | image-upload command template (`mytool up {file}`) |
 | `GOLIVE_SUPABASE_URL` / `_ANON_KEY` / `_SERVICE_KEY` | Supabase backends |
@@ -212,8 +251,12 @@ Porting pages from another deployment?
 
 Every publish is scanned against built-in rules — API keys, private
 keys, database connection strings, PII patterns. Strong hits block the
-publish; weak hits warn. Extend with your own YAML rules, or bypass a
-false positive with `--skip-scan`. Details: [docs/security.md](docs/security.md)
+publish; weak hits warn — and can optionally get a semantic second pass
+from any OpenAI-compatible LLM (`security.llm.base_url`; works with
+OpenAI / Azure / Ollama / self-hosted gateways). Unconfigured installs
+keep pure rule verdicts; `strict_mode: true` refuses to publish without
+AI review. Extend with your own YAML rules, or bypass a false positive
+with `--skip-scan`. Details: [docs/security.md](docs/security.md)
 
 ## Docker
 
@@ -227,8 +270,10 @@ docker compose --profile minio up -d        # + local S3 stack for images
 - ~~**M1 — core**: publish/serve/rollback, styles, clone, preview, scan~~ ✅ v0.1
 - ~~**M2 — data layer**: Supabase backend trio, TemplateAPI/SupabaseAPI
   injection, S3 adapters, migrate-check, Docker Compose~~ ✅ v0.2
-- **M3 — editing & beyond**: in-browser inline editor with versioned save
-  API, watermarking, optional OpenAI-compatible LLM security review, OAuth.
+- ~~**M3 — editing & identity**: inline editor with versioned save API,
+  watermarking, OpenAI-compatible LLM security review, generic OIDC~~ ✅ v0.3
+- **M4 — collaboration & scale**: shared session store (redis), multi-user
+  editing conflicts UX, OIDC provider quick-presets, group-based ACLs.
 
 ## License
 

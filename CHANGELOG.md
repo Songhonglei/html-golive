@@ -3,6 +3,78 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-07-25
+
+M3 "editing & identity" milestone.
+
+### Added
+- **Online inline editor** (`golive/inject/editor.py` +
+  `golive/server/editor_api.py`): per-site opt-in via
+  `golive publish --enable-editor`. Floating ✏️ button → contenteditable
+  text editing → save through `PUT /api/sites/<slug>/content` with
+  Bearer editor token + `X-Editor-User` (URL params stashed in
+  sessionStorage; OIDC sessions accepted too). Unsaved-changes guard,
+  status toasts, auto-reload after save.
+  - Server side: constant-time token compare, per-site `editable` gate,
+    **owner/maintainer ACL**, 10 MB body limit, `text/html` content type
+    required, snapshot before every overwrite (rollback covers
+    conflicts), audit-log entry per save.
+  - **The save channel re-runs the full publish security pipeline**
+    (code-safety checker + rule/AI scanner) — editing can never bypass
+    the scan.
+  - Registry schema: `sites.editable` BOOLEAN + `sites.maintainers`
+    JSON (SQLite migrates in place; Supabase DDL includes upgrade
+    hints). New CLI: `golive maintainer add|remove|list <site> [email]`.
+  - Shared-token mode (no owner/maintainer set) triggers an explicit
+    warning at `--enable-editor` time.
+- **Watermark layer** (`golive/inject/watermark.py`): canvas-tiled
+  diagonal identity watermark. Identity sources in priority order:
+  OIDC current user (email prefix only — never the full address),
+  static text (`watermark.text` / `GOLIVE_WATERMARK_TEXT` /
+  `--watermark <text>`), or `<meta name="golive-watermark">`.
+  Inline JS by default; `watermark.cdn_url` switches to your own CDN.
+  Style knobs: opacity / font_size / rotation / color. Optional
+  `watermark.report_webhook` (POST `{slug,user,ua,ts}`) — no telemetry
+  by default. `GOLIVE_WATERMARK_OFF=1` kill switch (also strips
+  previously injected layers on republish).
+- **LLM security review** (`golive/security/ai_review.py`): weak scan
+  hits get an optional semantic second pass through any
+  OpenAI-compatible Chat Completions endpoint
+  (`security.llm.base_url/api_key_env/model/timeout`). Policies:
+  unconfigured → skip (rule verdicts stand); `strict_mode: true` +
+  unconfigured → publish refused; LLM `sensitive:false` → hit cleared;
+  `sensitive:true` → kept; timeout/error/junk → conservative keep.
+  Only masked hit contexts are sent (never whole HTML), fenced as JSON
+  with a prompt-injection guard. Strong hits always block without an
+  LLM call. Compatible with OpenAI / Azure / Ollama / OneAPI / vLLM.
+- **Generic OIDC AuthProvider** (`golive/backends/auth/oauth.py`):
+  `auth.provider: oidc` with discovery-document auto-configuration.
+  Authorization-code flow with **PKCE (S256)** and single-use,
+  TTL-bound `state`; userinfo endpoint (id_token claims fallback);
+  HMAC-signed session-id cookies (HttpOnly, SameSite=Lax, Secure on
+  https or `force_secure_cookie`); in-memory session store with TTL.
+  New server routes: `/auth/login`, `/auth/callback`, `/auth/logout`
+  (with optional IdP end_session redirect), `/auth/me`. `/api/sites`
+  and the editor API accept sessions alongside Bearer tokens.
+  Example configs for Google / Keycloak / Dex-bridged GitHub in
+  `golive.example.yaml`.
+- Shared XSS escaping util `golive/inject/_escape.py` — template_api /
+  supabase_api / editor / watermark all import the same
+  `json_for_script` / `safe_comment` (one fix, four injectors).
+- 68 new tests (129 total): editor ACL + HTTP e2e, watermark identity
+  sources & kill switch, mock-LLM policy branches, fake-IdP OAuth flow
+  with state/PKCE/cookie tampering, M2 WARN regression tests.
+
+### Fixed
+- S3 storage error handling now uses botocore's official
+  `ClientError.response['Error']['Code']` (NoSuchKey / 404 / NotFound /
+  NoSuchBucket → `FileNotFoundError`, AccessDenied →
+  `PermissionError`) instead of substring-matching `str(e)` — an error
+  *message* containing "404" no longer masks a real failure.
+- Supabase Storage snapshot pruning is now guarded by an advisory
+  lockfile (`<site_id>/.prune.lock`, pid+ts payload, 60 s TTL);
+  concurrent publishers skip the prune instead of racing on deletes.
+
 ## [0.2.0] - 2026-07-25
 
 M2 "data layer" milestone.

@@ -1,0 +1,94 @@
+# golive built-in security scan rules
+#
+# Two rule kinds:
+#   keyword_rules — keyword recall + strength grading
+#     strength: strong  -> definite credential literal, BLOCK immediately
+#     strength: weak    -> nouns that often appear in docs; WARN only in M1
+#                          (M3 will route weak hits to optional LLM review)
+#   regex_rules   — patterns that keywords cannot express
+#
+# Extend via your own file and `security.extra_rules` in golive.yaml.
+
+keyword_rules:
+  - type: credential
+    name: 机密凭证（强特征）
+    strength: strong
+    keywords:
+      - api_key
+      - secret_key
+      - app_secret
+      - access_token
+      - private_key
+      - refresh_token
+      - client_secret
+      - session_token
+      - "password="
+      - "passwd="
+      - "pwd="
+      - "jdbc:"
+      - "mongodb://"
+      - "redis://"
+      - "postgres://"
+      - "mysql://"
+      - "authorization:"
+      - ssh-rsa
+      - begin private key
+      - begin rsa
+
+  - type: credential
+    name: 凭证相关名词（弱特征）
+    strength: weak
+    keywords:
+      - apikey
+      - api key
+      - secret
+      - token
+      - 密钥
+      - 私钥
+      - 口令
+
+  - type: personal_info
+    name: 个人信息
+    strength: weak
+    keywords:
+      - 身份证号
+      - 手机号
+      - 银行卡号
+      - 家庭住址
+      - 工资
+      - 薪酬
+
+regex_rules:
+  - type: personal_info
+    name: 手机号（11位）
+    pattern: '\b1[3-9]\d{9}\b'
+    strength: weak
+  - type: personal_info
+    name: 身份证号（18位）
+    pattern: '\b\d{17}[\dXx]\b'
+    strength: strong
+  - type: credential
+    name: JDBC连接串
+    pattern: 'jdbc:[a-zA-Z]+://[\w.:-]+'
+    strength: strong
+  - type: credential
+    name: 数据库连接串
+    pattern: '(mongodb|redis|postgres|mysql)://[\w.@:/-]+'
+    strength: strong
+  - type: credential
+    name: AWS AccessKey
+    pattern: '\bAKIA[0-9A-Z]{16}\b'
+    strength: strong
+  - type: credential
+    name: 云平台 AK/SK 赋值
+    pattern: '(?:AccessKeyId|AccessKeySecret|aws_access_key_id|aws_secret_access_key)\s*[=:]\s*["''][A-Za-z0-9/+\-_]{16,}["'']'
+    strength: strong
+  - type: credential
+    name: OpenAI 风格 key
+    pattern: '\bsk-[A-Za-z0-9\-_]{20,}\b'
+    strength: strong
+  - type: credential
+    name: 私钥文件头
+    # split on purpose so scanners don't flag this rules file itself
+    pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    strength: strong

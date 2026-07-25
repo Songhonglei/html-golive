@@ -90,8 +90,16 @@ golive doctor                                # 环境体检
 - `GOLIVE_UPLOADER_CMD` — 自定义图片上传命令模板
   （如 `mytool upload {file}`）；设置后打包图片走该命令上传，
   不再 base64 内联，详见 [docs/backends.md](docs/backends.md#imageuploader)
+- `FIRECRAWL_API_KEY` — `golive clone` 的可选降级抓取通道（针对重 JS
+  渲染页面）；默认不设置、不产生任何外部调用
 - `golive.yaml` — 后端选型与规则扩展，见
   [golive.example.yaml](golive.example.yaml)（大部分字段 M2 生效）
+
+**网络行为说明**：golive 在发布/托管时不产生任何外呼。例外：`golive clone
+<url>` 抓取目标页面；`golive preview` 首次运行会从 `cdn.tailwindcss.com`
+下载一次性 Tailwind 缓存（离线时静默降级）；注入的 CSS 风格引用公网字体
+CDN（可用 `GOLIVE_FONT_CDN_BASE` 替换）；以及你自己配置的
+`GOLIVE_UPLOADER_CMD`。
 
 ## 安全扫描
 

@@ -294,6 +294,7 @@ def cmd_preview(args) -> int:
         entry_html=args.entry or None,
         initial_style=args.css_style,
         port=args.port,
+        host=args.host,
         open_browser=not args.no_open,
     )
     return 0
@@ -445,6 +446,8 @@ def main(argv=None) -> int:
     p.add_argument("--site", default="", help="已发布站点 id/slug")
     p.add_argument("--css-style", default=None, help="初始 CSS 风格")
     p.add_argument("--port", type=int, default=18765)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="监听地址（默认 127.0.0.1 仅本机；远程/容器环境用 --host 0.0.0.0）")
     p.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     p.set_defaults(func=cmd_preview)
 

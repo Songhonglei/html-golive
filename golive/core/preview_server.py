@@ -628,6 +628,7 @@ def start_preview(
     initial_style: str | None = None,
     port: int = DEFAULT_PORT,
     open_browser: bool = True,
+    host: str = "127.0.0.1",
 ):
     """
     启动预览服务。三种内容来源（三选一）：
@@ -696,7 +697,7 @@ def start_preview(
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         daemon_threads = True
         allow_reuse_address = True  # 快速重启时端口复用
-    server = ThreadedHTTPServer(("0.0.0.0", port), PreviewHandler)
+    server = ThreadedHTTPServer((host, port), PreviewHandler)
 
     url_base, url_note = _get_access_url(port)
     style_hint = f"?style={initial_style}" if initial_style else ""

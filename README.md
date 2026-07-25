@@ -105,8 +105,18 @@ Everything works with zero config. Optional knobs:
   (e.g. `mytool upload {file}`); when set, bundled images are uploaded
   through it instead of being inlined as base64 — see
   [docs/backends.md](docs/backends.md#imageuploader)
+- `FIRECRAWL_API_KEY` — optional fallback fetcher for `golive clone`
+  when a page is heavily JS-rendered; unset by default (no external
+  calls unless you configure it)
 - `golive.yaml` — backend selection & rule extensions, see
   [golive.example.yaml](golive.example.yaml) (most fields land in M2)
+
+**Network behavior**: golive makes no outbound calls at publish/serve time.
+Exceptions: `golive clone <url>` fetches the target page; `golive preview`
+downloads a one-time Tailwind CSS cache from `cdn.tailwindcss.com` on first
+run (fails silently and degrades if offline); injected styles reference
+public font CDNs (override with `GOLIVE_FONT_CDN_BASE`); your own
+`GOLIVE_UPLOADER_CMD`, if configured.
 
 ## Security scanning
 

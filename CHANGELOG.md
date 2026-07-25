@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `GOLIVE_FONT_CDN_BASE` env / `style.font_cdn_base` config: swap the
   `fonts.googleapis.com` prefix for a custom font mirror at injection
   time (e.g. `fonts.loli.net` or a self-hosted service).
+- `golive preview --host` flag; preview now binds `127.0.0.1` by
+  default (use `--host 0.0.0.0` for remote/container environments).
+- README "Network behavior" section documenting every outbound call,
+  plus the optional `FIRECRAWL_API_KEY` fallback for `golive clone`.
 - Custom image uploader: `GOLIVE_UPLOADER_CMD` env /
   `uploader.command` config runs any CLI (`mytool upload {file}`) to
   upload bundled images and reference the returned URL; failures fall

@@ -250,11 +250,23 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
 # ── publish gate ─────────────────────────────────────────────────────────────
 
 def run_scan(html: str, skip_scan: bool = False,
-             extra_rule_files=None) -> tuple:
-    """Scan before publish. Returns (ok_to_publish, ScanResult|None)."""
+             extra_rule_files=None, cfg=None) -> tuple:
+    """Scan before publish. Returns (ok_to_publish, ScanResult|None).
+
+    M3: when ``security.llm.base_url`` is configured, weak hits get a
+    second-pass semantic review by the LLM (see ai_review.py). Strong
+    hits always block — they are never sent to the LLM.
+    """
     if skip_scan:
         print("⏭️  已跳过安全扫描（--skip-scan）", file=sys.stderr)
         return True, None
+
+    # strict mode: user demands AI review; none configured -> refuse
+    from golive.security.ai_review import review_hits, strict_mode_gate
+    ok, msg = strict_mode_gate(cfg)
+    if not ok:
+        print(f"\n🚫 {msg}", file=sys.stderr)
+        return False, None
 
     result = scan_html(html, load_rules(extra_rule_files))
 
@@ -267,25 +279,39 @@ def run_scan(html: str, skip_scan: bool = False,
               file=sys.stderr)
         return False, result
 
-    if result.weak_hits:
+    weak = result.weak_hits
+    if weak:
+        review = review_hits(weak, cfg)
+        if review.ai_used:
+            print(f"🤖 {review.note}", file=sys.stderr)
+            if review.dropped:
+                dropped_keys = {(d["type"], d["keyword"]) for d in review.dropped}
+                result.matched_details = [
+                    d for d in result.matched_details
+                    if not (d["strength"] == "weak"
+                            and (d["type"], d["keyword"]) in dropped_keys)]
+                result.has_sensitive = bool(result.matched_details)
+            weak = [d for d in result.matched_details if d["strength"] == "weak"]
+        elif review.note and "未配置" not in review.note:
+            print(f"⚠️  {review.note}", file=sys.stderr)
+
+    if weak:
         print("\n⚠️  安全扫描提示 — 检测到疑似敏感词（不阻断发布）：", file=sys.stderr)
-        for d in result.weak_hits[:10]:
-            print(f"   · [{d['name']}] {d['keyword']}", file=sys.stderr)
+        for d in weak[:10]:
+            reason = (d.get("ai_review") or {}).get("reason", "")
+            suffix = f"（AI: {reason}）" if reason else ""
+            print(f"   · [{d['name']}] {d['keyword']}{suffix}", file=sys.stderr)
         print("   请确认页面不含真实敏感数据。", file=sys.stderr)
 
     return True, result
 
 
-# ── AI review stub（M3 接 OpenAI 兼容端点）──────────────────────────────────
+# ── AI review（M3 — golive/security/ai_review.py）───────────────────────────
 
-def ai_review(candidates, html):  # pragma: no cover
-    """Optional LLM second-pass review. Not implemented in M1.
-
-    M3 plan: send weak-hit contexts to a user-configured OpenAI-compatible
-    endpoint (security.llm.base_url / api_key in golive.yaml); fall back to
-    rule-only verdicts when unconfigured.
-    """
-    raise NotImplementedError("AI review lands in M3; use rule verdicts for now")
+def ai_review(candidates, html=None, cfg=None):
+    """Compatibility shim — delegates to golive.security.ai_review."""
+    from golive.security.ai_review import review_hits
+    return review_hits(candidates, cfg)
 
 
 # ── CLI (debug) ──────────────────────────────────────────────────────────────

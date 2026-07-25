@@ -116,6 +116,11 @@ def cmd_publish(args) -> int:
     # data-layer injection (window.TemplateAPI / window.SupabaseAPI)
     html = _apply_data_layers(html, args)
 
+    # watermark (M3) — --watermark flag or yaml watermark.enabled
+    html = _apply_watermark(html, args)
+
+    enable_editor = bool(getattr(args, "enable_editor", False))
+
     # update or create
     if args.update:
         site = registry.resolve(args.update)
@@ -129,6 +134,9 @@ def cmd_publish(args) -> int:
                 print(f"❌ {msg}", file=sys.stderr)
                 return 1
             new_slug = args.slug
+        if enable_editor or site.get("editable"):
+            html = _apply_editor_layer(html, site, registry,
+                                       enable_now=enable_editor)
         storage.publish(html, site["site_id"])
         site = registry.update(site["site_id"],
                                name=args.name or None, slug=new_slug)
@@ -141,6 +149,8 @@ def cmd_publish(args) -> int:
                 return 1
         name = args.name or _title_of(html) or Path(args.source).stem
         site = registry.create(name=name, slug=args.slug, owner=args.owner)
+        if enable_editor:
+            html = _apply_editor_layer(html, site, registry, enable_now=True)
         storage.publish(html, site["site_id"], backup_previous=False)
         print(f"\n✅ 发布成功「{site['name']}」")
 
@@ -208,6 +218,67 @@ def _title_of(html: str) -> str:
     return m.group(1).strip()[:60] if m else ""
 
 
+def _apply_watermark(html: str, args) -> str:
+    """Inject the watermark layer when requested (M3).
+
+    Trigger: ``--watermark [text]`` CLI flag, or yaml ``watermark.enabled``.
+    ``GOLIVE_WATERMARK_OFF=1`` wins over everything (debug kill switch).
+    """
+    from golive.config import get_config
+    from golive.inject import watermark as wm
+
+    cfg = get_config()
+    flag = getattr(args, "watermark", None)          # None = flag absent
+    wants = (flag is not None) or cfg.watermark.enabled
+    if not wants:
+        return html
+    if wm.is_disabled():
+        print("⏭️  GOLIVE_WATERMARK_OFF=1 — 水印已禁用", file=sys.stderr)
+        return wm.remove_from_html(html)
+
+    text = (flag if isinstance(flag, str) and flag else "") or cfg.watermark.text
+    auth_me = "/auth/me" if cfg.auth.provider == "oidc" else ""
+    html = wm.inject_into_html(html, text=text, slug=getattr(args, "slug", ""),
+                               auth_me_url=auth_me, cfg=cfg)
+    source = ("OIDC 用户身份" if auth_me else
+              (f"静态文本「{text}」" if text else "页面 meta 标签"))
+    print(f"💧 已注入水印层（身份来源：{source}）")
+    return html
+
+
+def _apply_editor_layer(html: str, site: dict, registry,
+                        enable_now: bool = False) -> str:
+    """Inject the online editor JS + flip the registry editable flag."""
+    from golive.config import get_config
+    from golive.inject import editor as editor_inject
+    from golive.server.editor_api import resolve_editor_token
+
+    cfg = get_config()
+    if enable_now and not site.get("editable"):
+        registry.set_editable(site["site_id"], True)
+        site = dict(site, editable=True)
+
+    token = resolve_editor_token(cfg)
+    if enable_now:
+        if not token:
+            print("⚠️  编辑模式已开启，但未配置编辑令牌 —— 保存请求将全部被拒。\n"
+                  "   设置 GOLIVE_EDITOR_TOKEN（或 golive.yaml editor.token）后，"
+                  "用 ?editor_token=<token>&editor_user=<email> 打开页面。",
+                  file=sys.stderr)
+        elif not (site.get("owner") or site.get("maintainers")):
+            print("⚠️  该站点未设置 owner/maintainer —— 持有编辑令牌的任何人都可保存"
+                  "（共享令牌模式）。\n"
+                  "   建议：golive publish --owner you@example.com，"
+                  "或 golive maintainer add <slug> <email> 收紧权限。",
+                  file=sys.stderr)
+
+    html = editor_inject.inject_into_html(
+        html, slug=site.get("slug") or site["site_id"],
+        site_name=site.get("name", ""))
+    print(f"✏️  已注入在线编辑器（打开页面点右下角 ✏️，或加 ?edit=1）")
+    return html
+
+
 # ═════════════════════════════════ list ═════════════════════════════════════
 
 def cmd_list(args) -> int:
@@ -271,6 +342,43 @@ def cmd_rollback(args) -> int:
     storage.rollback(site["site_id"], target["ts"])
     registry.touch(site["site_id"])
     print(f"✅ 已回滚到 {target['ts']}（当前版本已自动存为新快照）")
+    return 0
+
+
+# ═════════════════════════════════ maintainer ═══════════════════════════════
+
+def cmd_maintainer(args) -> int:
+    """golive maintainer <add|remove|list> <site> [email] — editor ACL."""
+    from golive.backends.factory import get_registry
+    registry = get_registry()
+    site = registry.resolve(args.site)
+    if site is None:
+        print(f"❌ 未找到站点：{args.site}", file=sys.stderr)
+        return 1
+
+    if args.maintainer_action == "list":
+        owner = site.get("owner") or "(未设置)"
+        maintainers = site.get("maintainers") or []
+        print(f"站点「{site['name'] or site['site_id']}」编辑权限：")
+        print(f"  owner:       {owner}")
+        print(f"  maintainers: {', '.join(maintainers) or '(无)'}")
+        print(f"  editable:    {'是' if site.get('editable') else '否'}")
+        return 0
+
+    email = (args.email or "").strip().lower()
+    if not email or "@" not in email:
+        print("❌ 请提供合法邮箱：golive maintainer "
+              f"{args.maintainer_action} {args.site} you@example.com",
+              file=sys.stderr)
+        return 1
+
+    if args.maintainer_action == "add":
+        maintainers = registry.add_maintainer(site["site_id"], email)
+        print(f"✅ 已添加 maintainer：{email}")
+    else:
+        maintainers = registry.remove_maintainer(site["site_id"], email)
+        print(f"✅ 已移除 maintainer：{email}")
+    print(f"   当前列表：{', '.join(maintainers) or '(无)'}")
     return 0
 
 
@@ -559,6 +667,12 @@ def main(argv=None) -> int:
     p.add_argument("--data-model", default="",
                    help="TemplateAPI modelCode（逗号分隔多个）；配置 data backend "
                         "后自动注入数据层 JS")
+    p.add_argument("--enable-editor", action="store_true",
+                   help="开启在线编辑器（注入编辑器 JS + 标记站点可编辑）")
+    p.add_argument("--watermark", nargs="?", const="", default=None,
+                   metavar="TEXT",
+                   help="注入页面水印；可选静态文本（不填则用 OIDC 身份 / "
+                        "yaml watermark.text / 页面 meta 标签）")
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
                    help="URL 提示中的 serve 端口")
     p.set_defaults(func=cmd_publish)
@@ -574,6 +688,13 @@ def main(argv=None) -> int:
     p.add_argument("--dry-run", action="store_true", help="仅列出快照，不执行")
     p.add_argument("--yes", action="store_true", help="跳过确认")
     p.set_defaults(func=cmd_rollback)
+
+    # maintainer
+    p = sub.add_parser("maintainer", help="站点编辑权限（owner/maintainer）管理")
+    p.add_argument("maintainer_action", choices=["add", "remove", "list"])
+    p.add_argument("site", help="站点 id 或 slug")
+    p.add_argument("email", nargs="?", default="", help="maintainer 邮箱")
+    p.set_defaults(func=cmd_maintainer)
 
     # serve
     p = sub.add_parser("serve", help="启动内置 HTTP 服务")

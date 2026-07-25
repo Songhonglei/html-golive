@@ -1,11 +1,17 @@
 """golive.server.app — built-in static hosting server (stdlib http.server).
 
 Routes:
-  GET /                 site index (name + links)
-  GET /health           {"status": "ok"}
-  GET /api/sites        registry listing (token-protected when GOLIVE_TOKEN set)
-  GET /s/<site_id>      site HTML by id
-  GET /<slug>           site HTML by slug
+  GET  /                          site index (name + links)
+  GET  /health                    {"status": "ok"}
+  GET  /api/sites                 registry listing (token / session protected)
+  GET  /s/<site_id>               site HTML by id
+  GET  /<slug>                    site HTML by slug
+  PUT  /api/sites/<ref>/content   online-editor save (M3, editor_api)
+  POST /api/sites/<ref>/upload    online-editor image upload (M3)
+  GET  /auth/login                OIDC login redirect (M3, provider=oidc)
+  GET  /auth/callback             OIDC callback -> session cookie
+  GET  /auth/logout               clear session
+  GET  /auth/me                   current session identity JSON
 
 Start: ``golive serve [--port 8787] [--host 0.0.0.0]``.
 
@@ -19,6 +25,7 @@ import json
 import socket
 import socketserver
 import sys
+import urllib.parse
 
 from golive.backends.auth.token import get_auth_provider
 from golive.backends.registry.sqlite_store import SqliteRegistry
@@ -36,27 +43,53 @@ def _lan_ip() -> str:
         return "127.0.0.1"
 
 
+def _make_oidc():
+    """OIDCAuth instance when auth.provider == oidc, else None."""
+    from golive.config import get_config
+    cfg = get_config()
+    if cfg.auth.provider != "oidc":
+        return None
+    try:
+        from golive.backends.auth.oauth import OIDCAuth
+        return OIDCAuth()
+    except Exception as e:  # noqa: BLE001 — misconfig shouldn't kill serve
+        print(f"⚠️  OIDC 配置不完整，已禁用 OAuth 登录：{e}", file=sys.stderr)
+        return None
+
+
 class GoliveHandler(http.server.BaseHTTPRequestHandler):
-    server_version = "golive/0.1"
+    server_version = "golive/0.3"
 
     # injected by make_server()
     registry: SqliteRegistry = None
     storage: LocalStorage = None
-    auth = None
+    auth = None          # token provider (GOLIVE_TOKEN) for /api/sites
+    oidc = None          # OIDCAuth | None
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
-    def _send(self, code: int, body: bytes, ctype: str = "text/html; charset=utf-8"):
+    def _send(self, code: int, body: bytes, ctype: str = "text/html; charset=utf-8",
+              extra_headers: dict = None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_json(self, code: int, obj):
+    def _send_json(self, code: int, obj, extra_headers: dict = None):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
-                   "application/json; charset=utf-8")
+                   "application/json; charset=utf-8", extra_headers)
+
+    def _redirect(self, url: str, extra_headers: dict = None):
+        self.send_response(302)
+        self.send_header("Location", url)
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _send_site(self, site: dict):
         try:
@@ -66,20 +99,61 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return
         self._send(200, content.encode("utf-8"))
 
+    def _session_user(self):
+        if self.oidc is None:
+            return None
+        return self.oidc.session_user(dict(self.headers))
+
+    def _api_read_allowed(self) -> bool:
+        """/api/sites listing: token (when set) or OIDC session."""
+        if self.auth is not None and self.auth.verify(dict(self.headers)):
+            return True
+        if self.auth is None or getattr(self.auth, "name", "") == "none":
+            return True
+        return self._session_user() is not None
+
+    def _is_secure(self) -> bool:
+        # honor reverse-proxy TLS termination
+        proto = self.headers.get("X-Forwarded-Proto", "")
+        return proto.lower() == "https"
+
+    def _read_body(self, limit: int) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return b""
+        if length <= 0 or length > limit:
+            return b"" if length <= 0 else None   # None => too large
+        remaining = length
+        chunks = []
+        while remaining > 0:
+            chunk = self.rfile.read(min(remaining, 65536))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
+
     def log_message(self, fmt, *args):  # quieter default log
         sys.stderr.write("[serve] %s - %s\n" % (self.address_string(), fmt % args))
 
-    # ── routing ─────────────────────────────────────────────────────────────
+    # ── routing: GET ────────────────────────────────────────────────────────
 
     def do_GET(self):  # noqa: N802
-        path = self.path.split("?", 1)[0].rstrip("/") or "/"
+        parsed = urllib.parse.urlsplit(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        query = urllib.parse.parse_qs(parsed.query)
 
         if path == "/health":
             self._send_json(200, {"status": "ok"})
             return
 
+        if path.startswith("/auth/"):
+            self._handle_auth(path, query)
+            return
+
         if path == "/api/sites":
-            if self.auth is not None and not self.auth.verify(dict(self.headers)):
+            if not self._api_read_allowed():
                 self._send_json(401, {"error": "unauthorized"})
                 return
             sites = self.registry.list_all()
@@ -108,6 +182,149 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
                 return
 
         self._send(404, "<h1>404</h1><p>not found</p>".encode())
+
+    # ── routing: PUT / POST (editor API, M3) ────────────────────────────────
+
+    def _match_editor_route(self, suffix: str):
+        """/api/sites/<ref>/<suffix> -> site dict | None (after sending err)."""
+        parts = self.path.split("?", 1)[0].strip("/").split("/")
+        # ['api', 'sites', '<ref>', suffix]
+        if len(parts) != 4 or parts[0] != "api" or parts[1] != "sites" \
+                or parts[3] != suffix:
+            return None, False
+        ref = urllib.parse.unquote(parts[2])
+        site = self.registry.resolve(ref)
+        if site is None:
+            self._send_json(404, {"error": f"unknown site: {ref}"})
+            return None, True
+        return site, True
+
+    def do_PUT(self):  # noqa: N802
+        site, matched = self._match_editor_route("content")
+        if not matched:
+            self._send_json(404, {"error": "not found"})
+            return
+        if site is None:
+            return  # 404 already sent
+
+        from golive.server import editor_api
+
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip()
+        if ctype not in ("text/html", "application/xhtml+xml"):
+            self._send_json(415, {"error": "Content-Type must be text/html"})
+            return
+
+        ok, code, msg, editor = editor_api.check_editor_auth(
+            dict(self.headers), site, session_user=self._session_user())
+        if not ok:
+            self._send_json(code, {"error": msg})
+            return
+
+        body = self._read_body(editor_api.MAX_HTML_BYTES)
+        if body is None:
+            self._send_json(413, {"error": "HTML too large (10MB limit)"})
+            return
+        if not body:
+            self._send_json(400, {"error": "empty body"})
+            return
+        try:
+            html = body.decode("utf-8")
+        except UnicodeDecodeError:
+            self._send_json(400, {"error": "body must be UTF-8 HTML"})
+            return
+
+        status, payload = editor_api.save_content(
+            site, html, editor, self.registry, self.storage)
+        self._send_json(status, payload)
+
+    def do_POST(self):  # noqa: N802
+        site, matched = self._match_editor_route("upload")
+        if not matched:
+            self._send_json(404, {"error": "not found"})
+            return
+        if site is None:
+            return
+
+        from golive.server import editor_api
+
+        ok, code, msg, editor = editor_api.check_editor_auth(
+            dict(self.headers), site, session_user=self._session_user())
+        if not ok:
+            self._send_json(code, {"error": msg})
+            return
+
+        data = self._read_body(editor_api.MAX_UPLOAD_BYTES)
+        if data is None:
+            self._send_json(413, {"error": "file too large"})
+            return
+        if not data:
+            self._send_json(400, {"error": "empty body"})
+            return
+        filename = self.headers.get("X-Filename", "image.png")
+        status, payload = editor_api.upload_image(site, data, filename, editor)
+        self._send_json(status, payload)
+
+    # ── OIDC auth endpoints (M3) ────────────────────────────────────────────
+
+    def _handle_auth(self, path: str, query: dict):
+        if path == "/auth/me":
+            user = self._session_user()
+            if user is None:
+                self._send_json(401, {"error": "no active session"})
+            else:
+                self._send_json(200, user)
+            return
+
+        if self.oidc is None:
+            self._send_json(404, {"error": "OAuth is not configured "
+                                           "(auth.provider != oidc)"})
+            return
+
+        if path == "/auth/login":
+            try:
+                self._redirect(self.oidc.begin_login())
+            except Exception as e:  # noqa: BLE001
+                self._send_json(502, {"error": f"OIDC discovery/login failed: {e}"})
+            return
+
+        if path == "/auth/callback":
+            err = (query.get("error") or [""])[0]
+            if err:
+                desc = (query.get("error_description") or [""])[0]
+                self._send_json(400, {"error": f"IdP error: {err} {desc}".strip()})
+                return
+            code = (query.get("code") or [""])[0]
+            state = (query.get("state") or [""])[0]
+            if not code or not state:
+                self._send_json(400, {"error": "missing code/state"})
+                return
+            try:
+                result = self.oidc.complete_login(code, state)
+            except Exception as e:  # noqa: BLE001
+                self._send_json(401, {"error": f"login failed: {e}"})
+                return
+            cookie = self.oidc.build_cookie(result["cookie_value"],
+                                            secure=self._is_secure())
+            self._redirect("/", extra_headers={"Set-Cookie": cookie})
+            return
+
+        if path == "/auth/logout":
+            self.oidc.logout(dict(self.headers))
+            headers = {"Set-Cookie": self.oidc.clear_cookie()}
+            end_url = self.oidc.end_session_url()
+            if end_url:
+                self.send_response(302)
+                self.send_header("Location", end_url)
+                self.send_header("Set-Cookie", self.oidc.clear_cookie())
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._send_json(200, {"success": True}, extra_headers=headers)
+            return
+
+        self._send_json(404, {"error": "unknown auth endpoint"})
+
+    # ── index page ──────────────────────────────────────────────────────────
 
     def _send_index(self):
         sites = self.registry.list_all(limit=100)
@@ -141,6 +358,7 @@ def make_server(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
     handler.registry = get_registry()
     handler.storage = get_storage()
     handler.auth = get_auth_provider()
+    handler.oidc = _make_oidc()
     return _ThreadingServer((host, port), handler)
 
 
@@ -151,6 +369,8 @@ def serve(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
     print(f"   本机:  http://localhost:{port}/")
     if ip != "127.0.0.1":
         print(f"   局域网: http://{ip}:{port}/")
+    if GoliveHandler.oidc is not None:
+        print(f"   OAuth:  http://localhost:{port}/auth/login")
     print("   Ctrl+C 停止")
     try:
         srv.serve_forever()

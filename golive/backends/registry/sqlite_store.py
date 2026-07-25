@@ -2,13 +2,16 @@
 
 Table:
   sites(site_id TEXT PK, name, slug UNIQUE, created_at, updated_at,
-        owner, notes)
+        owner, notes, editable, maintainers)
 
 site_id: uuid4().hex — 32 hex chars.
 slug is stored lowercase; empty slug allowed (site addressable via /s/<id>).
+editable: 0/1 — whether the online editor is enabled for the site (M3).
+maintainers: JSON array of emails allowed to edit besides the owner (M3).
 """
 
 import datetime
+import json
 import sqlite3
 import uuid
 from typing import Optional
@@ -17,15 +20,23 @@ from golive.core.paths import get_registry_db
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sites (
-    site_id    TEXT PRIMARY KEY,
-    name       TEXT NOT NULL DEFAULT '',
-    slug       TEXT UNIQUE,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    owner      TEXT NOT NULL DEFAULT '',
-    notes      TEXT NOT NULL DEFAULT ''
+    site_id     TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    slug        TEXT UNIQUE,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    owner       TEXT NOT NULL DEFAULT '',
+    notes       TEXT NOT NULL DEFAULT '',
+    editable    INTEGER NOT NULL DEFAULT 0,
+    maintainers TEXT NOT NULL DEFAULT '[]'
 );
 """
+
+# columns added after v0.2 — migrated in-place for existing databases
+_MIGRATIONS = [
+    ("editable", "ALTER TABLE sites ADD COLUMN editable INTEGER NOT NULL DEFAULT 0"),
+    ("maintainers", "ALTER TABLE sites ADD COLUMN maintainers TEXT NOT NULL DEFAULT '[]'"),
+]
 
 
 def _now() -> str:
@@ -39,6 +50,10 @@ class SqliteRegistry:
         self.db_path = str(db_path or get_registry_db())
         with self._conn() as c:
             c.executescript(_SCHEMA)
+            cols = {r["name"] for r in c.execute("PRAGMA table_info(sites)")}
+            for col, ddl in _MIGRATIONS:
+                if col not in cols:
+                    c.execute(ddl)
 
     def _conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
@@ -91,11 +106,23 @@ class SqliteRegistry:
 
     # ── query ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _row_to_dict(row) -> dict:
+        d = dict(row)
+        raw = d.get("maintainers", "[]")
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+            d["maintainers"] = parsed if isinstance(parsed, list) else []
+        except (ValueError, TypeError):
+            d["maintainers"] = []
+        d["editable"] = bool(d.get("editable", 0))
+        return d
+
     def get(self, site_id: str) -> Optional[dict]:
         with self._conn() as c:
             row = c.execute("SELECT * FROM sites WHERE site_id = ?",
                             (site_id,)).fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row) if row else None
 
     def get_by_slug(self, slug: str) -> Optional[dict]:
         if not slug:
@@ -103,7 +130,7 @@ class SqliteRegistry:
         with self._conn() as c:
             row = c.execute("SELECT * FROM sites WHERE slug = ?",
                             (slug.strip().lower(),)).fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row) if row else None
 
     def resolve(self, ref: str) -> Optional[dict]:
         """Resolve a site by id or slug."""
@@ -114,10 +141,62 @@ class SqliteRegistry:
             rows = c.execute(
                 "SELECT * FROM sites ORDER BY updated_at DESC LIMIT ?",
                 (limit,)).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_dict(r) for r in rows]
 
     def slug_taken(self, slug: str, exclude_site_id: str = "") -> bool:
         site = self.get_by_slug(slug)
         if site is None:
             return False
         return site["site_id"] != exclude_site_id
+
+    # ── editor mode / maintainers (M3) ──────────────────────────────────────
+
+    def set_editable(self, site_id: str, editable: bool) -> None:
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE sites SET editable = ?, updated_at = ? WHERE site_id = ?",
+                (1 if editable else 0, _now(), site_id))
+            if cur.rowcount == 0:
+                raise KeyError(f"site not found: {site_id}")
+
+    def set_owner(self, site_id: str, owner: str) -> None:
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE sites SET owner = ?, updated_at = ? WHERE site_id = ?",
+                (owner.strip(), _now(), site_id))
+            if cur.rowcount == 0:
+                raise KeyError(f"site not found: {site_id}")
+
+    def _write_maintainers(self, site_id: str, maintainers: list) -> None:
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE sites SET maintainers = ?, updated_at = ? WHERE site_id = ?",
+                (json.dumps(sorted(set(maintainers))), _now(), site_id))
+            if cur.rowcount == 0:
+                raise KeyError(f"site not found: {site_id}")
+
+    def add_maintainer(self, site_id: str, email: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        m = list(site.get("maintainers") or [])
+        email = email.strip().lower()
+        if email and email not in m:
+            m.append(email)
+            self._write_maintainers(site_id, m)
+        return sorted(set(m))
+
+    def remove_maintainer(self, site_id: str, email: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        email = email.strip().lower()
+        m = [x for x in (site.get("maintainers") or []) if x != email]
+        self._write_maintainers(site_id, m)
+        return m
+
+    def list_maintainers(self, site_id: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        return list(site.get("maintainers") or [])

@@ -96,8 +96,64 @@ class DataConfig:
 
 @dataclass
 class AuthConfig:
-    provider: str = "none"           # none | token
+    provider: str = "none"           # none | token | oidc
     token: str = ""
+    # OIDC (M3) — generic OpenID Connect (Google / GitHub via OIDC bridge /
+    # Keycloak / Authentik / any self-hosted IdP with a discovery document).
+    oidc_issuer: str = ""            # https://idp.example.com (discovery base)
+    oidc_client_id: str = ""
+    oidc_client_secret_env: str = "GOLIVE_OIDC_CLIENT_SECRET"
+    oidc_redirect_uri: str = ""      # e.g. http://localhost:8787/auth/callback
+    oidc_scopes: str = "openid email profile"
+    oidc_session_ttl: int = 8 * 3600   # seconds
+    oidc_cookie_secret_env: str = "GOLIVE_COOKIE_SECRET"
+    oidc_force_secure_cookie: bool = False
+
+    @property
+    def oidc_client_secret(self) -> str:
+        return os.environ.get(self.oidc_client_secret_env, "")
+
+    @property
+    def oidc_cookie_secret(self) -> str:
+        return os.environ.get(self.oidc_cookie_secret_env, "")
+
+
+@dataclass
+class EditorConfig:
+    """Online editor (M3). Disabled per-site until publish --enable-editor."""
+    token: str = ""                  # editor token; falls back to auth.token
+
+
+@dataclass
+class WatermarkConfig:
+    """Front-end canvas watermark (M3)."""
+    enabled: bool = False
+    text: str = ""                   # static watermark text (identity source 2)
+    opacity: float = 0.15
+    font_size: int = 14
+    rotation: int = -30              # degrees
+    color: str = "150,150,150"       # rgb triplet
+    cdn_url: str = ""                # serve JS from your own CDN instead of inline
+    report_webhook: str = ""         # optional POST {slug,user,ua,ts}
+
+
+@dataclass
+class LLMConfig:
+    """OpenAI-compatible endpoint for AI security review (M3)."""
+    base_url: str = ""               # e.g. https://api.openai.com/v1
+    api_key_env: str = "GOLIVE_LLM_API_KEY"
+    model: str = "gpt-4o-mini"
+    timeout: int = 20                # seconds
+    strict_mode: bool = False        # True: refuse publish when LLM unset
+
+    @property
+    def api_key(self) -> str:
+        return os.environ.get("GOLIVE_LLM_API_KEY", "") \
+            or os.environ.get(self.api_key_env, "")
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.base_url)
 
 
 @dataclass
@@ -120,6 +176,7 @@ class StyleConfig:
 @dataclass
 class SecurityConfig:
     extra_rules: list = field(default_factory=list)
+    llm: LLMConfig = field(default_factory=LLMConfig)
 
 
 @dataclass
@@ -136,6 +193,8 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     uploader: UploaderConfig = field(default_factory=UploaderConfig)
+    editor: EditorConfig = field(default_factory=EditorConfig)
+    watermark: WatermarkConfig = field(default_factory=WatermarkConfig)
     style: StyleConfig = field(default_factory=StyleConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
@@ -245,6 +304,40 @@ def _build(raw: dict, source_path: str) -> Config:
     # auth
     cfg.auth.provider = str(_get(raw, "auth", "provider", default="none") or "none").lower()
     cfg.auth.token = str(_get(raw, "auth", "token", default="") or "")
+    au = cfg.auth
+    au.oidc_issuer = str(_get(raw, "auth", "oidc", "issuer", default="") or "").rstrip("/")
+    au.oidc_client_id = str(_get(raw, "auth", "oidc", "client_id", default="") or "")
+    au.oidc_client_secret_env = str(_get(raw, "auth", "oidc", "client_secret_env",
+                                         default=au.oidc_client_secret_env))
+    au.oidc_redirect_uri = str(_get(raw, "auth", "oidc", "redirect_uri", default="") or "")
+    au.oidc_scopes = str(_get(raw, "auth", "oidc", "scopes",
+                              default=au.oidc_scopes) or au.oidc_scopes)
+    try:
+        au.oidc_session_ttl = int(_get(raw, "auth", "oidc", "session_ttl",
+                                       default=au.oidc_session_ttl))
+    except (TypeError, ValueError):
+        raise ConfigError("auth.oidc.session_ttl must be an integer (seconds)")
+    au.oidc_cookie_secret_env = str(_get(raw, "auth", "oidc", "cookie_secret_env",
+                                         default=au.oidc_cookie_secret_env))
+    au.oidc_force_secure_cookie = bool(_get(raw, "auth", "oidc",
+                                            "force_secure_cookie", default=False))
+
+    # editor (M3)
+    cfg.editor.token = str(_get(raw, "editor", "token", default="") or "")
+
+    # watermark (M3)
+    wm = cfg.watermark
+    wm.enabled = bool(_get(raw, "watermark", "enabled", default=False))
+    wm.text = str(_get(raw, "watermark", "text", default="") or "")
+    try:
+        wm.opacity = float(_get(raw, "watermark", "opacity", default=wm.opacity))
+        wm.font_size = int(_get(raw, "watermark", "font_size", default=wm.font_size))
+        wm.rotation = int(_get(raw, "watermark", "rotation", default=wm.rotation))
+    except (TypeError, ValueError):
+        raise ConfigError("watermark.opacity/font_size/rotation must be numeric")
+    wm.color = str(_get(raw, "watermark", "color", default=wm.color) or wm.color)
+    wm.cdn_url = str(_get(raw, "watermark", "cdn_url", default="") or "")
+    wm.report_webhook = str(_get(raw, "watermark", "report_webhook", default="") or "")
 
     # uploader
     up = cfg.uploader
@@ -263,6 +356,17 @@ def _build(raw: dict, source_path: str) -> Config:
     cfg.style.font_cdn_base = str(_get(raw, "style", "font_cdn_base", default="") or "")
     extra = _get(raw, "security", "extra_rules", default=[])
     cfg.security.extra_rules = list(extra) if isinstance(extra, (list, tuple)) else []
+    llm = cfg.security.llm
+    llm.base_url = str(_get(raw, "security", "llm", "base_url", default="") or "").rstrip("/")
+    llm.api_key_env = str(_get(raw, "security", "llm", "api_key_env",
+                               default=llm.api_key_env))
+    llm.model = str(_get(raw, "security", "llm", "model",
+                         default=llm.model) or llm.model)
+    try:
+        llm.timeout = int(_get(raw, "security", "llm", "timeout", default=llm.timeout))
+    except (TypeError, ValueError):
+        raise ConfigError("security.llm.timeout must be an integer (seconds)")
+    llm.strict_mode = bool(_get(raw, "security", "llm", "strict_mode", default=False))
     cfg.server.host = str(_get(raw, "server", "host", default="0.0.0.0"))
     try:
         cfg.server.port = int(_get(raw, "server", "port", default=8787))
@@ -301,6 +405,20 @@ def _apply_env_overrides(cfg: Config) -> Config:
     s3_bucket = os.environ.get("GOLIVE_S3_BUCKET", "").strip()
     if s3_bucket:
         cfg.storage.s3_bucket = s3_bucket
+    editor_tok = os.environ.get("GOLIVE_EDITOR_TOKEN", "").strip()
+    if editor_tok:
+        cfg.editor.token = editor_tok
+    wm_text = os.environ.get("GOLIVE_WATERMARK_TEXT", "").strip()
+    if wm_text:
+        cfg.watermark.text = wm_text
+    if os.environ.get("GOLIVE_WATERMARK_OFF", "").strip() == "1":
+        cfg.watermark.enabled = False
+    llm_base = os.environ.get("GOLIVE_LLM_BASE_URL", "").strip()
+    if llm_base:
+        cfg.security.llm.base_url = llm_base.rstrip("/")
+    llm_model = os.environ.get("GOLIVE_LLM_MODEL", "").strip()
+    if llm_model:
+        cfg.security.llm.model = llm_model
     return cfg
 
 

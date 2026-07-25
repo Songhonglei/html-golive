@@ -32,14 +32,19 @@ DEFAULT_TABLE = "golive_sites"
 
 CREATE_TABLE_SQL = """\
 create table if not exists {table} (
-    site_id    text primary key,
-    name       text not null default '',
-    slug       text unique,
-    created_at text not null,
-    updated_at text not null,
-    owner      text not null default '',
-    notes      text not null default ''
+    site_id     text primary key,
+    name        text not null default '',
+    slug        text unique,
+    created_at  text not null,
+    updated_at  text not null,
+    owner       text not null default '',
+    notes       text not null default '',
+    editable    boolean not null default false,
+    maintainers jsonb not null default '[]'::jsonb
 );
+-- Upgrading from v0.2? Run instead:
+--   alter table {table} add column if not exists editable boolean not null default false;
+--   alter table {table} add column if not exists maintainers jsonb not null default '[]'::jsonb;
 -- Optional: enable RLS and restrict writes to service_role
 -- alter table {table} enable row level security;
 -- create policy "public read" on {table} for select using (true);
@@ -128,3 +133,52 @@ class SupabaseRegistry:
         if site is None:
             return False
         return site["site_id"] != exclude_site_id
+
+    # ── editor mode / maintainers (M3) ──────────────────────────────────────
+
+    def set_editable(self, site_id: str, editable: bool) -> None:
+        rows = self.client.update(
+            self.table, {"site_id": f"eq.{site_id}"},
+            {"editable": bool(editable), "updated_at": _now()})
+        if not rows:
+            raise KeyError(f"site not found: {site_id}")
+
+    def set_owner(self, site_id: str, owner: str) -> None:
+        rows = self.client.update(
+            self.table, {"site_id": f"eq.{site_id}"},
+            {"owner": owner.strip(), "updated_at": _now()})
+        if not rows:
+            raise KeyError(f"site not found: {site_id}")
+
+    def _write_maintainers(self, site_id: str, maintainers: list) -> None:
+        rows = self.client.update(
+            self.table, {"site_id": f"eq.{site_id}"},
+            {"maintainers": sorted(set(maintainers)), "updated_at": _now()})
+        if not rows:
+            raise KeyError(f"site not found: {site_id}")
+
+    def add_maintainer(self, site_id: str, email: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        m = list(site.get("maintainers") or [])
+        email = email.strip().lower()
+        if email and email not in m:
+            m.append(email)
+            self._write_maintainers(site_id, m)
+        return sorted(set(m))
+
+    def remove_maintainer(self, site_id: str, email: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        email = email.strip().lower()
+        m = [x for x in (site.get("maintainers") or []) if x != email]
+        self._write_maintainers(site_id, m)
+        return m
+
+    def list_maintainers(self, site_id: str) -> list:
+        site = self.get(site_id)
+        if site is None:
+            raise KeyError(f"site not found: {site_id}")
+        return list(site.get("maintainers") or [])

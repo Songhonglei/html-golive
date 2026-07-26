@@ -12,6 +12,8 @@ Routes:
   GET  /auth/callback             OIDC callback -> session cookie
   GET  /auth/logout               clear session
   GET  /auth/me                   current session identity JSON
+  GET  /admin                     admin portal SPA (M5)
+  *    /api/admin/...             admin JSON API (M5, admin_api)
 
 Start: ``golive serve [--port 8787] [--host 0.0.0.0]``.
 
@@ -128,6 +130,46 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         proto = self.headers.get("X-Forwarded-Proto", "")
         return proto.lower() == "https"
 
+    # ── admin portal helpers (M5) ───────────────────────────────────────────
+
+    def _is_loopback(self) -> bool:
+        client_ip = self.client_address[0] if self.client_address else ""
+        return client_ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+    def _admin_identity(self):
+        """Resolve the caller Identity for /admin + /api/admin.
+
+        Sources: OIDC session > static token (=> superadmin). With *no*
+        auth configured at all, a loopback caller is treated as
+        superadmin — same trust model as _api_read_allowed: the operator
+        sitting on the box already owns GOLIVE_HOME.
+        """
+        from golive.server import authz
+        session_user = self._session_user()
+        _auth_is_real = (self.auth is not None
+                         and getattr(self.auth, "name", "none") != "none")
+        token_ok = _auth_is_real and self.auth.verify(dict(self.headers))
+        ident = authz.resolve_identity(session_user, token_ok)
+        if ident is None and not _auth_is_real and self.oidc is None \
+                and self._is_loopback():
+            ident = authz.Identity(email="", via_token=True,
+                                   is_superadmin=True)
+        return ident
+
+    def _handle_admin_api(self, method: str, parsed):
+        from golive.server import admin_api
+        body = b""
+        if method in ("POST", "PATCH", "DELETE", "PUT"):
+            body = self._read_body(admin_api.MAX_BODY_BYTES)
+            if body is None:
+                self._send_json(413, {"error": "body too large"})
+                return
+        query = urllib.parse.parse_qs(parsed.query)
+        status, payload = admin_api.handle(
+            method, parsed.path, query, body,
+            self._admin_identity(), self.registry, self.storage)
+        self._send_json(status, payload)
+
     def _read_body(self, limit: int) -> bytes:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -161,6 +203,14 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/auth/"):
             self._handle_auth(path, query)
+            return
+
+        if path == "/admin":
+            self._send_admin_page()
+            return
+
+        if path.startswith("/api/admin"):
+            self._handle_admin_api("GET", parsed)
             return
 
         if path == "/api/sites":
@@ -211,6 +261,10 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         return site, True
 
     def do_PUT(self):  # noqa: N802
+        parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/admin"):
+            self._handle_admin_api("PUT", parsed)
+            return
         site, matched = self._match_editor_route("content")
         if not matched:
             self._send_json(404, {"error": "not found"})
@@ -249,6 +303,10 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         self._send_json(status, payload)
 
     def do_POST(self):  # noqa: N802
+        parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/admin"):
+            self._handle_admin_api("POST", parsed)
+            return
         site, matched = self._match_editor_route("upload")
         if not matched:
             self._send_json(404, {"error": "not found"})
@@ -274,6 +332,47 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         filename = self.headers.get("X-Filename", "image.png")
         status, payload = editor_api.upload_image(site, data, filename, editor)
         self._send_json(status, payload)
+
+    def do_PATCH(self):  # noqa: N802
+        parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/admin"):
+            self._handle_admin_api("PATCH", parsed)
+            return
+        self._send_json(404, {"error": "not found"})
+
+    def do_DELETE(self):  # noqa: N802
+        parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/admin"):
+            self._handle_admin_api("DELETE", parsed)
+            return
+        self._send_json(404, {"error": "not found"})
+
+    # ── admin portal page (M5) ──────────────────────────────────────────────
+
+    def _send_admin_page(self):
+        """Serve the admin SPA.
+
+        - identity resolved (OIDC session / token header / zero-config
+          loopback) -> full page.
+        - no identity but OIDC configured -> redirect to /auth/login.
+        - no identity but token auth configured -> serve the static shell
+          anyway: it contains no data (the JSON API enforces auth on every
+          call) and the SPA prompts for the token, sent via X-Golive-Token.
+        - no identity, no auth, remote caller -> 401 (mirror of
+          _api_read_allowed's loopback-only rule).
+        """
+        ident = self._admin_identity()
+        _auth_is_real = (self.auth is not None
+                         and getattr(self.auth, "name", "none") != "none")
+        if ident is None and self.oidc is not None:
+            self._redirect("/auth/login")
+            return
+        if ident is None and not _auth_is_real:
+            self._send_json(401, {"error": "authentication required "
+                                           "(set GOLIVE_TOKEN or OIDC)"})
+            return
+        from golive.server.admin_ui import render_admin_page
+        self._send(200, render_admin_page(ident).encode("utf-8"))
 
     # ── OIDC auth endpoints (M3) ────────────────────────────────────────────
 

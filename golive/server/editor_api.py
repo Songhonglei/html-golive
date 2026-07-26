@@ -132,6 +132,12 @@ def save_content(site: dict, html: str, editor: str,
              success=True, duration_ms=int((time.time() - t0) * 1000),
              result={"snapshot_id": snapshot_id})
 
+    # admin audit trail (M5) — one line per write action
+    from golive.core.audit import record
+    record(editor or "(token)", "editor.save",
+           site.get("slug") or site_id,
+           {"size": size, "snapshot_id": snapshot_id})
+
     return 200, {"success": True, "snapshot_id": snapshot_id, "size": size}
 
 

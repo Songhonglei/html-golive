@@ -1,0 +1,339 @@
+"""golive.server.admin_api — JSON API behind the admin portal (M5).
+
+All endpoints live under ``/api/admin/``; every response is JSON.
+Auth: 401 when the caller has no identity at all, 403 when the identity
+lacks the required role. Identity resolution is in golive.server.authz.
+
+Endpoints (dispatched from app.py):
+  GET    /api/admin/me                          identity + roles
+  GET    /api/admin/sites?page=&size=&q=        list (scoped by role)
+  GET    /api/admin/sites/<slug>                detail + snapshots
+  PATCH  /api/admin/sites/<slug>                edit name/notes/editable
+  DELETE /api/admin/sites/<slug>                delete (confirm required)
+  POST   /api/admin/sites/<slug>/transfer       transfer ownership
+  POST   /api/admin/sites/<slug>/maintainers    add maintainer
+  DELETE /api/admin/sites/<slug>/maintainers    remove maintainer
+  POST   /api/admin/sites/<slug>/rollback       roll back to a snapshot
+  GET    /api/admin/stats                       superadmin dashboard numbers
+  GET    /api/admin/audit?page=&size=&slug=&action=   audit trail
+
+This module is transport-free: ``handle()`` gets plain values and returns
+``(status_code, payload_dict)`` — easy to unit-test without sockets.
+"""
+
+from __future__ import annotations
+
+import datetime
+import json
+import re
+from typing import Optional
+
+from golive.core.audit import read_entries, record
+from golive.server import authz
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAX_BODY_BYTES = 64 * 1024
+
+
+def _err(status: int, msg: str) -> tuple:
+    return status, {"error": msg}
+
+
+def _who(identity: authz.Identity) -> str:
+    return identity.email or "(token)"
+
+
+def _site_public(site: dict, storage=None) -> dict:
+    """Registry row -> API shape (adds size when storage given)."""
+    out = {
+        "site_id": site["site_id"],
+        "name": site.get("name") or "",
+        "slug": site.get("slug") or "",
+        "owner": site.get("owner") or "",
+        "notes": site.get("notes") or "",
+        "editable": bool(site.get("editable")),
+        "maintainers": list(site.get("maintainers") or []),
+        "created_at": site.get("created_at") or "",
+        "updated_at": site.get("updated_at") or "",
+    }
+    if storage is not None:
+        out["size"] = _site_size(storage, site["site_id"])
+    return out
+
+
+def _site_size(storage, site_id: str) -> int:
+    try:
+        p = storage.site_path(site_id)
+        return p.stat().st_size if p.exists() else 0
+    except Exception:  # noqa: BLE001 — non-local storage / missing file
+        try:
+            return len(storage.read(site_id).encode("utf-8"))
+        except Exception:  # noqa: BLE001
+            return 0
+
+
+def _parse_body(body: bytes) -> Optional[dict]:
+    if not body:
+        return {}
+    try:
+        obj = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def _valid_email(s: str) -> bool:
+    return bool(_EMAIL_RE.match(s or ""))
+
+
+# ── dispatcher ───────────────────────────────────────────────────────────────
+
+def handle(method: str, path: str, query: dict, body: bytes,
+           identity: Optional[authz.Identity],
+           registry, storage) -> tuple:
+    """Route an /api/admin/* request. Returns (status, payload)."""
+    if identity is None:
+        return _err(401, "authentication required (OIDC session or token)")
+
+    parts = [p for p in path.strip("/").split("/") if p]
+    # parts[0:2] == ['api', 'admin']
+    rest = parts[2:]
+
+    if rest == ["me"] and method == "GET":
+        return _me(identity, registry)
+    if rest == ["sites"] and method == "GET":
+        return _list_sites(identity, query, registry, storage)
+    if rest == ["stats"] and method == "GET":
+        return _stats(identity, registry, storage)
+    if rest == ["audit"] and method == "GET":
+        return _audit(identity, query)
+
+    if len(rest) >= 2 and rest[0] == "sites":
+        slug_ref = rest[1]
+        site = registry.resolve(slug_ref)
+        if site is None:
+            return _err(404, f"unknown site: {slug_ref}")
+        sub = rest[2] if len(rest) > 2 else ""
+
+        if not sub:
+            if method == "GET":
+                return _site_detail(identity, site, storage)
+            if method == "PATCH":
+                return _site_patch(identity, site, body, registry)
+            if method == "DELETE":
+                return _site_delete(identity, site, body, registry, storage)
+        elif sub == "transfer" and method == "POST":
+            return _site_transfer(identity, site, body, registry)
+        elif sub == "maintainers" and method in ("POST", "DELETE"):
+            return _site_maintainers(identity, site, method, body, registry)
+        elif sub == "rollback" and method == "POST":
+            return _site_rollback(identity, site, body, registry, storage)
+
+    return _err(404, "unknown admin endpoint")
+
+
+# ── endpoints ────────────────────────────────────────────────────────────────
+
+def _me(identity: authz.Identity, registry) -> tuple:
+    owned, maintained = [], []
+    if identity.email:
+        for s in registry.list_all(limit=1000):
+            role = authz.site_role(identity, s)
+            if role == "owner" or \
+                    (identity.email == (s.get("owner") or "").strip().lower()):
+                owned.append(s.get("slug") or s["site_id"])
+            elif identity.email in [str(m).strip().lower()
+                                    for m in (s.get("maintainers") or [])]:
+                maintained.append(s.get("slug") or s["site_id"])
+    return 200, {
+        "identity": identity.as_dict(),
+        "role": "superadmin" if identity.is_superadmin else "user",
+        "owned": owned,
+        "maintained": maintained,
+    }
+
+
+def _list_sites(identity, query, registry, storage) -> tuple:
+    try:
+        page = max(1, int((query.get("page") or ["1"])[0]))
+        size = max(1, min(int((query.get("size") or ["20"])[0]), 100))
+    except (ValueError, TypeError):
+        return _err(400, "page/size must be integers")
+    q = ((query.get("q") or [""])[0] or "").strip().lower()
+
+    sites = registry.list_all(limit=10000)
+    if not identity.is_superadmin:
+        sites = [s for s in sites if authz.can_view(identity, s)]
+    if q:
+        sites = [s for s in sites
+                 if q in (s.get("slug") or "").lower()
+                 or q in (s.get("name") or "").lower()]
+    total = len(sites)
+    start = (page - 1) * size
+    rows = [_site_public(s, storage) for s in sites[start:start + size]]
+    for s, row in zip(sites[start:start + size], rows):
+        row["role"] = authz.site_role(identity, s)
+    return 200, {"sites": rows, "total": total, "page": page, "size": size}
+
+
+def _site_detail(identity, site, storage) -> tuple:
+    if not authz.can_view(identity, site):
+        return _err(403, "not owner/maintainer of this site")
+    out = _site_public(site, storage)
+    out["role"] = authz.site_role(identity, site)
+    try:
+        snaps = storage.list_snapshots(site["site_id"])
+        out["snapshots"] = [{"ts": s["ts"], "size": s.get("size", 0)}
+                            for s in snaps]
+    except Exception:  # noqa: BLE001
+        out["snapshots"] = []
+    return 200, out
+
+
+def _site_patch(identity, site, body, registry) -> tuple:
+    if not authz.can_edit_meta(identity, site):
+        return _err(403, "owner or superadmin required")
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    allowed = {"name", "notes", "editable"}
+    unknown = set(data) - allowed
+    if unknown:
+        return _err(400, f"unknown fields: {', '.join(sorted(unknown))}")
+    if not data:
+        return _err(400, "nothing to update (name/notes/editable)")
+
+    changes = {}
+    if "name" in data:
+        if not isinstance(data["name"], str) or len(data["name"]) > 200:
+            return _err(400, "name must be a string (<=200 chars)")
+        changes["name"] = data["name"]
+    if "notes" in data:
+        if not isinstance(data["notes"], str) or len(data["notes"]) > 2000:
+            return _err(400, "notes must be a string (<=2000 chars)")
+        changes["notes"] = data["notes"]
+    if "editable" in data and not isinstance(data["editable"], bool):
+        return _err(400, "editable must be a boolean")
+
+    site_id = site["site_id"]
+    if "name" in changes or "notes" in changes:
+        registry.update(site_id, name=changes.get("name"),
+                        notes=changes.get("notes"))
+    if "editable" in data:
+        registry.set_editable(site_id, data["editable"])
+        changes["editable"] = data["editable"]
+
+    record(_who(identity), "site.update", site.get("slug") or site_id,
+           {"fields": sorted(changes)})
+    return 200, {"success": True,
+                 "site": _site_public(registry.get(site_id))}
+
+
+def _site_delete(identity, site, body, registry, storage) -> tuple:
+    if not authz.can_delete(identity, site):
+        return _err(403, "owner or superadmin required")
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    ref = site.get("slug") or site["site_id"]
+    if data.get("confirm") != ref:
+        return _err(400, f'deletion requires body {{"confirm": "{ref}"}}')
+    try:
+        storage.delete(site["site_id"])
+    except Exception:  # noqa: BLE001 — registry cleanup still proceeds
+        pass
+    registry.delete(site["site_id"])
+    record(_who(identity), "site.delete", ref,
+           {"site_id": site["site_id"], "name": site.get("name") or ""})
+    return 200, {"success": True, "deleted": ref}
+
+
+def _site_transfer(identity, site, body, registry) -> tuple:
+    if not authz.can_transfer(identity, site):
+        return _err(403, "owner or superadmin required")
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    to = str(data.get("to") or "").strip().lower()
+    if not _valid_email(to):
+        return _err(400, "body.to must be a valid email")
+    old = (site.get("owner") or "").strip().lower()
+    registry.set_owner(site["site_id"], to)
+    record(_who(identity), "site.transfer",
+           site.get("slug") or site["site_id"], {"from": old, "to": to})
+    return 200, {"success": True, "owner": to, "previous_owner": old}
+
+
+def _site_maintainers(identity, site, method, body, registry) -> tuple:
+    if not authz.can_manage_maintainers(identity, site):
+        return _err(403, "owner or superadmin required")
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    email = str(data.get("email") or "").strip().lower()
+    if not _valid_email(email):
+        return _err(400, "body.email must be a valid email")
+    if method == "POST":
+        maintainers = registry.add_maintainer(site["site_id"], email)
+        action = "maintainer.add"
+    else:
+        maintainers = registry.remove_maintainer(site["site_id"], email)
+        action = "maintainer.remove"
+    record(_who(identity), action, site.get("slug") or site["site_id"],
+           {"email": email})
+    return 200, {"success": True, "maintainers": maintainers}
+
+
+def _site_rollback(identity, site, body, registry, storage) -> tuple:
+    if not authz.can_rollback(identity, site):
+        return _err(403, "owner/maintainer/superadmin required")
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    ts = str(data.get("snapshot") or "").strip()
+    try:
+        storage.rollback(site["site_id"], ts)
+    except FileNotFoundError as e:
+        return _err(404, str(e))
+    registry.touch(site["site_id"])
+    record(_who(identity), "site.rollback",
+           site.get("slug") or site["site_id"],
+           {"snapshot": ts or "(latest)"})
+    return 200, {"success": True, "snapshot": ts or "(latest)"}
+
+
+def _stats(identity, registry, storage) -> tuple:
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    sites = registry.list_all(limit=100000)
+    sized = [(s, _site_size(storage, s["site_id"])) for s in sites]
+    total_bytes = sum(n for _, n in sized)
+
+    cutoff = (datetime.datetime.now()
+              - datetime.timedelta(days=7)).isoformat(timespec="seconds")
+    recent = sum(1 for s in sites if (s.get("updated_at") or "") >= cutoff)
+
+    top = sorted(sized, key=lambda t: t[1], reverse=True)[:10]
+    top_rows = [{"slug": s.get("slug") or s["site_id"],
+                 "name": s.get("name") or "", "size": n} for s, n in top]
+    editable = sum(1 for s in sites if s.get("editable"))
+    return 200, {
+        "total_sites": len(sites),
+        "total_bytes": total_bytes,
+        "updated_last_7d": recent,
+        "editable_sites": editable,
+        "top_sites": top_rows,
+    }
+
+
+def _audit(identity, query) -> tuple:
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    try:
+        page = int((query.get("page") or ["1"])[0])
+        size = int((query.get("size") or ["50"])[0])
+    except (ValueError, TypeError):
+        return _err(400, "page/size must be integers")
+    slug = ((query.get("slug") or [""])[0] or "").strip()
+    action = ((query.get("action") or [""])[0] or "").strip()
+    return 200, read_entries(page=page, size=size, slug=slug, action=action)

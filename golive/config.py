@@ -386,7 +386,7 @@ def _build(raw: dict, source_path: str) -> Config:
     except (TypeError, ValueError):
         raise ConfigError("security.llm.timeout must be an integer (seconds)")
     llm.strict_mode = bool(_get(raw, "security", "llm", "strict_mode", default=False))
-    cfg.server.host = str(_get(raw, "server", "host", default="0.0.0.0"))
+    cfg.server.host = str(_get(raw, "server", "host", default="127.0.0.1"))
     try:
         cfg.server.port = int(_get(raw, "server", "port", default=8787))
     except (TypeError, ValueError):

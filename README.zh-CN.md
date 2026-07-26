@@ -6,7 +6,7 @@
 电脑、NAS、VPS 或内网服务器上。
 
 ```bash
-pip install html-golive
+pip install git+https://github.com/Songhonglei/html-golive.git
 
 golive publish report.html --name "季度报告" --slug q3
 # ✅ 发布成功 → http://localhost:8787/q3
@@ -53,9 +53,12 @@ golive serve
 ### 1 · 安装
 
 ```bash
-pip install html-golive              # 核心
-pip install 'html-golive[image]'     # + 图片压缩（Pillow）
-pip install 'html-golive[s3]'        # + S3 兼容后端（boto3）
+# 从 GitHub 安装（PyPI 上架准备中）
+pip install git+https://github.com/Songhonglei/html-golive.git
+
+# 源码 checkout 后可装 extras：
+#   pip install '.[image]'   # + 图片压缩（Pillow）
+#   pip install '.[s3]'      # + S3 兼容后端（boto3）
 ```
 
 ### 2 · 发布

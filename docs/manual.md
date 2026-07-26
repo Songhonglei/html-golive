@@ -32,7 +32,7 @@ the [Quickstart](quickstart.md), then come back for the details.
 ## 1. Getting started
 
 ```bash
-pip install html-golive
+pip install git+https://github.com/Songhonglei/html-golive.git
 golive publish index.html --slug hello
 golive serve                       # → http://localhost:8787/hello
 ```

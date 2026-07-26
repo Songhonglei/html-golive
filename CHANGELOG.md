@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-07-26
+
+Security hardening + release infrastructure (M1-M4 retrospective fixes).
+
+### Security
+- **`GET /api/sites` no longer serves unauthenticated remote callers.**
+  With no auth configured, the registry listing (site ids, slugs, names)
+  is now only returned to loopback clients; remote callers must present
+  a `GOLIVE_TOKEN` bearer token or an OIDC session. Previously any host
+  that could reach the port could enumerate all sites.
+- **`golive serve` now binds `127.0.0.1` by default** (was `0.0.0.0`),
+  matching `golive preview`. Expose deliberately with `--host 0.0.0.0`
+  or `server.host` in golive.yaml — the startup banner reminds you to
+  pair that with auth.
+
+### Added
+- **GitHub Actions CI**: pytest matrix (3.9/3.11/3.12), compileall,
+  wheel build with content verification (19 css styles + rules.yaml,
+  no pycache), and an install-from-wheel smoke test.
+
+### Changed
+- Install instructions now use `pip install git+https://…` until the
+  package is published to PyPI (the old `pip install html-golive`
+  instruction did not work).
+
 ## [0.4.0] - 2026-07-26
 
 Docs, identity presets, and editor polish.

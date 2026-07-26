@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[image]'
+
+      - name: Compile check
+        run: python -m compileall -q golive/
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Verify wheel contents
+        run: |
+          python - <<'EOF'
+          import glob, sys, zipfile
+          whl = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(whl).namelist()
+          css = [n for n in names if "css_styles" in n and n.endswith(".css")]
+          assert len(css) == 19, f"expected 19 css styles in wheel, got {len(css)}"
+          assert any(n.endswith("rules.yaml") for n in names), "rules.yaml missing"
+          assert not any("__pycache__" in n for n in names), "pycache leaked"
+          print(f"wheel OK: {len(names)} files, {len(css)} css styles")
+          EOF
+
+      - name: Smoke test from wheel
+        run: |
+          pip install dist/*.whl
+          export GOLIVE_HOME="$RUNNER_TEMP/golive-home"
+          echo '<html><body><h1>ci</h1></body></html>' > "$RUNNER_TEMP/ci.html"
+          golive publish "$RUNNER_TEMP/ci.html" --slug ci
+          golive list
+          golive doctor

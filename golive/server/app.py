@@ -105,12 +105,23 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         return self.oidc.session_user(dict(self.headers))
 
     def _api_read_allowed(self) -> bool:
-        """/api/sites listing: token (when set) or OIDC session."""
-        if self.auth is not None and self.auth.verify(dict(self.headers)):
+        """/api/sites listing: token (when set) or OIDC session.
+
+        With no auth configured at all, listing is only served to loopback
+        clients — a remote caller must present a token or an OIDC session.
+        (The site registry reveals every site_id/slug; don't expose it to
+        the whole network just because the operator skipped auth setup.)
+        """
+        _auth_is_real = (self.auth is not None
+                         and getattr(self.auth, "name", "none") != "none")
+        if _auth_is_real and self.auth.verify(dict(self.headers)):
             return True
-        if self.auth is None or getattr(self.auth, "name", "") == "none":
+        if self._session_user() is not None:
             return True
-        return self._session_user() is not None
+        if not _auth_is_real:
+            client_ip = self.client_address[0] if self.client_address else ""
+            return client_ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+        return False
 
     def _is_secure(self) -> bool:
         # honor reverse-proxy TLS termination
@@ -352,7 +363,7 @@ class _ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-def make_server(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
+def make_server(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     from golive.backends.factory import get_registry, get_storage
     handler = GoliveHandler
     handler.registry = get_registry()
@@ -362,13 +373,17 @@ def make_server(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
     return _ThreadingServer((host, port), handler)
 
 
-def serve(host: str = "0.0.0.0", port: int = DEFAULT_PORT):
+def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     srv = make_server(host, port)
     ip = _lan_ip()
     print(f"🚀 golive serve 已启动")
     print(f"   本机:  http://localhost:{port}/")
-    if ip != "127.0.0.1":
-        print(f"   局域网: http://{ip}:{port}/")
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        if ip != "127.0.0.1":
+            print(f"   局域网: http://{ip}:{port}/")
+    else:
+        print("   （仅本机可访问；对外分享请加 --host 0.0.0.0，"
+              "并建议配合 GOLIVE_TOKEN / OIDC）")
     if GoliveHandler.oidc is not None:
         print(f"   OAuth:  http://localhost:{port}/auth/login")
     print("   Ctrl+C 停止")

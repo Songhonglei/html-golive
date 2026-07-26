@@ -386,7 +386,14 @@ def cmd_maintainer(args) -> int:
 
 def cmd_serve(args) -> int:
     from golive.server.app import serve
-    serve(host=args.host, port=args.port)
+    host = args.host
+    if host is None:  # --host not given: golive.yaml server.host, else loopback
+        try:
+            from golive.config import get_config
+            host = get_config().server.host or "127.0.0.1"
+        except Exception:
+            host = "127.0.0.1"
+    serve(host=host, port=args.port)
     return 0
 
 
@@ -699,7 +706,7 @@ def main(argv=None) -> int:
     # serve
     p = sub.add_parser("serve", help="启动内置 HTTP 服务")
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
-    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--host", default=None, help="bind address (default: server.host in golive.yaml, else 127.0.0.1; use 0.0.0.0 to expose)")
     p.set_defaults(func=cmd_serve)
 
     # clone

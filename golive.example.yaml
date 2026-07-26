@@ -140,6 +140,11 @@ server:
   port: 8787
   public_base: ""         # e.g. https://pages.example.com — used in printed URLs
 
+# ── admin portal (M5) ────────────────────────────────────────────────────────
+admin:
+  admins: []              # superadmin emails, e.g. [ops@example.com]
+                          # env GOLIVE_ADMINS=a@x.com,b@x.com overrides this list
+
 # ── slug rules ───────────────────────────────────────────────────────────────
 slug:
   reserved: []            # extra reserved slugs, e.g. [internal, beta]

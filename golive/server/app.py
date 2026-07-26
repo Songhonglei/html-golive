@@ -485,6 +485,7 @@ def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
               "并建议配合 GOLIVE_TOKEN / OIDC）")
     if GoliveHandler.oidc is not None:
         print(f"   OAuth:  http://localhost:{port}/auth/login")
+    print(f"   管理门户: http://localhost:{port}/admin")
     print("   Ctrl+C 停止")
     try:
         srv.serve_forever()

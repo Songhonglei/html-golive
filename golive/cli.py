@@ -397,6 +397,20 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_admin(args) -> int:
+    """golive admin open — print the admin portal URL."""
+    from golive.config import get_config
+    base = ""
+    try:
+        base = get_config().server.public_base
+    except Exception:
+        pass
+    url = f"{base}/admin" if base else f"http://localhost:{args.port}/admin"
+    print(f"🛠  管理门户: {url}")
+    print(f"   （若 serve 未启动，运行：golive serve --port {args.port}）")
+    return 0
+
+
 # ═════════════════════════════════ clone ════════════════════════════════════
 
 def cmd_clone(args) -> int:
@@ -708,6 +722,12 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
     p.add_argument("--host", default=None, help="bind address (default: server.host in golive.yaml, else 127.0.0.1; use 0.0.0.0 to expose)")
     p.set_defaults(func=cmd_serve)
+
+    # admin
+    p = sub.add_parser("admin", help="运营管理门户")
+    p.add_argument("admin_action", choices=["open"], help="open: 打印 /admin 门户地址")
+    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
+    p.set_defaults(func=cmd_admin)
 
     # clone
     p = sub.add_parser("clone", help="克隆公网页面并发布")

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS sites (
 
 # columns added after v0.2 — migrated in-place for existing databases
 _MIGRATIONS = [
+    ("owner", "ALTER TABLE sites ADD COLUMN owner TEXT NOT NULL DEFAULT ''"),
     ("editable", "ALTER TABLE sites ADD COLUMN editable INTEGER NOT NULL DEFAULT 0"),
     ("maintainers", "ALTER TABLE sites ADD COLUMN maintainers TEXT NOT NULL DEFAULT '[]'"),
 ]

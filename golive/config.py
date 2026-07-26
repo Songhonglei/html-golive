@@ -187,6 +187,16 @@ class ServerConfig:
 
 
 @dataclass
+class AdminConfig:
+    """Admin portal (M5). ``admins`` lists superadmin emails.
+
+    env ``GOLIVE_ADMINS`` (comma separated) always wins over yaml —
+    see golive.server.authz.get_admin_emails().
+    """
+    admins: list = field(default_factory=list)
+
+
+@dataclass
 class Config:
     storage: StorageConfig = field(default_factory=StorageConfig)
     registry: RegistryConfig = field(default_factory=RegistryConfig)
@@ -198,6 +208,7 @@ class Config:
     style: StyleConfig = field(default_factory=StyleConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    admin: AdminConfig = field(default_factory=AdminConfig)
     supabase: SupabaseConfig = field(default_factory=SupabaseConfig)
     slug_reserved: list = field(default_factory=list)
     localize_never: list = field(default_factory=list)
@@ -394,6 +405,11 @@ def _build(raw: dict, source_path: str) -> Config:
                           f"(got {_get(raw, 'server', 'port')!r})")
     cfg.server.public_base = str(_get(raw, "server", "public_base", default="") or "").rstrip("/")
 
+    # admin portal (M5)
+    admins = _get(raw, "admin", "admins", default=[])
+    cfg.admin.admins = [str(a).strip().lower() for a in admins if str(a).strip()] \
+        if isinstance(admins, (list, tuple)) else []
+
     reserved = _get(raw, "slug", "reserved", default=[])
     cfg.slug_reserved = [str(s).lower() for s in reserved] \
         if isinstance(reserved, (list, tuple)) else []
@@ -438,6 +454,10 @@ def _apply_env_overrides(cfg: Config) -> Config:
     llm_model = os.environ.get("GOLIVE_LLM_MODEL", "").strip()
     if llm_model:
         cfg.security.llm.model = llm_model
+    admins_env = os.environ.get("GOLIVE_ADMINS", "").strip()
+    if admins_env:
+        cfg.admin.admins = [a.strip().lower() for a in admins_env.split(",")
+                            if a.strip()]
     return cfg
 
 

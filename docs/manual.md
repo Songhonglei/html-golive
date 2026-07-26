@@ -25,7 +25,8 @@ the [Quickstart](quickstart.md), then come back for the details.
 14. [Backends: storage / registry / images](#14-backends)
 15. [Identity & login (OIDC)](#15-identity--login)
 16. [Migrating pages from another deployment](#16-migrating-pages)
-17. [FAQ](#17-faq)
+17. [Admin portal](#17-admin-portal)
+18. [FAQ](#18-faq)
 
 ---
 
@@ -213,7 +214,48 @@ It flags hard-coded API domains, deployment ids, and non-portable calls
 with `file:line` and a suggested fix. Guide:
 [migrate-from-intranet.md](migrate-from-intranet.md).
 
-## 17. FAQ
+## 17. Admin portal
+
+`golive serve` ships a web management portal at **`/admin`** (URL printed
+in the startup banner, or `golive admin open`). Site owners and
+maintainers manage their own sites; **superadmins** see everything plus
+instance-wide stats and the audit trail.
+
+Superadmins are declared by email:
+
+```yaml
+# golive.yaml
+admin:
+  admins: [ops@example.com]
+```
+
+or `GOLIVE_ADMINS=a@x.com,b@x.com` (env wins). A caller authenticated with
+the static `GOLIVE_TOKEN` is also treated as superadmin — the token is
+operator-held by definition. With zero auth configured the portal only
+answers loopback requests (same rule as `/api/sites`).
+
+What you can do, by role:
+
+| Action | owner | maintainer | superadmin |
+|---|---|---|---|
+| See the site in the list / details / snapshots | ✅ | ✅ | ✅ (all sites) |
+| Edit name / notes / toggle online editing | ✅ | — | ✅ |
+| Add / remove maintainers | ✅ | — | ✅ |
+| Transfer ownership | ✅ | — | ✅ |
+| Roll back to a snapshot | ✅ | ✅ | ✅ |
+| Delete the site (type the slug to confirm) | ✅ | — | ✅ |
+| Stats dashboard & audit log | — | — | ✅ |
+
+Every write action (and every online-editor save) appends a line to
+`GOLIVE_HOME/audit.log` — JSONL with who/action/slug/ts/detail, browsable
+from the portal's Audit tab with slug/action filters. The file is never
+rotated automatically; archive it as you see fit.
+
+The portal is a single self-contained page: no external CDN, no
+framework, works on airgapped intranets. The same operations are
+available as a JSON API under `/api/admin/*` for scripting.
+
+## 18. FAQ
 
 **Do I need a server?** No — `golive publish` + a local file is enough.
 `golive serve` adds a shareable URL and the online editor/data layer.

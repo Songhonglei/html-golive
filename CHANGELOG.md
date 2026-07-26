@@ -3,6 +3,47 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-07-26
+
+Admin portal (M5): web-based operations console for `golive serve`.
+
+### Added
+- **Admin portal at `/admin`** — self-contained single-page console
+  (no external CDN/frameworks; works airgapped): site list with
+  search/pagination, detail drawer with metadata editing, maintainer
+  tag management, ownership transfer (double confirm), snapshot list
+  with one-click rollback, and delete gated on typing the slug.
+  Superadmins additionally get a stats dashboard (total sites/bytes,
+  7-day activity, top-10 by size) and a filterable audit-log view.
+- **Admin JSON API under `/api/admin/*`** — `me`, `sites` (list/detail/
+  PATCH/DELETE), `transfer`, `maintainers` (POST/DELETE), `rollback`,
+  `stats`, `audit`. Unauthenticated → 401, insufficient role → 403;
+  destructive delete requires `{"confirm": "<slug>"}`.
+- **Role model** (`golive/server/authz.py`): `superadmin` (email in
+  `admin.admins` yaml list or `GOLIVE_ADMINS` env — env wins; static
+  token auth also counts, the token is operator-held), `owner`
+  (registry column), `maintainer` (M3 list). Zero-config loopback
+  callers keep working as before (treated as operator).
+- **Admin audit trail** (`golive/core/audit.py`): JSONL at
+  `GOLIVE_HOME/audit.log` — who/action/slug/ts/detail for every admin
+  write and every online-editor save; served by `GET /api/admin/audit`
+  with slug/action filters + pagination.
+- **`golive admin open`** CLI + the serve banner now prints the portal
+  URL.
+- `admin:` section in `golive.example.yaml`.
+
+### Changed
+- SQLite registry now migrates an `owner` column into pre-v0.2
+  databases transparently (older DBs created before the column existed).
+- `serve` gained `PATCH`/`DELETE` HTTP method handling (admin API only).
+
+### Tests
+- 45 new tests (199 total): permission matrix per endpoint (owner /
+  maintainer / superadmin / outsider), transfer revokes the old owner,
+  delete confirm gate, audit recording/filtering/malformed-line
+  tolerance, portal DOM/no-CDN/XSS-escape checks, HTTP identity
+  resolution, and the owner-column migration.
+
 ## [0.4.1] - 2026-07-26
 
 Security hardening + release infrastructure (M1-M4 retrospective fixes).

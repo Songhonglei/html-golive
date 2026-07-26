@@ -149,6 +149,13 @@ login session instead of the token+header pair.
   OpenAI-compatible endpoint (`security.llm.*`), with a conservative
   degrade path and a `strict_mode` gate
 
+**Admin portal** *(v0.5)*
+- Web management portal at `/admin`: site list/search, metadata editing,
+  maintainer & ownership management, snapshot rollback, delete with
+  slug confirmation — role-scoped (owner / maintainer / superadmin via
+  `admin.admins` or `GOLIVE_ADMINS`), plus superadmin stats dashboard
+  and a JSONL audit trail (`/api/admin/*` JSON API for scripting)
+
 **Safety**
 - Credential / PII scanning on every publish (YAML-extensible rules)
 - Path-traversal-hardened server and archive extraction

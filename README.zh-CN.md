@@ -143,6 +143,13 @@ golive serve
 - 可选 **LLM 安全复核**：弱命中送任意 OpenAI 兼容端点二次判定
   （`security.llm.*`），失败保守降级，支持 `strict_mode` 硬门槛
 
+**运营管理门户** *(v0.5)*
+- `/admin` Web 管理门户：站点列表/搜索、基本信息编辑、maintainer 与
+  owner 移交管理、快照回滚、输入 slug 确认删除——按角色隔离
+  （owner / maintainer / 超管，超管名单来自 `admin.admins` 或
+  `GOLIVE_ADMINS`）；超管另有统计看板与审计日志页；全部操作
+  也可通过 `/api/admin/*` JSON API 脚本化调用
+
 **安全**
 - 每次发布凭证/隐私信息扫描（YAML 可扩展规则）
 - 服务端与压缩包解压均做路径穿越防护

@@ -3,7 +3,7 @@
 ## Zero-config single machine (v0.1)
 
 ```bash
-pip install git+https://github.com/Songhonglei/html-golive.git   # PyPI release coming soon
+pip install html-golive        # + 'html-golive[image]' for image compression
 
 golive publish index.html --name Demo --slug demo
 golive serve --port 8787

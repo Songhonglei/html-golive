@@ -6,7 +6,7 @@ Turn any HTML file, project folder or zip archive into a shareable URL on
 your own machine, NAS, VPS or intranet server.
 
 ```bash
-pip install git+https://github.com/Songhonglei/html-golive.git
+pip install html-golive
 
 golive publish report.html --name "Q3 Report" --slug q3
 # ✅ Published → http://localhost:8787/q3
@@ -56,12 +56,9 @@ golive serve
 ### 1 · Install
 
 ```bash
-# from GitHub (PyPI release coming soon)
-pip install git+https://github.com/Songhonglei/html-golive.git
-
-# extras once installed from source checkout:
-#   pip install '.[image]'   # + image compression (Pillow)
-#   pip install '.[s3]'      # + S3-compatible backends (boto3)
+pip install html-golive              # core
+pip install 'html-golive[image]'     # + image compression (Pillow)
+pip install 'html-golive[s3]'        # + S3-compatible backends (boto3)
 ```
 
 ### 2 · Publish

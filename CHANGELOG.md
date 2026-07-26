@@ -24,9 +24,9 @@ Security hardening + release infrastructure (M1-M4 retrospective fixes).
   no pycache), and an install-from-wheel smoke test.
 
 ### Changed
-- Install instructions now use `pip install git+https://…` until the
-  package is published to PyPI (the old `pip install html-golive`
-  instruction did not work).
+- **Published to PyPI**: `pip install html-golive` now works. (Install
+  instructions briefly pointed at GitHub while the package was
+  unpublished.)
 
 ## [0.4.0] - 2026-07-26
 

@@ -192,8 +192,15 @@ class AdminConfig:
 
     env ``GOLIVE_ADMINS`` (comma separated) always wins over yaml —
     see golive.server.authz.get_admin_emails().
+
+    ``audit_max_bytes`` / ``audit_keep`` control audit.log size rotation
+    (M6): when the log exceeds ``audit_max_bytes`` it is renamed to
+    ``audit.log.1`` (older archives shift up, ``audit_keep`` kept).
+    0 disables rotation. env: GOLIVE_AUDIT_MAX_BYTES / GOLIVE_AUDIT_KEEP.
     """
     admins: list = field(default_factory=list)
+    audit_max_bytes: int = 10 * 1024 * 1024   # 10 MB; 0 = no rotation
+    audit_keep: int = 5                       # archived generations kept
 
 
 @dataclass
@@ -409,6 +416,18 @@ def _build(raw: dict, source_path: str) -> Config:
     admins = _get(raw, "admin", "admins", default=[])
     cfg.admin.admins = [str(a).strip().lower() for a in admins if str(a).strip()] \
         if isinstance(admins, (list, tuple)) else []
+    # audit rotation (M6)
+    try:
+        cfg.admin.audit_max_bytes = int(
+            _get(raw, "admin", "audit_max_bytes",
+                 default=cfg.admin.audit_max_bytes))
+    except (TypeError, ValueError):
+        raise ConfigError("admin.audit_max_bytes must be an integer")
+    try:
+        cfg.admin.audit_keep = int(
+            _get(raw, "admin", "audit_keep", default=cfg.admin.audit_keep))
+    except (TypeError, ValueError):
+        raise ConfigError("admin.audit_keep must be an integer")
 
     reserved = _get(raw, "slug", "reserved", default=[])
     cfg.slug_reserved = [str(s).lower() for s in reserved] \
@@ -458,6 +477,14 @@ def _apply_env_overrides(cfg: Config) -> Config:
     if admins_env:
         cfg.admin.admins = [a.strip().lower() for a in admins_env.split(",")
                             if a.strip()]
+    for env_name, attr in (("GOLIVE_AUDIT_MAX_BYTES", "audit_max_bytes"),
+                           ("GOLIVE_AUDIT_KEEP", "audit_keep")):
+        v = os.environ.get(env_name, "").strip()
+        if v:
+            try:
+                setattr(cfg.admin, attr, int(v))
+            except ValueError:
+                pass  # ignore malformed env — keep yaml/default
     return cfg
 
 

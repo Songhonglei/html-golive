@@ -143,6 +143,11 @@ server:
 # ── admin portal (M5) ────────────────────────────────────────────────────────
 admin:
   admins: []              # superadmin emails, e.g. [ops@example.com]
+  # audit.log size rotation (M6): rotate to audit.log.1/.2/... when the
+  # current file exceeds audit_max_bytes; keep audit_keep archives.
+  # 0 disables rotation. env: GOLIVE_AUDIT_MAX_BYTES / GOLIVE_AUDIT_KEEP.
+  audit_max_bytes: 10485760   # 10 MB
+  audit_keep: 5
                           # env GOLIVE_ADMINS=a@x.com,b@x.com overrides this list
 
 # ── slug rules ───────────────────────────────────────────────────────────────

@@ -248,8 +248,28 @@ What you can do, by role:
 
 Every write action (and every online-editor save) appends a line to
 `GOLIVE_HOME/audit.log` — JSONL with who/action/slug/ts/detail, browsable
-from the portal's Audit tab with slug/action filters. The file is never
-rotated automatically; archive it as you see fit.
+from the portal's Audit tab with slug/action filters.
+
+**Audit rotation** *(M6)*: before each write, when `audit.log` exceeds
+`admin.audit_max_bytes` (default 10 MB; env `GOLIVE_AUDIT_MAX_BYTES`;
+`0` disables) it is renamed to `audit.log.1` and older archives shift up
+(`.1` → `.2`, …), keeping `admin.audit_keep` generations (default 5; env
+`GOLIVE_AUDIT_KEEP`). The portal's Audit tab and `GET /api/admin/audit`
+read **only the current** `audit.log` — rotated archives are plain JSONL
+files for operators to grep or ship elsewhere. A failed rotation never
+blocks the write (the log just grows past the limit until fixed).
+
+**Data management** *(M6, superadmin only)*: when a Supabase/PostgREST
+data backend is configured (`data.backend: supabase` + the top-level
+`supabase:` block), the portal gains a **数据管理** tab that manages the
+TemplateAPI rows (`golive_templates` table) shared by all sites: pick a
+model from the dropdown (listed with row counts), search inside the JSON
+content, view rows in a formatted dialog, edit them in a JSON textarea
+(validated client-side before saving), add new rows, and delete with a
+confirm. Every write is audited as `data.create` / `data.update` /
+`data.delete`. Without a data backend the tab shows setup guidance
+instead; the underlying endpoints live at `/api/admin/data/*` and return
+`400 {"error": "no data backend configured"}` in that state.
 
 The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are

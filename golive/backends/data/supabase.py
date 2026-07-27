@@ -92,6 +92,58 @@ class TemplateStore:
         return self.client.count(self.table,
                                  {"model_code": f"eq.{model_code}"})
 
+    def list_models(self, scan_limit: int = 10000) -> list:
+        """Distinct model_code values + row count each (admin portal, M6).
+
+        PostgREST has no first-class DISTINCT, so we pull the model_code
+        column (capped at ``scan_limit`` rows) and aggregate client-side.
+        Returns [{"model_code": str, "count": int}, ...] sorted by code.
+        """
+        rows, _ = self.client.select(self.table, {
+            "select": "model_code",
+            "limit": str(scan_limit),
+        })
+        counts: dict = {}
+        for r in rows:
+            code = str(r.get("model_code") or "")
+            if code:
+                counts[code] = counts.get(code, 0) + 1
+        return [{"model_code": c, "count": n}
+                for c, n in sorted(counts.items())]
+
+    def search(self, model_code: str, q: str = "", page_no: int = 1,
+               page_size: int = 20, scan_limit: int = 2000) -> dict:
+        """Paged rows for one model with best-effort substring filter (M6).
+
+        Without ``q`` this delegates to :meth:`list` (server-side paging).
+        With ``q`` we fetch up to ``scan_limit`` rows of the model and do a
+        case-insensitive containment match over name/description/content
+        client-side — PostgREST cannot LIKE into arbitrary jsonb portably.
+        """
+        page_no = max(1, int(page_no))
+        page_size = max(1, min(int(page_size), 200))
+        if not q:
+            return self.list(model_code, page_no=page_no,
+                             page_size=page_size)
+        rows, _ = self.client.select(self.table, {
+            "model_code": f"eq.{model_code}",
+            "order": "sort_index.desc,created_at.desc",
+            "limit": str(scan_limit),
+        })
+        needle = q.lower()
+        hits = []
+        for r in rows:
+            hay = " ".join([
+                str(r.get("name") or ""),
+                str(r.get("description") or ""),
+                json.dumps(r.get("content"), ensure_ascii=False,
+                           default=str),
+            ]).lower()
+            if needle in hay:
+                hits.append(r)
+        start = (page_no - 1) * page_size
+        return {"total": len(hits), "list": hits[start:start + page_size]}
+
     # ── writes ──────────────────────────────────────────────────────────────
 
     def create(self, model_code: str, name: str, content=None,

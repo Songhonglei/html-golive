@@ -165,6 +165,7 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   <div id="sidebar">
     <div id="logo">🚀 golive <small id="ver"></small></div>
     <div class="nav-item active" data-view="sites">站点管理</div>
+    <div class="nav-item hidden" data-view="data" id="nav-data">数据管理</div>
     <div class="nav-item hidden" data-view="stats" id="nav-stats">统计</div>
     <div class="nav-item hidden" data-view="audit" id="nav-audit">审计日志</div>
     <div id="whoami"></div>
@@ -192,6 +193,46 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
         <button id="site-prev">‹ 上一页</button>
         <span id="site-page"></span>
         <button id="site-next">下一页 ›</button>
+      </div>
+    </div>
+
+    <!-- data management (M6) -->
+    <div class="view" id="view-data">
+      <h2>数据管理</h2>
+      <div id="data-nobackend" class="empty" style="display:none;text-align:left">
+        <p style="margin-bottom:10px">未配置 data backend。数据管理页管理
+        TemplateAPI 模板行（golive_templates 表），需要一个 Supabase/PostgREST
+        数据后端。</p>
+        <p style="margin-bottom:6px">在 golive.yaml 中配置：</p>
+        <pre style="background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px;font-size:12px;line-height:1.7">data:
+  backend: supabase
+supabase:
+  url: https://xxxx.supabase.co
+  # key 走环境变量 GOLIVE_SUPABASE_SERVICE_KEY / GOLIVE_SUPABASE_ANON_KEY</pre>
+        <p style="margin-top:10px">建表 SQL 可用 <code>golive db init --sql</code>
+        生成；配置后重启 <code>golive serve</code> 即可。</p>
+      </div>
+      <div id="data-main" style="display:none">
+        <div class="toolbar">
+          <select id="data-model" style="min-width:180px"></select>
+          <input type="text" id="data-q" placeholder="搜索 JSON 内容…"
+                 style="width:220px">
+          <button id="data-search">搜索</button>
+          <div class="spacer"></div>
+          <button class="primary" id="data-add">+ 新增行</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>ID</th><th>名称</th><th>内容摘要</th><th>更新时间</th><th>操作</th>
+          </tr></thead>
+          <tbody id="data-rows"></tbody>
+        </table>
+        <div class="pager">
+          <button id="data-prev">‹ 上一页</button>
+          <span id="data-page"></span>
+          <button id="data-next">下一页 ›</button>
+          <span id="data-count" style="margin-left:8px"></span>
+        </div>
       </div>
     </div>
 
@@ -278,6 +319,30 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   </div>
 </div>
 
+<!-- data row modal (M6) -->
+<div id="dm-mask" style="position:fixed;inset:0;background:rgba(0,0,0,.55);
+  display:none;z-index:60"></div>
+<div id="dm" style="position:fixed;top:8vh;left:50%;transform:translateX(-50%);
+  width:640px;max-width:94vw;max-height:82vh;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:22px 24px;display:none;z-index:61">
+  <h3 id="dm-title" style="font-size:16px;margin-bottom:12px"></h3>
+  <div class="frow" id="dm-model-row"><label>model</label>
+    <input type="text" id="dm-model" maxlength="200" style="flex:1"></div>
+  <div class="frow"><label>名称</label>
+    <input type="text" id="dm-name" maxlength="200" style="flex:1"></div>
+  <textarea id="dm-json" spellcheck="false"
+    style="width:100%;height:300px;font:12px/1.6 ui-monospace,monospace;
+    background:var(--bg);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:10px;resize:vertical"></textarea>
+  <div id="dm-err" style="color:var(--danger);font-size:12px;
+    margin-top:6px;display:none"></div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+    <button id="dm-cancel">取消</button>
+    <button class="primary" id="dm-save" style="display:none">保存</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -287,7 +352,9 @@ var BOOT = window.GOLIVE_BOOT || {};
 var TOKEN_KEY = "golive_admin_token";
 var state = {
   me: null, page: 1, size: 20, q: "",
-  auditPage: 1, current: null
+  auditPage: 1, current: null,
+  dataModel: "", dataQ: "", dataPage: 1, dataSize: 20,
+  dataInit: false, dmRow: null
 };
 
 function $(id){ return document.getElementById(id); }
@@ -343,6 +410,7 @@ function start(){
     $("whoami").textContent = (who.email || "(token)") +
       (who.superadmin ? " · 超管" : "");
     if (who.superadmin){
+      $("nav-data").classList.remove("hidden");
       $("nav-stats").classList.remove("hidden");
       $("nav-audit").classList.remove("hidden");
     }
@@ -380,6 +448,7 @@ Array.prototype.forEach.call(
         v.classList.remove("active"); });
     $("view-" + el.dataset.view).classList.add("active");
     if (el.dataset.view === "sites") loadSites();
+    if (el.dataset.view === "data") initData();
     if (el.dataset.view === "stats") loadStats();
     if (el.dataset.view === "audit") loadAudit();
   });
@@ -559,6 +628,189 @@ $("d-delete").addEventListener("click", function(){
     closeDrawer();
     loadSites();
   }).catch(function(e){ toast(e.message, true); });
+});
+
+// ── data management (M6) ──────────────────────────────────────
+function initData(){
+  api("GET", "/api/admin/data/models").then(function(d){
+    $("data-nobackend").style.display = "none";
+    $("data-main").style.display = "";
+    var sel = $("data-model");
+    sel.innerHTML = "";
+    (d.models || []).forEach(function(m){
+      var o = document.createElement("option");
+      o.value = m.model_code;
+      o.textContent = m.model_code + " (" + m.count + ")";
+      sel.appendChild(o);
+    });
+    if (!(d.models || []).length){
+      $("data-rows").innerHTML =
+        '<tr><td colspan="5" class="empty">data backend 里还没有模型数据' +
+        '（可用 golive data create 或下方“新增行”创建）</td></tr>';
+      $("data-count").textContent = "";
+      $("data-page").textContent = "";
+      state.dataModel = "";
+      return;
+    }
+    if (!state.dataModel ||
+        !(d.models || []).some(function(m){
+          return m.model_code === state.dataModel; })){
+      state.dataModel = d.models[0].model_code;
+    }
+    sel.value = state.dataModel;
+    loadDataRows();
+  }).catch(function(e){
+    if (e.status === 400){
+      $("data-main").style.display = "none";
+      $("data-nobackend").style.display = "block";
+    } else {
+      toast(e.message, true);
+    }
+  });
+}
+function jsonSummary(v){
+  var s = "";
+  try { s = JSON.stringify(v); } catch (_e){ s = String(v); }
+  if (s == null) s = "";
+  return s.length > 80 ? s.slice(0, 80) + "…" : s;
+}
+function loadDataRows(){
+  if (!state.dataModel) return;
+  var qs = "?model=" + encodeURIComponent(state.dataModel) +
+    "&page=" + state.dataPage + "&size=" + state.dataSize +
+    "&q=" + encodeURIComponent(state.dataQ);
+  api("GET", "/api/admin/data/rows" + qs).then(function(d){
+    var tb = $("data-rows");
+    tb.innerHTML = "";
+    if (!(d.rows || []).length){
+      tb.innerHTML = '<tr><td colspan="5" class="empty">没有数据行</td></tr>';
+    }
+    (d.rows || []).forEach(function(r){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td style="font-family:ui-monospace,monospace;font-size:12px">' +
+          esc(String(r.id || "").slice(0, 8)) + "</td>" +
+        "<td>" + esc(r.name || "") + "</td>" +
+        '<td style="font-size:12px;color:var(--muted)">' +
+          esc(jsonSummary(r.content)) + "</td>" +
+        "<td>" + esc(String(r.updated_at || r.created_at || "")
+                     .replace("T", " ").slice(0, 19)) + "</td>" +
+        '<td class="actions">' +
+          '<button data-act="view">查看</button>' +
+          '<button data-act="edit">编辑</button>' +
+          '<button class="danger" data-act="del">删除</button></td>';
+      tr.querySelector('[data-act="view"]').addEventListener(
+        "click", function(){ openRowModal(r, "view"); });
+      tr.querySelector('[data-act="edit"]').addEventListener(
+        "click", function(){ openRowModal(r, "edit"); });
+      tr.querySelector('[data-act="del"]').addEventListener(
+        "click", function(){
+          if (!window.confirm("删除行 " + (r.name || r.id) + " ？")) return;
+          api("DELETE", "/api/admin/data/rows/" +
+              encodeURIComponent(r.id))
+          .then(function(){ toast("已删除"); loadDataRows(); })
+          .catch(function(e){ toast(e.message, true); });
+        });
+      tb.appendChild(tr);
+    });
+    var pages = Math.max(1, Math.ceil((d.total || 0) / state.dataSize));
+    $("data-page").textContent = state.dataPage + " / " + pages;
+    $("data-count").textContent = "共 " + (d.total || 0) + " 行";
+    $("data-prev").disabled = state.dataPage <= 1;
+    $("data-next").disabled = state.dataPage >= pages;
+  }).catch(function(e){ toast(e.message, true); });
+}
+$("data-model").addEventListener("change", function(){
+  state.dataModel = this.value;
+  state.dataPage = 1;
+  loadDataRows();
+});
+$("data-search").addEventListener("click", function(){
+  state.dataQ = $("data-q").value.trim();
+  state.dataPage = 1;
+  loadDataRows();
+});
+$("data-q").addEventListener("keydown", function(ev){
+  if (ev.key === "Enter") $("data-search").click();
+});
+$("data-prev").addEventListener("click", function(){
+  if (state.dataPage > 1){ state.dataPage--; loadDataRows(); }
+});
+$("data-next").addEventListener("click", function(){
+  state.dataPage++; loadDataRows();
+});
+$("data-add").addEventListener("click", function(){
+  openRowModal(null, "create");
+});
+
+function openRowModal(row, mode){
+  state.dmRow = row;
+  state.dmMode = mode;
+  var isView = mode === "view";
+  var isCreate = mode === "create";
+  $("dm-title").textContent = isCreate ? "新增数据行" :
+    (isView ? "查看数据行" : "编辑数据行");
+  $("dm-model-row").style.display = isCreate ? "" : "none";
+  $("dm-model").value = state.dataModel || "";
+  $("dm-name").value = row ? (row.name || "") : "";
+  $("dm-name").readOnly = isView;
+  var content = row ? row.content : {};
+  try {
+    $("dm-json").value = JSON.stringify(
+      content == null ? {} : content, null, 2);
+  } catch (_e){ $("dm-json").value = String(content); }
+  $("dm-json").readOnly = isView;
+  $("dm-err").style.display = "none";
+  $("dm-save").style.display = isView ? "none" : "";
+  $("dm-mask").style.display = "block";
+  $("dm").style.display = "block";
+}
+function closeRowModal(){
+  $("dm-mask").style.display = "none";
+  $("dm").style.display = "none";
+  state.dmRow = null;
+}
+$("dm-mask").addEventListener("click", closeRowModal);
+$("dm-cancel").addEventListener("click", closeRowModal);
+$("dm-save").addEventListener("click", function(){
+  var parsed;
+  try {
+    parsed = JSON.parse($("dm-json").value || "{}");
+  } catch (e){
+    $("dm-err").textContent = "JSON 解析失败：" + e.message;
+    $("dm-err").style.display = "block";
+    return;
+  }
+  if (parsed === null || typeof parsed !== "object" ||
+      Array.isArray(parsed)){
+    $("dm-err").textContent = "内容必须是 JSON 对象（{...}）";
+    $("dm-err").style.display = "block";
+    return;
+  }
+  var name = $("dm-name").value.trim();
+  var done = function(){
+    toast("已保存");
+    closeRowModal();
+    if (state.dmMode === "create") initData(); else loadDataRows();
+  };
+  var fail = function(e){
+    $("dm-err").textContent = e.message;
+    $("dm-err").style.display = "block";
+  };
+  if (state.dmMode === "create"){
+    var model = $("dm-model").value.trim();
+    if (!model){
+      $("dm-err").textContent = "model 不能为空";
+      $("dm-err").style.display = "block";
+      return;
+    }
+    api("POST", "/api/admin/data/rows",
+        {model: model, name: name, data: parsed}).then(done).catch(fail);
+  } else {
+    api("PATCH", "/api/admin/data/rows/" +
+        encodeURIComponent(state.dmRow.id),
+        {name: name, data: parsed}).then(done).catch(fail);
+  }
 });
 
 // ── stats ──────────────────────────────────────────────────────

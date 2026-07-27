@@ -16,6 +16,14 @@ Endpoints (dispatched from app.py):
   POST   /api/admin/sites/<slug>/rollback       roll back to a snapshot
   GET    /api/admin/stats                       superadmin dashboard numbers
   GET    /api/admin/audit?page=&size=&slug=&action=   audit trail
+  GET    /api/admin/data/models                 data backend model list (M6)
+  GET    /api/admin/data/rows?model=&page=&size=&q=   paged template rows
+  POST   /api/admin/data/rows                   create row {model, data}
+  PATCH  /api/admin/data/rows/<id>              update row {data}
+  DELETE /api/admin/data/rows/<id>              delete row
+
+Data endpoints are superadmin-only (the data backend is shared across
+sites) and return 400 with a hint when no data backend is configured.
 
 This module is transport-free: ``handle()`` gets plain values and returns
 ``(status_code, payload_dict)`` — easy to unit-test without sockets.
@@ -107,6 +115,9 @@ def handle(method: str, path: str, query: dict, body: bytes,
         return _stats(identity, registry, storage)
     if rest == ["audit"] and method == "GET":
         return _audit(identity, query)
+
+    if rest[:1] == ["data"]:
+        return _data_dispatch(method, rest[1:], query, body, identity)
 
     if len(rest) >= 2 and rest[0] == "sites":
         slug_ref = rest[1]
@@ -337,3 +348,140 @@ def _audit(identity, query) -> tuple:
     slug = ((query.get("slug") or [""])[0] or "").strip()
     action = ((query.get("action") or [""])[0] or "").strip()
     return 200, read_entries(page=page, size=size, slug=slug, action=action)
+
+
+# ── data management (M6) ─────────────────────────────────────────────────────
+
+_DATA_HINT = ("set data.backend: supabase plus supabase.url and an API key "
+              "in golive.yaml (see golive.example.yaml), then restart serve")
+_MAX_ROW_JSON_BYTES = 256 * 1024
+
+
+def _data_store():
+    """Return a TemplateStore or None when no data backend is configured."""
+    from golive.config import get_config
+    cfg = get_config()
+    if cfg.data.backend != "supabase" or not cfg.supabase.configured:
+        return None
+    from golive.backends.data.supabase import TemplateStore
+    return TemplateStore()
+
+
+def _data_dispatch(method, rest, query, body, identity) -> tuple:
+    """Route /api/admin/data/*. superadmin only; 400 without a backend."""
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    try:
+        store = _data_store()
+    except Exception as e:  # noqa: BLE001 — config/backend init failure
+        return 400, {"error": f"data backend init failed: {e}",
+                     "hint": _DATA_HINT}
+    if store is None:
+        return 400, {"error": "no data backend configured",
+                     "hint": _DATA_HINT}
+
+    try:
+        if rest == ["models"] and method == "GET":
+            return _data_models(store)
+        if rest == ["rows"] and method == "GET":
+            return _data_rows_list(store, query)
+        if rest == ["rows"] and method == "POST":
+            return _data_row_create(store, body, identity)
+        if len(rest) == 2 and rest[0] == "rows":
+            if method == "PATCH":
+                return _data_row_update(store, rest[1], body, identity)
+            if method == "DELETE":
+                return _data_row_delete(store, rest[1], identity)
+    except Exception as e:  # noqa: BLE001 — PostgREST/network errors -> 502
+        return 502, {"error": f"data backend error: {e}"}
+    return _err(404, "unknown admin endpoint")
+
+
+def _data_models(store) -> tuple:
+    return 200, {"models": store.list_models()}
+
+
+def _data_rows_list(store, query) -> tuple:
+    model = ((query.get("model") or [""])[0] or "").strip()
+    if not model:
+        return _err(400, "query param 'model' is required")
+    try:
+        page = max(1, int((query.get("page") or ["1"])[0]))
+        size = max(1, min(int((query.get("size") or ["20"])[0]), 200))
+    except (ValueError, TypeError):
+        return _err(400, "page/size must be integers")
+    q = ((query.get("q") or [""])[0] or "").strip()
+    out = store.search(model, q=q, page_no=page, page_size=size)
+    return 200, {"model": model, "total": out.get("total", 0),
+                 "rows": out.get("list", []), "page": page, "size": size}
+
+
+def _row_payload(data) -> tuple:
+    """Validate the ``data`` field of a row body. Returns (err, row_dict)."""
+    if not isinstance(data, dict):
+        return _err(400, "body.data must be a JSON object"), None
+    try:
+        blob = json.dumps(data, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return _err(400, "body.data is not JSON-serializable"), None
+    if len(blob.encode("utf-8")) > _MAX_ROW_JSON_BYTES:
+        return _err(400, "body.data too large (max 256 KB)"), None
+    return None, data
+
+
+def _data_row_create(store, body, identity) -> tuple:
+    payload = _parse_body(body)
+    if payload is None:
+        return _err(400, "body must be a JSON object")
+    model = str(payload.get("model") or "").strip()
+    if not model or len(model) > 200:
+        return _err(400, "body.model is required (string, <=200 chars)")
+    err, data = _row_payload(payload.get("data"))
+    if err:
+        return err
+    name = str(payload.get("name") or data.get("name") or "").strip() \
+        or f"row-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+    row = store.create(model, name, content=data,
+                       description=str(payload.get("description") or ""))
+    record(_who(identity), "data.create", "",
+           {"model": model, "id": row.get("id") or "", "name": name})
+    return 200, {"success": True, "row": row}
+
+
+def _data_row_update(store, row_id, body, identity) -> tuple:
+    payload = _parse_body(body)
+    if payload is None:
+        return _err(400, "body must be a JSON object")
+    patch = {}
+    if "data" in payload:
+        err, data = _row_payload(payload.get("data"))
+        if err:
+            return err
+        patch["content"] = data
+    for k in ("name", "description", "version"):
+        if k in payload:
+            v = payload[k]
+            if not isinstance(v, str) or len(v) > 500:
+                return _err(400, f"body.{k} must be a string (<=500 chars)")
+            patch[k] = v
+    if not patch:
+        return _err(400, "nothing to update (data/name/description/version)")
+    try:
+        row = store.update(row_id, patch)
+    except KeyError:
+        return _err(404, f"row not found: {row_id}")
+    record(_who(identity), "data.update", "",
+           {"model": row.get("model_code") or "", "id": row_id,
+            "fields": sorted(patch)})
+    return 200, {"success": True, "row": row}
+
+
+def _data_row_delete(store, row_id, identity) -> tuple:
+    row = store.get(row_id)
+    if row is None:
+        return _err(404, f"row not found: {row_id}")
+    store.delete(row_id)
+    record(_who(identity), "data.delete", "",
+           {"model": row.get("model_code") or "", "id": row_id,
+            "name": row.get("name") or ""})
+    return 200, {"success": True, "deleted": row_id}

@@ -37,6 +37,32 @@ class TestRenderAdminPage(unittest.TestCase):
                        "login-gate", "d-maints", "d-snaps", "toast"):
             self.assertIn(f'id="{dom_id}"', html, dom_id)
 
+    def test_data_view_dom_ids_present(self):
+        """M6: data-management view elements exist."""
+        html = self._render()
+        for dom_id in ("nav-data", "view-data", "data-nobackend",
+                       "data-main", "data-model", "data-rows", "data-q",
+                       "data-add", "dm", "dm-json", "dm-err", "dm-save"):
+            self.assertIn(f'id="{dom_id}"', html, dom_id)
+
+    def test_data_nav_superadmin_only(self):
+        """M6: nav-data is hidden by default and revealed for superadmin."""
+        html = self._render()
+        m = re.search(r'<div class="([^"]*)" data-view="data"', html)
+        self.assertIsNotNone(m)
+        self.assertIn("hidden", m.group(1))
+        # JS reveals it inside the superadmin branch only
+        js = html[html.rindex("<script>"):]
+        gate = js[js.index("who.superadmin"):]
+        self.assertIn('$("nav-data").classList.remove("hidden")',
+                      gate[:400])
+
+    def test_data_modal_validates_json_client_side(self):
+        """M6: the row modal JSON.parse-validates before saving."""
+        html = self._render()
+        self.assertIn('JSON.parse($("dm-json").value', html)
+        self.assertIn("JSON 解析失败", html)
+
     def test_no_external_cdn_references(self):
         html = self._render()
         # every http(s):// occurrence must be inside a code string that the

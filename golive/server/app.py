@@ -21,6 +21,8 @@ Note: this is a lightweight single-process server intended for personal /
 small-team intranet use. Put nginx/caddy in front for TLS or heavy traffic.
 """
 
+
+from __future__ import annotations
 import html as html_mod
 import http.server
 import json

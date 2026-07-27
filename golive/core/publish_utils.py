@@ -5,6 +5,8 @@ Extracted from the upstream orchestration layer: framework-project
 detection, directory bundling, base64 image compression and size gates.
 """
 
+
+from __future__ import annotations
 import base64
 import json
 import re

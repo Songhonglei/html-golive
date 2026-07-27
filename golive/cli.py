@@ -12,6 +12,8 @@ Subcommands:
   styles    List built-in CSS styles
 """
 
+
+from __future__ import annotations
 import argparse
 import shutil
 import sys

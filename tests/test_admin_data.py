@@ -5,6 +5,8 @@ models list, paged rows (+q filter), create/update/delete, audit trail,
 superadmin-only 403, no-backend 400 guidance, and escaping-safe inputs.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import tempfile

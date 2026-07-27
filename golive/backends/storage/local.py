@@ -5,6 +5,8 @@ Layout:
   $GOLIVE_HOME/backups/<site_id>/<ts>.html     rollback snapshots (max 10)
 """
 
+
+from __future__ import annotations
 import datetime
 from pathlib import Path
 

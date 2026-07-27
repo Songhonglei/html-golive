@@ -23,6 +23,8 @@ Public API:
   localize(html, do_download=True, uploader=None, log=print) -> (html, stats)
 """
 
+
+from __future__ import annotations
 import base64
 import mimetypes
 import re

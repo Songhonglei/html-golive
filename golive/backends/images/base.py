@@ -11,6 +11,8 @@ Contract:
 """
 
 
+
+from __future__ import annotations
 class UploadError(RuntimeError):
     """Raised when an image upload fails (caller falls back to base64)."""
 

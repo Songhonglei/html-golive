@@ -1,5 +1,7 @@
 """golive.backends.auth.none — no-auth provider (default for single-user)."""
 
+
+from __future__ import annotations
 from golive.backends.auth.base import AuthProvider
 
 

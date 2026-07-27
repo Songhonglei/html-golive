@@ -1,5 +1,7 @@
 """Tests for M6 audit.log size rotation (golive/core/audit.py)."""
 
+from __future__ import annotations
+
 import os
 import tempfile
 import unittest

@@ -3,6 +3,8 @@ clone_analyzer.py — HTML 克隆迁移可行性分析器
 扫描 HTML 源码中的 API 依赖、字体问题、凭证泄露等，返回结构化分析报告。
 """
 
+
+from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from urllib.parse import urlparse

@@ -1,5 +1,7 @@
 """golive.backends.auth.base — AuthProvider interface."""
 
+
+from __future__ import annotations
 from abc import ABC, abstractmethod
 
 

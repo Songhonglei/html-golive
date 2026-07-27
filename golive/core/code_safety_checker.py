@@ -35,6 +35,8 @@ code_safety_checker.py — html-go-live HTML 代码安全检查模块
      "label": str, "context": str, "line_hint": str}
 """
 
+
+from __future__ import annotations
 import re
 import sys
 

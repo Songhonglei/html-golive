@@ -10,6 +10,8 @@ editable: 0/1 — whether the online editor is enabled for the site (M3).
 maintainers: JSON array of emails allowed to edit besides the owner (M3).
 """
 
+
+from __future__ import annotations
 import datetime
 import json
 import sqlite3

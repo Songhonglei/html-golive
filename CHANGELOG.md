@@ -3,6 +3,40 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-07-27
+
+Data management in the admin portal + audit rotation (M6).
+
+### Added
+- **Data management tab in `/admin`** (superadmin only) — manage the
+  TemplateAPI rows (`golive_templates`) shared by all sites when a
+  Supabase/PostgREST data backend is configured: model dropdown with row
+  counts, paged row table with JSON-content search, formatted view
+  dialog, JSON-validated edit, add row, delete with confirm. Shows setup
+  guidance instead of an error when no data backend is configured.
+- **Admin data JSON API** — `GET /api/admin/data/models`,
+  `GET/POST /api/admin/data/rows`, `PATCH/DELETE
+  /api/admin/data/rows/<id>`. Superadmin only; `400` with a hint when no
+  data backend is configured; every write audited as
+  `data.create`/`data.update`/`data.delete`.
+- **TemplateStore helpers** — `list_models()` (distinct model_code +
+  counts) and `search()` (paged rows with best-effort case-insensitive
+  containment filter over name/description/content).
+- **Audit log rotation** — before each write, `audit.log` over
+  `admin.audit_max_bytes` (default 10 MB, env `GOLIVE_AUDIT_MAX_BYTES`,
+  0 = off) rotates to `audit.log.1`, older archives shift up, keeping
+  `admin.audit_keep` generations (default 5, env `GOLIVE_AUDIT_KEEP`).
+  Rotation failures never block the write; `GET /api/admin/audit` reads
+  only the current file.
+- **CI badge** on both READMEs.
+
+### Tests
+- 33 new tests (199 → 232): data endpoints (models/pagination/search/
+  CRUD/audit/403/401/no-backend-400/malicious model names), store
+  helpers, audit rotation (threshold, keep-limit, shift-up, disable,
+  fail-open rename, env-beats-yaml), portal data-view DOM +
+  superadmin-only nav.
+
 ## [0.5.0] - 2026-07-26
 
 Admin portal (M5): web-based operations console for `golive serve`.

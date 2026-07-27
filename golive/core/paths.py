@@ -1,3 +1,5 @@
+
+from __future__ import annotations
 # golive — data directory layout
 #
 # GOLIVE_HOME (default: ~/.golive/)

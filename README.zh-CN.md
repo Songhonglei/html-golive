@@ -1,5 +1,7 @@
 # html-golive
 
+[![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
+
 > **自部署的一键 HTML 发布工具 —— 你的内网 Vercel-lite。**
 
 一条命令把 HTML 文件、项目文件夹或压缩包变成可分享的 URL，跑在你自己的

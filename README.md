@@ -1,5 +1,7 @@
 # html-golive
 
+[![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
+
 > **Self-hosted one-command HTML deployment — Vercel-lite for your intranet.**
 
 Turn any HTML file, project folder or zip archive into a shareable URL on

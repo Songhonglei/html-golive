@@ -26,9 +26,13 @@ The report covers three categories, each with `file:line` and advice:
 
 Exit code 0 = clean, 1 = items to handle.
 
-## Step 2 — configure a data backend
+## Step 2 — check the data backend
 
-Follow [data-layer.md](data-layer.md): create a Supabase project, run
+The default `data.backend: sqlite` already serves migrated pages with no
+setup: rows go to `$GOLIVE_HOME/data.db` and the pages read them through
+`golive serve`. If you need the dataset shared across machines, or the
+pages hosted outside golive, switch to Supabase instead — see
+[data-layer.md](data-layer.md): create a project, run
 `golive db init --print-sql` in its SQL editor, set `supabase.url` +
 keys in `golive.yaml` / env.
 

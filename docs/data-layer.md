@@ -1,11 +1,52 @@
 # Data Layer — `window.TemplateAPI` / `window.SupabaseAPI`
 
 golive can inject a JavaScript data layer into published pages, giving
-static HTML full read/write persistence backed by your own Supabase
-project. Pages built against the same API on other golive deployments
-run **unchanged** — the API signatures are stable contracts.
+static HTML full read/write persistence. Pages built against the same
+API on other golive deployments run **unchanged** — the API signatures
+are stable contracts.
 
-## Setup (once)
+Two backends provide it. `sqlite` is the default and needs no setup;
+`supabase` is opt-in for shared or externally hosted deployments.
+
+## Setup — sqlite (default, zero config)
+
+Nothing to configure. Publish with a data model namespace and serve:
+
+```bash
+golive publish app.html --name MyApp --data-model myapp_v1
+golive serve
+```
+
+Rows land in `$GOLIVE_HOME/data.db` (table created on first use).
+Because a browser cannot open a local database file, `golive serve`
+exposes a PostgREST-shaped endpoint at `/api/data/<table>` and the
+injected JS calls that.
+
+What follows from this:
+
+- **the page must be loaded through `golive serve`** — opening the HTML
+  from disk (`file://`) leaves the data layer with nothing to call
+- no API key is embedded in the HTML
+- anyone who can reach the server can call `/api/data` — put
+  `GOLIVE_TOKEN`, OIDC or a reverse proxy in front for sensitive data
+- the data stays on this machine; copying the HTML elsewhere does not
+  copy the rows
+
+Optional knobs:
+
+```yaml
+# golive.yaml
+data:
+  backend: sqlite
+  sqlite:
+    path: /var/lib/golive/data.db   # override the default location
+  api_base: https://pages.example.com/api/data   # cross-origin serving
+```
+
+## Setup — supabase (shared / externally hosted)
+
+Choose this when several machines share one dataset, or the pages are
+hosted somewhere other than golive.
 
 1. Create a Supabase project (cloud or [self-hosted](https://supabase.com/docs/guides/self-hosting/docker)).
 2. Print the schema and run it in the Supabase SQL Editor:
@@ -35,17 +76,38 @@ run **unchanged** — the API signatures are stable contracts.
    golive publish app.html --name MyApp --data-model myapp_v1
    ```
 
-Pages calling `TemplateAPI.*` / `SupabaseAPI.*` are detected
-automatically at publish time and get the matching layer injected. If no
-data backend is configured, a **stub** is injected instead: the page
-still publishes, and every data call rejects with a clear
-configuration hint in the console.
-
-> ⚠️ **RLS is mandatory.** The injected JS embeds your **anon key** —
-> anyone viewing the page source can read it. Protect your tables with
+> ⚠️ **RLS is mandatory in Supabase mode.** The injected JS embeds your
+> **anon key** — anyone viewing the page source can read it. Protect
+> your tables with
 > [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
 > policies. The SQL from `golive db init --print-sql` includes example
 > policies to start from; tighten them before production use.
+
+## Injection rules
+
+Pages calling `TemplateAPI.*` / `SupabaseAPI.*` are detected
+automatically at publish time and get the matching layer injected;
+`--data-model` forces injection even before the calls exist. Injection
+is idempotent — republishing replaces the previous block.
+
+With `data.backend: none`, or Supabase mode without keys, a **stub** is
+injected instead: the page still publishes and loads, and every data
+call rejects with a console message naming the exact fix. Publishing is
+never blocked by a missing backend.
+
+## Switching backends
+
+The backend is baked into the HTML at publish time. Changing
+`golive.yaml` does not touch pages that are already live — republish
+them:
+
+```bash
+golive publish app.html --update app --data-model myapp_v1
+```
+
+Rows are **not** migrated between backends. Export from the old one
+(`golive data list --model-code myapp_v1 --limit 1000`) and re-import if
+the content has to survive the move.
 
 ## `window.TemplateAPI`
 

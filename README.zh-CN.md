@@ -86,6 +86,7 @@ golive preview draft.html                    # 热更新预览 + 风格面板
 golive clone https://example.com --save-only # 克隆公网页面
 golive styles                                # 查看 19 种 CSS 风格
 golive doctor                                # 环境体检
+golive skill install                         # 让 AI agent 学会正确使用 golive
 
 # v0.3 —— 在线编辑与水印
 golive publish page.html --enable-editor --owner you@example.com
@@ -124,11 +125,16 @@ golive serve
 - 热更新实时预览 + 风格切换面板
 - `golive doctor` 环境诊断、审计日志
 
-**数据与后端** *(v0.2)*
+**数据与后端** *(v0.2；SQLite 数据层 v0.7)*
 - `window.TemplateAPI` / `window.SupabaseAPI` 注入——静态页面零服务端
   代码获得真实数据库
-- 存储 / 注册表 / 数据三层后端：local + SQLite（默认）、Supabase
-  （一个项目装下三层）、S3 兼容对象存储
+- 三层后端各自独立切换：
+  - **storage**（站点 HTML）：`local`（默认）/ `s3` / `supabase`
+  - **registry**（站点元信息）：`sqlite`（默认）/ `supabase`
+  - **data**（TemplateAPI 数据行）：`sqlite`（默认）/ `supabase` /
+    `none`
+  默认三层全本地——SQLite 文件落在 `GOLIVE_HOME` 下，无需注册任何服务；
+  需要多机共享时，一个 Supabase 项目可以同时承载三层。
 - `golive migrate-check` —— 从其他 golive 部署迁移页面
 - Docker Compose 部署（含可选 MinIO profile）
 
@@ -152,6 +158,13 @@ golive serve
   `GOLIVE_ADMINS`）；超管另有统计看板与审计日志页；全部操作
   也可通过 `/api/admin/*` JSON API 脚本化调用
 
+**AI agent skill** *(v0.7)*
+- `golive skill install` 把随包分发的 AgentSkill 装进 agent 的 skills
+  目录（自动探测位置）：教它先探测环境再动手、按 slug 更新而不是重复
+  发布、正确接入 `TemplateAPI`，并明确区分「本地自部署 CLI」与任何同名
+  的托管服务
+- skill 打在 wheel 里，离线可装；`golive skill status` 提示版本漂移
+
 **安全**
 - 每次发布凭证/隐私信息扫描（YAML 可扩展规则）
 - 服务端与压缩包解压均做路径穿越防护
@@ -167,8 +180,8 @@ golive serve
   StorageBackend    RegistryBackend     DataBackend
   站点 HTML/资源     站点元信息          TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
-  supabase storage
+  local-fs / s3 /    sqlite / supabase   sqlite（本地文件）/
+  supabase storage                       supabase (PostgREST) / none
        │
   AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oidc（通用 OIDC）
 ```
@@ -179,10 +192,17 @@ golive serve
 ~/.golive/
 ├── sites/<site_id>/index.html   已发布内容
 ├── backups/<site_id>/           回滚快照（最多 10 份）
-├── registry.db                  SQLite 注册表
-├── logs/                        审计日志
+├── registry.db                  SQLite 注册表 + 可管理超管名单
+├── data.db                      SQLite 数据层（TemplateAPI 数据行）
+├── audit.log                    管理操作审计流水
+├── logs/                        运行日志
 └── cache/                       风格备份等缓存
 ```
+
+默认后端下，以上 SQLite 文件与目录就是全部持久化——不依赖任何外部服务。
+使用 `TemplateAPI` 的页面通过 `golive serve` 的 `/api/data` 端点读写
+`data.db`，因此页面必须由服务端访问，直接以 `file://` 打开无效。
+详见 [docs/data-layer.md](docs/data-layer.md)。
 
 ## 配置
 

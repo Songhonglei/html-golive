@@ -1,8 +1,11 @@
 # Backends
 
 golive separates concerns into three swappable interfaces plus auth.
-Everything is selected in `golive.yaml` (see `golive.example.yaml`);
-zero-config means local + SQLite + built-in server.
+Everything is selected in `golive.yaml` (see `golive.example.yaml`).
+Each layer is chosen independently — the zero-config defaults are
+`storage: local`, `registry: sqlite` and `data: sqlite`, i.e. plain
+files and SQLite databases under `$GOLIVE_HOME` served by the built-in
+server, with nothing external to register.
 
 ## StorageBackend
 
@@ -46,18 +49,50 @@ against them run unchanged across implementations. Full guide:
 
 | Impl | Status | Notes |
 |---|---|---|
-| `none` | ✅ | default — pages using the APIs get a stub with clear errors |
-| `supabase` | ✅ v0.2 | PostgREST table `golive_templates` |
+| `sqlite` | ✅ v0.7 | **default** — table `golive_templates` in `$GOLIVE_HOME/data.db`, created on first use |
+| `supabase` | ✅ v0.2 | PostgREST table `golive_templates` in your Supabase project |
+| `none` | ✅ | data layer disabled — pages using the APIs get a stub with clear errors |
+
+Both implementations expose the identical `TemplateStore` interface
+(`list` / `get` / `count` / `list_models` / `search` / `create` /
+`update` / `upsert` / `delete`), so `golive data ...`, the admin portal
+and the injected JS behave the same either way.
+
+**sqlite** — zero configuration. Browsers cannot open a local database
+file, so `golive serve` exposes a PostgREST-shaped adapter at
+`/api/data/<table>` and the injected JS talks to that instead of a
+remote endpoint. Consequences: pages must be loaded **through the
+server** (`file://` has no endpoint to call); no API key is embedded in
+the HTML; and anyone who can reach the server can call the endpoint —
+put `GOLIVE_TOKEN`, OIDC or a reverse proxy in front for sensitive data.
+Override the file location with `data.sqlite.path`, and set
+`data.api_base` when pages are served from a different origin.
+
+**supabase** — pick this to share one dataset across machines, or when
+the pages are hosted somewhere other than golive. The **anon key is
+embedded in the published HTML**, so RLS policies are mandatory.
+
+The backend is baked into each page at publish time: after changing
+`data.backend`, republish (`golive publish app.html --update <slug>`)
+for existing sites to pick it up. Rows are not migrated automatically.
 
 ## Backend combos — worked examples
 
 ### 1. Pure local (zero config)
 
-No `golive.yaml` at all:
+No `golive.yaml` at all — storage on disk, registry and data layer in
+SQLite:
 
 ```bash
 golive publish page.html --name Demo --slug demo
 golive serve   # http://localhost:8787/demo
+```
+
+Dynamic pages work here too, with no extra setup:
+
+```bash
+golive publish app.html --slug app --data-model app_v1
+golive serve   # TemplateAPI reads/writes $GOLIVE_HOME/data.db
 ```
 
 ### 2. Pure Supabase (one project hosts all three layers)

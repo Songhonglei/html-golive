@@ -89,6 +89,7 @@ golive preview draft.html                    # live preview + style panel
 golive clone https://example.com --save-only # snapshot a public page
 golive styles                                # list the 19 CSS styles
 golive doctor                                # environment health check
+golive skill install                         # teach your AI agent to drive golive
 
 # v0.3 — online editing & watermark
 golive publish page.html --enable-editor --owner you@example.com
@@ -128,11 +129,17 @@ login session instead of the token+header pair.
 - Live preview with hot reload and style-switch panel
 - `golive doctor` environment diagnostics, audit log
 
-**Data & backends** *(v0.2)*
+**Data & backends** *(v0.2, SQLite data layer in v0.7)*
 - `window.TemplateAPI` / `window.SupabaseAPI` injection — static pages
   get a real database with zero backend code
-- Storage / registry / data backends: local + SQLite (default),
-  Supabase (one project covers all three), S3-compatible object storage
+- Three independent backend layers, each switchable on its own:
+  - **storage** (site HTML): `local` *(default)* / `s3` / `supabase`
+  - **registry** (site metadata): `sqlite` *(default)* / `supabase`
+  - **data** (TemplateAPI rows): `sqlite` *(default)* / `supabase` /
+    `none`
+  Defaults are fully local — SQLite files under `GOLIVE_HOME`, nothing
+  to register. One Supabase project can back all three when you want
+  them shared across machines.
 - `golive migrate-check` — port pages from other golive deployments
 - Docker Compose deployment (+ optional MinIO profile)
 
@@ -158,6 +165,14 @@ login session instead of the token+header pair.
   `admin.admins` or `GOLIVE_ADMINS`), plus superadmin stats dashboard
   and a JSONL audit trail (`/api/admin/*` JSON API for scripting)
 
+**AI agent skill** *(v0.7)*
+- `golive skill install` drops a ready-made AgentSkill into your agent's
+  skills directory (auto-detected), teaching it to probe the environment
+  before acting, publish and update by slug, wire up `TemplateAPI`, and
+  never confuse this self-hosted CLI with a hosted deployment service
+- Ships inside the wheel, so installation works offline;
+  `golive skill status` flags version drift
+
 **Safety**
 - Credential / PII scanning on every publish (YAML-extensible rules)
 - Path-traversal-hardened server and archive extraction
@@ -173,8 +188,8 @@ login session instead of the token+header pair.
   StorageBackend    RegistryBackend     DataBackend
   site HTML/assets  site metadata       TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    SQLite / supabase   supabase (PostgREST)
-  supabase storage
+  local-fs / s3 /    sqlite / supabase   sqlite (local file) /
+  supabase storage                       supabase (PostgREST) / none
        │
   AuthProvider: none (default) / token (GOLIVE_TOKEN) / oidc (generic OIDC)
 ```
@@ -185,10 +200,18 @@ All data lives under `GOLIVE_HOME` (default `~/.golive/`):
 ~/.golive/
 ├── sites/<site_id>/index.html   published content
 ├── backups/<site_id>/           rollback snapshots (max 10)
-├── registry.db                  SQLite registry
-├── logs/                        audit log
+├── registry.db                  SQLite registry + managed superadmins
+├── data.db                      SQLite data layer (TemplateAPI rows)
+├── audit.log                    admin action trail
+├── logs/                        operation log
 └── cache/                       style backups etc.
 ```
+
+With the default backends the three SQLite/filesystem entries above are
+the entire persistence story — no external service is involved. Pages
+using `TemplateAPI` reach `data.db` through `golive serve`'s
+`/api/data` endpoint, so they must be loaded from the server rather than
+opened as `file://`. See [docs/data-layer.md](docs/data-layer.md).
 
 ## Configuration
 

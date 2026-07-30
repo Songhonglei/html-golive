@@ -26,7 +26,8 @@ the [Quickstart](quickstart.md), then come back for the details.
 15. [Identity & login (OIDC)](#15-identity--login)
 16. [Migrating pages from another deployment](#16-migrating-pages)
 17. [Admin portal](#17-admin-portal)
-18. [FAQ](#18-faq)
+18. [AI agent skill](#18-ai-agent-skill)
+19. [FAQ](#19-faq)
 
 ---
 
@@ -121,8 +122,27 @@ Identity comes from the OIDC session when logged in, otherwise from the
 
 Give a static page a real key-value/record store via `window.TemplateAPI`
 — no backend code. Namespaced records, list/get/create/update/delete/
-upsert/sort. Backed by SQLite locally or Supabase remotely. Full API and
-examples: [data-layer.md](data-layer.md).
+upsert/sort.
+
+```bash
+golive publish app.html --slug app --data-model app_v1
+golive serve
+```
+
+That is the whole setup: the default `sqlite` backend keeps rows in
+`$GOLIVE_HOME/data.db` (table created on first use) and `golive serve`
+exposes them to the page at `/api/data`. The page therefore has to be
+loaded **through the server** — `file://` gives the data layer no
+endpoint to call. Switch to Supabase when a dataset must be shared
+across machines (section 9). Full API and examples:
+[data-layer.md](data-layer.md).
+
+Inspect or seed rows from the CLI:
+
+```bash
+golive data list   --model-code app_v1
+golive data create --model-code app_v1 --name seed --content '{"n":1}'
+```
 
 ## 9. Using Supabase
 
@@ -234,6 +254,29 @@ the static `GOLIVE_TOKEN` is also treated as superadmin — the token is
 operator-held by definition. With zero auth configured the portal only
 answers loopback requests (same rule as `/api/sites`).
 
+**Two superadmin sources** *(v0.7)*. The declarations above are
+**builtin** admins: read-only at runtime, so nobody can remove the
+operator through the UI or API. Additional **managed** admins can be
+added and removed at runtime and are stored in `registry.db`. The
+effective superadmin set is the union of both, and
+`GET /api/admin/me` reports `builtin` so the UI can hide *delete* on the
+config-declared ones.
+
+Permission endpoints (all superadmin-only):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/admin/permissions` | builtin + managed admins, effective union, and every site's owner/maintainers |
+| `POST /api/admin/permissions/admins` | add a managed superadmin (`{"email": ...}`) |
+| `DELETE /api/admin/permissions/admins` | remove one — a builtin admin returns `400` with the config fix |
+| `POST /api/admin/permissions/bulk` | grant/revoke `maintainer` (or grant `owner`) across many sites at once |
+
+Bulk calls take `{"email", "role", "action", "slugs"}` and answer with
+per-slug `applied` / `skipped` / `failed`, so one unknown slug never
+aborts the batch. Revoking `owner` in bulk is refused — transfer the
+site instead. Writes are audited as `perm.admin.add`,
+`perm.admin.remove` and `perm.bulk`.
+
 What you can do, by role:
 
 | Action | owner | maintainer | superadmin |
@@ -259,15 +302,15 @@ read **only the current** `audit.log` — rotated archives are plain JSONL
 files for operators to grep or ship elsewhere. A failed rotation never
 blocks the write (the log just grows past the limit until fixed).
 
-**Data management** *(M6, superadmin only)*: when a Supabase/PostgREST
-data backend is configured (`data.backend: supabase` + the top-level
-`supabase:` block), the portal gains a **数据管理** tab that manages the
-TemplateAPI rows (`golive_templates` table) shared by all sites: pick a
-model from the dropdown (listed with row counts), search inside the JSON
-content, view rows in a formatted dialog, edit them in a JSON textarea
-(validated client-side before saving), add new rows, and delete with a
-confirm. Every write is audited as `data.create` / `data.update` /
-`data.delete`. Without a data backend the tab shows setup guidance
+**Data management** *(M6, superadmin only)*: whenever a data backend is
+active — `sqlite` by default, or `supabase` — the portal gains a data
+tab that manages the TemplateAPI rows (`golive_templates`) shared by all
+sites: pick a model from the dropdown (listed with row counts), search
+inside the JSON content, view rows in a formatted dialog, edit them in a
+JSON textarea (validated client-side before saving), add new rows, and
+delete with a confirm. Every write is audited as `data.create` /
+`data.update` / `data.delete`. Only with `data.backend: none` (or
+Supabase selected without keys) does the tab show setup guidance
 instead; the underlying endpoints live at `/api/admin/data/*` and return
 `400 {"error": "no data backend configured"}` in that state.
 
@@ -275,7 +318,31 @@ The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are
 available as a JSON API under `/api/admin/*` for scripting.
 
-## 18. FAQ
+## 18. AI agent skill
+
+golive ships an AgentSkill so AI coding assistants drive it correctly
+instead of guessing paths or mistaking it for a hosted deployment
+service:
+
+```bash
+golive skill install          # auto-detect the agent's skills directory
+golive skill install --target ~/.agent/skills
+golive skill status           # installed vs packaged version
+golive skill path             # bundled source, for manual copies
+```
+
+The skill is packaged inside the wheel, so installation needs no
+network; `--from-github` pulls the latest copy instead, and falls back
+with a clear message when offline. Installing over an existing copy
+requires `--force`, which backs up the old directory first.
+
+It teaches the agent to probe first (`golive --version`, `golive
+doctor`, `$GOLIVE_HOME`, `golive list`), update existing sites by slug
+rather than publishing duplicates, treat `--host 0.0.0.0` and
+`--skip-scan` as explicit-request-only, and wire up `TemplateAPI`
+correctly (including the `templateapi:ready` gate).
+
+## 19. FAQ
 
 **Do I need a server?** No — `golive publish` + a local file is enough.
 `golive serve` adds a shareable URL and the online editor/data layer.

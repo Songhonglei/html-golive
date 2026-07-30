@@ -10,7 +10,9 @@ golive serve --port 8787
 # → http://<host>:8787/demo
 ```
 
-Data lives in `~/.golive/` (override with `GOLIVE_HOME`).
+Data lives in `~/.golive/` (override with `GOLIVE_HOME`): published
+HTML, the SQLite registry, and the SQLite data layer. Nothing external
+to register.
 
 ## Common flows
 
@@ -38,6 +40,26 @@ golive clone https://example.com --save-only     # save locally, review, then pu
 golive clone https://spa.example.com --headless  # JS-rendered pages need Chrome
 ```
 
+### Publish a page with data
+
+```bash
+golive publish app.html --slug app --data-model app_v1
+golive serve
+```
+
+Pages calling `window.TemplateAPI` get the data layer injected
+automatically. The default `sqlite` backend stores rows in
+`$GOLIVE_HOME/data.db` and serves them at `/api/data` — so open the page
+through `golive serve`, not as a local file. Details:
+[data-layer.md](data-layer.md).
+
+### Teach your AI agent to use golive
+
+```bash
+golive skill install       # auto-detects the agent's skills directory
+golive skill status        # check it matches the installed golive
+```
+
 ### Protect the API
 
 ```bash
@@ -48,5 +70,27 @@ golive serve
 
 ## Supabase / S3 paths
 
-Coming in M2 — see the Roadmap in the main README and the placeholder
-fields in `golive.example.yaml`.
+Each of the three backend layers switches independently in
+`golive.yaml`; the defaults (`local` storage, `sqlite` registry,
+`sqlite` data) need no configuration at all.
+
+```yaml
+# golive.yaml — one Supabase project behind all three layers
+supabase:
+  url: https://YOURPROJECT.supabase.co
+storage:  { backend: supabase }
+registry: { backend: supabase }
+data:     { backend: supabase }
+```
+
+```bash
+export GOLIVE_SUPABASE_SERVICE_KEY=eyJ...   # CLI / serve
+export GOLIVE_SUPABASE_ANON_KEY=eyJ...      # embedded in injected page JS
+golive db init --print-sql                  # run the SQL in Supabase
+```
+
+S3-compatible object storage (MinIO / OSS / COS / S3) works the same way
+via `storage.backend: s3` with `pip install 'html-golive[s3]'`.
+
+Configuration matrix and worked combinations:
+[backends.md](backends.md).

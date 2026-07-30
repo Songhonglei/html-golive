@@ -44,7 +44,24 @@ registry:
 
 # ── data layer (window.TemplateAPI / window.SupabaseAPI injection) ───────────
 data:
-  backend: none           # none | supabase
+  # sqlite   — default. Rows live in $GOLIVE_HOME/data.db; the table is
+  #            created on first use and published pages read/write it
+  #            through golive serve's /api/data endpoint. No key is
+  #            embedded in the HTML, and no external service is needed.
+  #            Anyone who can reach the server can call that endpoint —
+  #            front it with GOLIVE_TOKEN / OIDC / a proxy if the data
+  #            is sensitive.
+  # supabase — rows live in your Supabase project; pages call PostgREST
+  #            directly with the anon key embedded in the HTML, so RLS
+  #            policies are mandatory. Use this to share one dataset
+  #            across machines or to host pages outside golive.
+  # none     — data layer disabled; TemplateAPI is injected as a stub
+  #            that rejects every call with a configuration hint.
+  backend: sqlite         # sqlite | supabase | none
+  # sqlite:
+  #   path: ""            # override the data.db location
+  # api_base: ""          # absolute /api/data URL when pages are served
+  #                       # from a different origin than golive serve
   # supabase:
   #   templates_table: golive_templates    # TemplateAPI storage table
   #   user_id: ""                           # identity stamped on created rows

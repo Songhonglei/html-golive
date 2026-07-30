@@ -53,7 +53,7 @@ class TestRenderAdminPage(unittest.TestCase):
         self.assertIn("hidden", m.group(1))
         # JS reveals it inside the superadmin branch only
         js = html[html.rindex("<script>"):]
-        gate = js[js.index("who.superadmin"):]
+        gate = js[js.index("if (who.superadmin){"):]
         self.assertIn('$("nav-data").classList.remove("hidden")',
                       gate[:400])
 

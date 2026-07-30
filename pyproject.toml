@@ -45,5 +45,9 @@ golive = "golive.cli:main"
 include = ["golive*"]
 
 [tool.setuptools.package-data]
-"golive" = ["resources/css_styles/*.css"]
+"golive" = [
+    "resources/css_styles/*.css",
+    "resources/skill/SKILL.md",
+    "resources/skill/references/*.md",
+]
 "golive.security" = ["rules.yaml"]

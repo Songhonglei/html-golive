@@ -699,6 +699,70 @@ def cmd_data(args) -> int:
     return 0
 
 
+# ═════════════════════════════════ skill ════════════════════════════════════
+
+def cmd_skill(args) -> int:
+    """golive skill <install|status|path> — the bundled agent skill."""
+    from golive.core import skill_installer as si
+
+    action = args.skill_action
+    try:
+        if action == "path":
+            path = si.packaged_skill_dir()
+            print(path)
+            if not (path / "SKILL.md").is_file():
+                print("⚠️  该目录下没有 SKILL.md —— 包安装可能不完整。",
+                      file=sys.stderr)
+                return 1
+            return 0
+
+        if action == "status":
+            st = si.status()
+            print(f"golive 版本：        {st['golive_version']}")
+            print(f"包内 skill 版本：    "
+                  f"{st['packaged_skill_version'] or '(未知)'}")
+            print(f"包内 skill 路径：    {st['packaged_skill_path']}")
+            if not st["installs"]:
+                print("\nℹ️  尚未在任何已知位置安装。运行："
+                      "\n   golive skill install")
+                return 0
+            print("\n已安装：")
+            for item in st["installs"]:
+                mark = "✅" if item["version"] == \
+                    st["packaged_skill_version"] else "⚠️ "
+                ver = item["version"] or "(无版本号)"
+                print(f"  {mark} {ver}  {item['path']}")
+                if item["error"]:
+                    print(f"      ⚠️  {item['error']}")
+            if st["stale"]:
+                print("\n⚠️  版本与当前 golive 不一致，同步："
+                      "\n   golive skill install --force")
+                return 0
+            print("\n✅ 已是最新。")
+            return 0
+
+        # install
+        res = si.install(target=args.target or None,
+                         from_github=args.from_github,
+                         force=args.force)
+        print(f"✅ 已安装 skill「{res['name']}」"
+              f"{' v' + res['version'] if res['version'] else ''}")
+        print(f"   来源：   {'GitHub' if res['origin'] == 'github' else '包内'}"
+              f"（{res['source']}）")
+        print(f"   安装到： {res['installed_to']}")
+        print(f"   文件：   {len(res['files'])} 个"
+              f"（{', '.join(res['files'][:4])}"
+              f"{' ...' if len(res['files']) > 4 else ''}）")
+        if res["backup"]:
+            print(f"   旧版本已备份： {res['backup']}")
+        print("\n下一步：重启你的 AI agent 使其重新扫描 skills 目录，"
+              "然后让它执行 `golive doctor` 验证。")
+        return 0
+    except si.SkillInstallError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return 1
+
+
 # ═════════════════════════════════ main ═════════════════════════════════════
 
 def main(argv=None) -> int:
@@ -830,6 +894,19 @@ def main(argv=None) -> int:
     p = sub.add_parser("doctor", help="环境健康检查")
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
     p.set_defaults(func=cmd_doctor)
+
+    # skill
+    p = sub.add_parser("skill", help="安装随包分发的 AI agent skill")
+    p.add_argument("skill_action", choices=["install", "status", "path"],
+                   help="install：安装到 agent skills 目录；"
+                        "status：版本比对；path：打印包内 skill 目录")
+    p.add_argument("--target", default="",
+                   help="安装目标目录（不指定则自动探测常见位置）")
+    p.add_argument("--from-github", action="store_true",
+                   help="从 GitHub 拉取最新 skill（默认用包内版本，离线可用）")
+    p.add_argument("--force", action="store_true",
+                   help="覆盖已存在的同名 skill（先自动备份）")
+    p.set_defaults(func=cmd_skill)
 
     args = parser.parse_args(argv)
 

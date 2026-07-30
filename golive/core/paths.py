@@ -6,6 +6,7 @@ from __future__ import annotations
 # ├── sites/<site_id>/index.html     published sites
 # ├── backups/<site_id>/             rollback snapshots (max 10 per site)
 # ├── registry.db                    SQLite registry
+# ├── data.db                        SQLite data layer (TemplateAPI rows)
 # ├── logs/                          audit + error logs
 # └── cache/                         misc caches (css backups, tailwind, ...)
 """golive.core.paths — unified data-directory resolution.
@@ -19,6 +20,7 @@ Public API:
   get_sites_dir()   -> Path   sites/
   get_backups_dir() -> Path   backups/
   get_registry_db() -> Path   registry.db (path only; not created)
+  get_data_db()     -> Path   data.db (path only; not created)
   get_log_dir()     -> Path   logs/
   get_data_dir()    -> Path   cache/
 """
@@ -61,6 +63,11 @@ def get_backups_dir() -> Path:
 def get_registry_db() -> Path:
     """Path of the SQLite registry database (file may not exist yet)."""
     return get_home() / "registry.db"
+
+
+def get_data_db() -> Path:
+    """Path of the SQLite data-layer database (file may not exist yet)."""
+    return get_home() / "data.db"
 
 
 def get_log_dir() -> Path:

@@ -161,9 +161,9 @@ def print_report(path: str, findings: dict, data_backend_ready: bool) -> int:
         if data_backend_ready:
             print("   ✅ data backend 已配置，重新发布即可自动注入开源数据层")
         else:
-            print("   ⚠️  data backend 未配置 —— 需要在 golive.yaml 配置 "
-                  "data.backend: supabase + supabase.url/key，"
-                  "否则页面数据调用将报错")
+            print("   ⚠️  data backend 未就绪 —— 在 golive.yaml 配置 "
+                  "data.backend: sqlite（零配置，默认值）或 supabase + "
+                  "supabase.url/key，否则页面数据调用将报错")
         print()
 
     if not hits and not ((tpl_n or sb_n) and not data_backend_ready):
@@ -185,5 +185,6 @@ def run(path_str: str) -> int:
     findings = scan_html(html)
     from golive.config import get_config
     cfg = get_config()
-    ready = cfg.data.backend == "supabase" and cfg.supabase.configured
+    ready = (cfg.data.backend in ("", "sqlite")
+             or (cfg.data.backend == "supabase" and cfg.supabase.configured))
     return print_report(str(p), findings, ready)

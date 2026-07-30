@@ -89,9 +89,22 @@ class RegistryConfig:
 
 @dataclass
 class DataConfig:
-    backend: str = "none"            # none | supabase
+    """Data layer for published pages (window.TemplateAPI).
+
+    backend:
+      sqlite   — default; rows live in ``$GOLIVE_HOME/data.db`` and pages
+                 reach them through ``golive serve``'s /api/data endpoint.
+                 Zero configuration, no external service.
+      supabase — rows live in your Supabase project; pages call PostgREST
+                 directly with the anon key (configure RLS).
+      none     — data layer disabled; TemplateAPI is injected as a stub
+                 that errors with a configuration hint.
+    """
+    backend: str = "sqlite"          # sqlite | supabase | none
     templates_table: str = "golive_templates"
     user_id: str = ""                # identity stamped on rows ('' = anonymous)
+    sqlite_path: str = ""            # override the data.db location
+    api_base: str = ""               # public base URL of /api/data for pages
 
 
 @dataclass
@@ -314,10 +327,12 @@ def _build(raw: dict, source_path: str) -> Config:
 
     # data layer
     dt = cfg.data
-    dt.backend = str(_get(raw, "data", "backend", default="none") or "none").lower()
+    dt.backend = str(_get(raw, "data", "backend", default="sqlite") or "sqlite").lower()
     dt.templates_table = str(_get(raw, "data", "supabase", "templates_table",
                                   default=dt.templates_table))
     dt.user_id = str(_get(raw, "data", "supabase", "user_id", default=""))
+    dt.sqlite_path = str(_get(raw, "data", "sqlite", "path", default="") or "")
+    dt.api_base = str(_get(raw, "data", "api_base", default="") or "").rstrip("/")
 
     # auth
     cfg.auth.provider = str(_get(raw, "auth", "provider", default="none") or "none").lower()

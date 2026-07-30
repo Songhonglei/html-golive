@@ -17,9 +17,13 @@ Semantics preserved:
   * placeholder modelCodes hard-block the whole API
   * ``templateapi:ready`` CustomEvent after mount
 
-Backend difference (invisible to pages): requests go straight to the
-user's own Supabase PostgREST endpoint (``golive_templates`` table)
-using the anon key — configure RLS accordingly (see docs/data-layer.md).
+Backend difference (invisible to pages): the JS always speaks the
+PostgREST wire format. With ``data.backend: sqlite`` (default) requests go
+to the golive server's own ``/api/data/<table>`` endpoint, which is backed
+by ``$GOLIVE_HOME/data.db`` — zero configuration, no API key. With
+``data.backend: supabase`` requests go straight to the user's Supabase
+PostgREST endpoint using the anon key — configure RLS accordingly
+(see docs/data-layer.md).
 """
 
 from __future__ import annotations
@@ -47,6 +51,7 @@ _JS_TEMPLATE = r"""
     modelCode  : {first_model_code_json},   // compat field: first modelCode
     version    : '{data_version}',
     userId     : {user_id_json},
+    mode       : {mode_json},               // 'sqlite' (golive serve) | 'supabase'
     baseUrl    : {rest_url_json},
     apiKey     : {anon_key_json},
     table      : {table_json},
@@ -56,11 +61,12 @@ _JS_TEMPLATE = r"""
   var _placeholderFound = CFG.modelCodes.find(function (c) {{
     return c.indexOf('__PLACEHOLDER__') !== -1 || c === '__PLACEHOLDER_MODEL_CODE__';
   }});
-  var _noBackend = !CFG.baseUrl || !CFG.apiKey;
+  /* sqlite mode is served by golive itself — no API key involved. */
+  var _noBackend = !CFG.baseUrl || (CFG.mode !== 'sqlite' && !CFG.apiKey);
   if (_placeholderFound || _noBackend) {{
     var _blockedMsg = _placeholderFound
       ? '[TemplateAPI] not ready: modelCode contains placeholder ' + _placeholderFound
-      : '[TemplateAPI] not ready: no data backend configured. Set data.backend: supabase + supabase.url/key in golive.yaml and republish.';
+      : '[TemplateAPI] not ready: no data backend configured. Set data.backend: sqlite (default, zero-config) or supabase + supabase.url/key in golive.yaml and republish.';
     var _blockedFn = function() {{
       console.error(_blockedMsg);
       return Promise.reject(new Error(_blockedMsg));
@@ -82,13 +88,13 @@ _JS_TEMPLATE = r"""
     return;
   }}
 
-  /* ── HTTP (PostgREST) ── */
+  /* ── HTTP (PostgREST wire format) ── */
   function _headers(extra) {{
-    var h = {{
-      'apikey'        : CFG.apiKey,
-      'Authorization' : 'Bearer ' + CFG.apiKey,
-      'Content-Type'  : 'application/json',
-    }};
+    var h = {{ 'Content-Type': 'application/json' }};
+    if (CFG.mode !== 'sqlite') {{
+      h['apikey'] = CFG.apiKey;
+      h['Authorization'] = 'Bearer ' + CFG.apiKey;
+    }}
     if (extra) for (var k in extra) h[k] = extra[k];
     return h;
   }}
@@ -327,16 +333,20 @@ _JS_TEMPLATE = r"""
 
 def generate_js(model_code: str, data_version: str = "1.0.0",
                 rest_url: str = "", anon_key: str = "",
-                table: str = "golive_templates", user_id: str = "") -> str:
+                table: str = "golive_templates", user_id: str = "",
+                mode: str = "supabase") -> str:
     """Build the injectable <script> tag.
 
     Args:
       model_code: modelCode namespace(s); comma-separated for multi.
       data_version: version string stamped on created rows.
-      rest_url: ``https://<proj>.supabase.co/rest/v1`` (empty -> stub mode).
-      anon_key: Supabase anon key (empty -> stub mode).
+      rest_url: PostgREST base. Supabase mode:
+        ``https://<proj>.supabase.co/rest/v1``. SQLite mode: the golive
+        server's ``/api/data`` base (empty -> stub mode).
+      anon_key: Supabase anon key (ignored in sqlite mode).
       table: templates table name.
       user_id: identity stamped on created rows ('' = anonymous).
+      mode: ``sqlite`` (served by golive itself, no key) or ``supabase``.
     """
     if not model_code or not model_code.strip():
         raise ValueError(
@@ -367,6 +377,7 @@ def generate_js(model_code: str, data_version: str = "1.0.0",
         anon_key_json=_json_for_script(anon_key),
         table_json=_json_for_script(table),
         user_id_json=_json_for_script(user_id),
+        mode_json=_json_for_script(mode or "supabase"),
     )
     return f'<script id="{TEMPLATE_SCRIPT_ID}">\n{js_code}\n</script>'
 
@@ -377,16 +388,32 @@ from golive.inject._escape import _json_for_script, _safe_comment  # noqa: E402
 
 def generate_js_from_config(model_code: str, data_version: str = "1.0.0",
                             cfg=None) -> str:
-    """Build the script tag using the current golive Config."""
+    """Build the script tag using the current golive Config.
+
+    ``data.backend: sqlite`` (default) points the page at the golive
+    server's own ``/api/data`` endpoint — same wire format, no API key.
+    ``data.api_base`` overrides the base when the site is served from a
+    different origin than the golive server (reverse proxy, CDN).
+    """
     if cfg is None:
         from golive.config import get_config
         cfg = get_config()
+    if cfg.data.backend == "sqlite":
+        # Relative base: the published page and golive serve share an origin
+        # unless the operator says otherwise via data.api_base.
+        return generate_js(model_code, data_version,
+                           rest_url=cfg.data.api_base or "/api/data",
+                           anon_key="",
+                           table=cfg.data.templates_table,
+                           user_id=cfg.data.user_id,
+                           mode="sqlite")
     rest_url = cfg.supabase.url.rstrip("/") + "/rest/v1" if cfg.supabase.url else ""
     return generate_js(model_code, data_version,
                        rest_url=rest_url,
                        anon_key=cfg.supabase.anon_key,
                        table=cfg.data.templates_table,
-                       user_id=cfg.data.user_id)
+                       user_id=cfg.data.user_id,
+                       mode="supabase")
 
 
 def inject_into_html(html: str, model_code: str, data_version: str = "1.0.0",

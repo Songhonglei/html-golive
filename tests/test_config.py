@@ -47,7 +47,7 @@ class TestLookupPriority(ConfigTestBase):
         cfg = load_config()
         self.assertEqual(cfg.storage.backend, "local")
         self.assertEqual(cfg.registry.backend, "sqlite")
-        self.assertEqual(cfg.data.backend, "none")
+        self.assertEqual(cfg.data.backend, "sqlite")
         self.assertEqual(cfg.auth.provider, "none")
         self.assertEqual(cfg.source_path, "")
 

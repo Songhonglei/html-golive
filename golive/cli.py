@@ -168,7 +168,7 @@ def _apply_data_layers(html: str, args) -> str:
     """Detect TemplateAPI/SupabaseAPI usage and inject the JS data layer.
 
     Configured data backend  -> real injection (page runs unchanged).
-    No backend configured    -> stub injection with a clear console error
+    ``data.backend: none``   -> stub injection with a clear console error
                                 (publish is never blocked) + CLI warning.
     """
     from golive.config import get_config
@@ -182,20 +182,36 @@ def _apply_data_layers(html: str, args) -> str:
     if not uses_tpl and not uses_sb:
         return html
 
-    backend_ready = cfg.data.backend == "supabase" and cfg.supabase.configured
+    if cfg.data.backend == "sqlite":
+        backend_ready, backend_label = True, "sqlite"
+    elif cfg.data.backend == "supabase":
+        backend_ready = cfg.supabase.configured
+        backend_label = "supabase"
+    else:
+        backend_ready, backend_label = False, cfg.data.backend or "none"
 
     if uses_tpl:
         model_code = data_model \
             or template_api.extract_model_code_from_html(html) or "default"
+        html = template_api.inject_into_html(html, model_code, cfg=cfg)
         if backend_ready:
-            html = template_api.inject_into_html(html, model_code, cfg=cfg)
-            print(f"🧩 已注入 TemplateAPI 数据层（modelCode: {model_code}）")
-        else:
-            html = template_api.inject_into_html(html, model_code, cfg=cfg)
-            print("⚠️  页面使用了 TemplateAPI，但 data backend 未配置 —— "
+            print(f"🧩 已注入 TemplateAPI 数据层"
+                  f"（modelCode: {model_code}，backend: {backend_label}）")
+            if backend_label == "sqlite":
+                print("   数据存放在 $GOLIVE_HOME/data.db，页面通过 "
+                      "golive serve 的 /api/data 读写。")
+        elif cfg.data.backend == "supabase":
+            print("⚠️  页面使用了 TemplateAPI，但 Supabase 未配置 —— "
                   "已注入 stub（调用会报错并提示配置方法）。\n"
-                  "   配置：golive.yaml 里 data.backend: supabase + "
-                  "supabase.url，env 里 GOLIVE_SUPABASE_ANON_KEY。",
+                  "   配置：golive.yaml 里 supabase.url，env 里 "
+                  "GOLIVE_SUPABASE_ANON_KEY；\n"
+                  "   或改回默认的 data.backend: sqlite（零配置）。",
+                  file=sys.stderr)
+        else:
+            print("⚠️  页面使用了 TemplateAPI，但 data.backend 为 none —— "
+                  "已注入 stub（调用会报错并提示配置方法）。\n"
+                  "   配置：golive.yaml 里 data.backend: sqlite（零配置，"
+                  "默认值）或 supabase。",
                   file=sys.stderr)
 
     if uses_sb:
@@ -572,7 +588,7 @@ def cmd_doctor(args) -> int:
 # ═════════════════════════════════ db / data ════════════════════════════════
 
 def cmd_db(args) -> int:
-    """golive db init — print (or apply) backend table schemas."""
+    """golive db init — create local tables / print remote table schemas."""
     from golive.backends.data.supabase import CREATE_TABLE_SQL as TPL_SQL
     from golive.backends.data.supabase import DEFAULT_TABLE as TPL_TABLE
     from golive.backends.registry.supabase_store import CREATE_TABLE_SQL as REG_SQL
@@ -582,6 +598,27 @@ def cmd_db(args) -> int:
     cfg = get_config()
     reg_table = cfg.registry.supabase_table or REG_TABLE
     tpl_table = cfg.data.templates_table or TPL_TABLE
+
+    # Local backends create their own tables on first use — report and exit
+    # unless the user explicitly asked for the remote SQL.
+    local_registry = cfg.registry.backend in ("", "sqlite")
+    local_data = cfg.data.backend in ("", "sqlite")
+    if (local_registry or local_data) and not args.print_sql:
+        from golive.core.paths import get_home
+        if local_registry:
+            from golive.backends.factory import get_registry
+            get_registry()
+            print(f"✅ registry (sqlite)：{get_home() / 'registry.db'} 已就绪")
+        if local_data:
+            from golive.backends.data.sqlite_store import TemplateStore
+            store = TemplateStore()
+            print(f"✅ data (sqlite)：{store.db_path} 已就绪"
+                  f"（表 {store.table}）")
+        if local_registry and local_data:
+            print("ℹ️  本地后端会在首次使用时自动建表，无需手动 init。"
+                  "需要 Supabase 建表 SQL 请加 --print-sql。")
+            return 0
+
     sql = ("-- golive registry table\n" + REG_SQL.format(table=reg_table)
            + "\n-- golive data-layer (TemplateAPI) table\n"
            + TPL_SQL.format(table=tpl_table))
@@ -608,8 +645,8 @@ def cmd_data(args) -> int:
     from golive.backends.factory import get_template_store
     store = get_template_store()
     if store is None:
-        print("❌ data backend 未配置。请在 golive.yaml 设置 "
-              "data.backend: supabase 并配置 supabase.url + key。",
+        print("❌ data backend 已禁用（data.backend: none）。改为 "
+              "data.backend: sqlite（零配置，默认值）或 supabase 后重试。",
               file=sys.stderr)
         return 1
 

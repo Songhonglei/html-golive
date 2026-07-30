@@ -235,8 +235,20 @@ class TestDataPermissions(DataApiBase):
 
 
 class TestDataNoBackend(unittest.TestCase):
+    """data.backend: none — the data layer is explicitly disabled.
+
+    (sqlite is the default since v0.7.0, so 'no backend' now requires an
+    explicit opt-out in golive.yaml.)
+    """
+
     def setUp(self):
         _fresh_home()
+        home = os.environ["GOLIVE_HOME"]
+        with open(os.path.join(home, "golive.yaml"), "w",
+                  encoding="utf-8") as f:
+            f.write("data:\n  backend: none\n")
+        from golive.config import reset_config
+        reset_config()
         from golive.backends.registry.sqlite_store import SqliteRegistry
         from golive.backends.storage.local import LocalStorage
         from golive.server import authz

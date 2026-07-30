@@ -14,6 +14,7 @@ Routes:
   GET  /auth/me                   current session identity JSON
   GET  /admin                     admin portal SPA (M5)
   *    /api/admin/...             admin JSON API (M5, admin_api)
+  *    /api/data/<table>          local data layer (M7, sqlite backend)
 
 Start: ``golive serve [--port 8787] [--host 0.0.0.0]``.
 
@@ -172,6 +173,20 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             self._admin_identity(), self.registry, self.storage)
         self._send_json(status, payload)
 
+    def _handle_data_api(self, method: str, parsed):
+        """PostgREST-shaped local data endpoint (sqlite data backend)."""
+        from golive.server import data_api
+        body = b""
+        if method in ("POST", "PATCH", "PUT", "DELETE"):
+            body = self._read_body(data_api.MAX_BODY_BYTES)
+            if body is None:
+                self._send_json(413, {"message": "body too large"})
+                return
+        query = urllib.parse.parse_qs(parsed.query)
+        status, payload, headers = data_api.handle(
+            method, parsed.path, query, body, dict(self.headers))
+        self._send_json(status, payload, extra_headers=headers or None)
+
     def _read_body(self, limit: int) -> bytes:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -213,6 +228,10 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/admin"):
             self._handle_admin_api("GET", parsed)
+            return
+
+        if path.startswith("/api/data"):
+            self._handle_data_api("GET", parsed)
             return
 
         if path == "/api/sites":
@@ -309,6 +328,9 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/admin"):
             self._handle_admin_api("POST", parsed)
             return
+        if parsed.path.startswith("/api/data"):
+            self._handle_data_api("POST", parsed)
+            return
         site, matched = self._match_editor_route("upload")
         if not matched:
             self._send_json(404, {"error": "not found"})
@@ -340,12 +362,18 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/admin"):
             self._handle_admin_api("PATCH", parsed)
             return
+        if parsed.path.startswith("/api/data"):
+            self._handle_data_api("PATCH", parsed)
+            return
         self._send_json(404, {"error": "not found"})
 
     def do_DELETE(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path.startswith("/api/admin"):
             self._handle_admin_api("DELETE", parsed)
+            return
+        if parsed.path.startswith("/api/data"):
+            self._handle_data_api("DELETE", parsed)
             return
         self._send_json(404, {"error": "not found"})
 

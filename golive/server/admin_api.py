@@ -352,8 +352,9 @@ def _audit(identity, query) -> tuple:
 
 # ── data management (M6) ─────────────────────────────────────────────────────
 
-_DATA_HINT = ("set data.backend: supabase plus supabase.url and an API key "
-              "in golive.yaml (see golive.example.yaml), then restart serve")
+_DATA_HINT = ("set data.backend: sqlite (default, zero-config) or "
+              "supabase plus supabase.url and an API key in golive.yaml "
+              "(see golive.example.yaml), then restart serve")
 _MAX_ROW_JSON_BYTES = 256 * 1024
 
 
@@ -361,10 +362,13 @@ def _data_store():
     """Return a TemplateStore or None when no data backend is configured."""
     from golive.config import get_config
     cfg = get_config()
-    if cfg.data.backend != "supabase" or not cfg.supabase.configured:
-        return None
-    from golive.backends.data.supabase import TemplateStore
-    return TemplateStore()
+    if cfg.data.backend in ("", "sqlite"):
+        from golive.backends.data.sqlite_store import TemplateStore
+        return TemplateStore()
+    if cfg.data.backend == "supabase" and cfg.supabase.configured:
+        from golive.backends.data.supabase import TemplateStore
+        return TemplateStore()
+    return None
 
 
 def _data_dispatch(method, rest, query, body, identity) -> tuple:

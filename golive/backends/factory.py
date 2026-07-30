@@ -41,11 +41,23 @@ def get_storage(cfg=None):
 
 
 def get_template_store(cfg=None):
-    """TemplateStore when data.backend == supabase, else None."""
+    """TemplateStore for the configured data backend (None when disabled).
+
+    sqlite (default) -> local $GOLIVE_HOME/data.db, zero configuration
+    supabase         -> PostgREST against your Supabase project
+    none             -> data layer disabled; callers inject a stub
+    """
     if cfg is None:
         from golive.config import get_config
         cfg = get_config()
-    if cfg.data.backend == "supabase":
+    backend = cfg.data.backend
+    if backend in ("", "sqlite"):
+        from golive.backends.data.sqlite_store import TemplateStore
+        return TemplateStore()
+    if backend == "supabase":
         from golive.backends.data.supabase import TemplateStore
         return TemplateStore()
-    return None
+    if backend == "none":
+        return None
+    raise ValueError(f"unknown data backend: {backend!r} "
+                     "(expected sqlite | supabase | none)")

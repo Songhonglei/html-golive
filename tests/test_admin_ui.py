@@ -13,6 +13,8 @@ import unittest
 import urllib.error
 import urllib.request
 
+from tests import lan_ip_or_none
+
 
 def _fresh_home():
     os.environ["GOLIVE_HOME"] = tempfile.mkdtemp()
@@ -458,9 +460,9 @@ class TestAdminPageHttp(unittest.TestCase):
 
     def test_admin_page_remote_denied_without_auth(self):
         port = self._start()
-        lan_ip = socket.gethostbyname(socket.gethostname())
-        if lan_ip.startswith("127."):
-            self.skipTest("no non-loopback interface available")
+        lan_ip = lan_ip_or_none()
+        if lan_ip is None:
+            self.skipTest("no routable non-loopback interface available")
         # rebind on all interfaces for this case
         from golive.server.app import make_server
         s = socket.socket()

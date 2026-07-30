@@ -14,6 +14,21 @@ Data lives in `~/.golive/` (override with `GOLIVE_HOME`): published
 HTML, the SQLite registry, and the SQLite data layer. Nothing external
 to register.
 
+## Keep it running / check on it
+
+```bash
+golive serve start        # background (pidfile + logs in GOLIVE_HOME)
+golive serve status       # running? which pid, port and version?
+golive serve restart      # what to run after upgrading golive
+golive serve logs -f
+golive serve stop
+
+golive doctor             # one screen: versions, three backends, skill, portal
+```
+
+Plain `golive serve` still runs in the foreground — nothing about that
+changed. Upgrading? [upgrading.md](upgrading.md).
+
 ## Common flows
 
 ### Publish a project folder

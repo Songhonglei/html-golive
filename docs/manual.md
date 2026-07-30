@@ -18,16 +18,17 @@ the [Quickstart](quickstart.md), then come back for the details.
 7. [Access control: owners & maintainers](#7-access-control)
 8. [Built-in data storage (TemplateAPI)](#8-built-in-data-storage)
 9. [Using Supabase](#9-using-supabase)
-10. [Doctor: diagnose & fix](#10-doctor)
-11. [Logs & audit](#11-logs--audit)
-12. [Security: scanning, blocking, watermark, LLM review](#12-security)
-13. [Sharing: public mirror & Docker](#13-sharing)
-14. [Backends: storage / registry / images](#14-backends)
-15. [Identity & login (OIDC)](#15-identity--login)
-16. [Migrating pages from another deployment](#16-migrating-pages)
-17. [Admin portal](#17-admin-portal)
-18. [AI agent skill](#18-ai-agent-skill)
-19. [FAQ](#19-faq)
+10. [Doctor: the one command to verify everything](#10-doctor)
+11. [Running as a background service](#11-running-as-a-background-service)
+12. [Logs & audit](#12-logs--audit)
+13. [Security: scanning, blocking, watermark, LLM review](#13-security)
+14. [Sharing: public mirror & Docker](#14-sharing)
+15. [Backends: storage / registry / images](#15-backends)
+16. [Identity & login (OIDC)](#16-identity--login)
+17. [Migrating pages from another deployment](#17-migrating-pages)
+18. [Admin portal](#18-admin-portal)
+19. [AI agent skill](#19-ai-agent-skill)
+20. [FAQ](#20-faq)
 
 ---
 
@@ -157,20 +158,87 @@ Config and RLS notes: [backends.md](backends.md), [data-layer.md](data-layer.md)
 
 ## 10. Doctor
 
+`golive doctor` is the one command to run whenever something behaves
+unexpectedly, and the one to run after every upgrade.
+
 ```bash
-golive doctor            # environment & config health check
+golive doctor                    # full report
+golive doctor --port 9000        # probe a service on a non-default port
+golive doctor --json             # machine-readable, for scripts and agents
 ```
 
-Reports Python/dependency status, `GOLIVE_HOME` writability, configured
-backends and their reachability, and common misconfigurations with fixes.
+```
+🩺 golive doctor
 
-## 11. Logs & audit
+golive           0.7.1                                （CLI）
+running service  0.7.0  pid 12345  port 8787          ⚠️  版本不一致，建议重启
+                 代码已更新（CLI 0.7.1）但服务还是旧的（0.7.0）—— 运行：golive serve restart
+GOLIVE_HOME      /Users/you/.golive                   (from $GOLIVE_HOME)
+storage          local → /Users/you/.golive/sites     （12 个站点, 4.2 MB）
+registry         sqlite → /Users/you/.golive/registry.db  （12 个站点）
+data backend     sqlite → /Users/you/.golive/data.db  （3 张表, 47 行, 96.0 KB）
+skill            ~/.codex/skills/html-golive  0.7.1   ✅
+admin portal     http://localhost:8787/admin
+```
+
+Line by line:
+
+- **golive / running service** — the CLI version next to the version of
+  the server actually answering on the port. When they differ you are
+  looking at old code still in memory; `golive serve restart` fixes it.
+  Not running is reported as `not running`, which is not an error.
+- **GOLIVE_HOME** — the resolved data directory and where that value came
+  from (`$GOLIVE_HOME`, a pointer file, or the default).
+- **storage / registry / data backend** — each of the three layers with
+  its backend type, real path, and size, so you can tell at a glance
+  whether you are writing where you think you are.
+- **skill** — every installed copy of the agent skill and whether its
+  version matches this golive.
+- **admin portal** — the URL, ready to click.
+
+Missing dependencies and orphaned sites (a registry row with no content
+file) are listed underneath. Exit code is `0` when healthy and `1` when
+there is a blocking problem; a version mismatch is a warning, not a
+failure.
+
+## 11. Running as a background service
+
+`golive serve` with no sub-action runs in the **foreground**, exactly as
+it always has — `Ctrl+C` stops it. To keep it running after you close the
+terminal, use the sub-actions:
+
+```bash
+golive serve start               # background; pidfile + log in GOLIVE_HOME
+golive serve start --port 9000 --host 0.0.0.0
+golive serve status              # running? which pid, port, version?
+golive serve restart             # what you run after upgrading
+golive serve stop                # SIGTERM, then SIGKILL if it hangs
+golive serve logs -n 100         # last 100 lines
+golive serve logs -f             # follow
+```
+
+State lives in `GOLIVE_HOME`: the pid and its metadata in `golive.pid`,
+output in `logs/serve.log`.
+
+Things that will not surprise you:
+
+- A **stale pidfile** (the recorded process is gone) is detected and
+  cleaned up automatically — it never blocks a start.
+- A **second `start`** does not spawn a twin; it tells you the service is
+  already up and suggests `restart`.
+- A **port held by something else** is reported as such, distinct from
+  "our own server is already there", because the fixes differ.
+- A server you started in the **foreground** has no pidfile, so
+  `serve stop` will say so and point you at `Ctrl+C` rather than killing
+  a process it does not own.
+
+## 12. Logs & audit
 
 Every publish, update, rollback, and editor save is recorded in the audit
 log under `GOLIVE_HOME/logs/`. Editor saves record the editor's identity,
 the site, size, and the snapshot id created.
 
-## 12. Security
+## 13. Security
 
 - **Scanning**: every publish (and every editor save) is scanned for API
   keys, private keys, connection strings, and PII. Strong hits **block**
@@ -184,7 +252,7 @@ the site, size, and the snapshot id created.
   come from the logged-in OIDC user, a static string, or a page meta tag.
   Disable globally with `GOLIVE_WATERMARK_OFF=1`.
 
-## 13. Sharing
+## 14. Sharing
 
 ```bash
 docker compose up -d golive                 # serve on :8787
@@ -195,14 +263,14 @@ Put golive behind your reverse proxy / VPN to control who reaches it.
 There is no built-in "publish to the public internet" step — you decide
 the network boundary.
 
-## 14. Backends
+## 15. Backends
 
 golive is built on three swappable interfaces — Storage, Registry, and
 Images — plus an S3-compatible image uploader. Mix and match local,
 Supabase, and S3. Configuration matrix and examples:
 [backends.md](backends.md).
 
-## 15. Identity & login
+## 16. Identity & login
 
 Serve mode supports three auth providers: `none` (default), `token`
 (`GOLIVE_TOKEN`), and `oidc` (any OpenID Connect IdP). OIDC handles login,
@@ -222,7 +290,7 @@ Set the client secret via `GOLIVE_OIDC_CLIENT_SECRET` and a stable
 `GOLIVE_COOKIE_SECRET` in production (otherwise golive persists one under
 `GOLIVE_HOME`). Presets fill the issuer/scopes; explicit fields override.
 
-## 16. Migrating pages
+## 17. Migrating pages
 
 Moving a page built on another golive deployment (or an intranet one)?
 
@@ -234,7 +302,7 @@ It flags hard-coded API domains, deployment ids, and non-portable calls
 with `file:line` and a suggested fix. Guide:
 [migrate-from-intranet.md](migrate-from-intranet.md).
 
-## 17. Admin portal
+## 18. Admin portal
 
 `golive serve` ships a web management portal at **`/admin`** (URL printed
 in the startup banner, or `golive admin open`). Site owners and
@@ -318,7 +386,7 @@ The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are
 available as a JSON API under `/api/admin/*` for scripting.
 
-## 18. AI agent skill
+## 19. AI agent skill
 
 golive ships an AgentSkill so AI coding assistants drive it correctly
 instead of guessing paths or mistaking it for a hosted deployment
@@ -342,7 +410,7 @@ rather than publishing duplicates, treat `--host 0.0.0.0` and
 `--skip-scan` as explicit-request-only, and wire up `TemplateAPI`
 correctly (including the `templateapi:ready` gate).
 
-## 19. FAQ
+## 20. FAQ
 
 **Do I need a server?** No — `golive publish` + a local file is enough.
 `golive serve` adds a shareable URL and the online editor/data layer.

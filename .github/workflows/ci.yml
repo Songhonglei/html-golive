@@ -8,11 +8,19 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.9", "3.11", "3.12"]
+        include:
+          # macOS on 3.11 only: the failures we are guarding against are
+          # platform-specific (hostname resolution, /tmp -> /private/tmp
+          # symlink resolution), not version-specific, so one runner buys
+          # the same signal for a third of the CI minutes.
+          - os: macos-latest
+            python-version: "3.11"
     steps:
       - uses: actions/checkout@v4
 
@@ -66,3 +74,20 @@ jobs:
           golive publish "$RUNNER_TEMP/ci.html" --slug ci
           golive list
           golive doctor
+          golive doctor --json > "$RUNNER_TEMP/doctor.json"
+          python -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['ok'], d['problems']; assert d['registry']['sites'] >= 1" "$RUNNER_TEMP/doctor.json"
+
+      - name: Smoke test the background service
+        run: |
+          export GOLIVE_HOME="$RUNNER_TEMP/golive-home"
+          golive serve start --port 8788
+          golive serve status
+          curl -fsS http://127.0.0.1:8788/health
+          curl -fsS http://127.0.0.1:8788/ci | grep -q '<h1>ci</h1>'
+          # doctor must see the running service and agree on the version
+          golive doctor --port 8788 --json > "$RUNNER_TEMP/doctor-live.json"
+          python -c "import json,sys; d=json.load(open(sys.argv[1])); s=d['service']; assert s['running'], s; assert s['version_match'], s" "$RUNNER_TEMP/doctor-live.json"
+          golive serve restart
+          golive serve logs -n 20
+          golive serve stop
+          golive serve status || echo "stopped as expected (exit 1)"

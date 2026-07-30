@@ -26,6 +26,7 @@ golive serve
 
 - [为什么选 html-golive](#为什么选-html-golive)
 - [快速开始](#快速开始)
+- [升级](#升级)
 - [功能](#功能)
 - [架构](#架构)
 - [配置](#配置)
@@ -72,8 +73,13 @@ golive publish page.html --style apple       # 套用 19 种 CSS 风格之一
 ### 3 · 启动服务
 
 ```bash
-golive serve --port 8787
+golive serve --port 8787          # 前台运行，Ctrl+C 停止
 # → http://<你的主机>:8787/demo
+
+golive serve start                # 或者放到后台跑
+golive serve status               # pid、端口、版本
+golive serve logs -f
+golive serve stop
 ```
 
 ### 日常命令
@@ -85,7 +91,8 @@ golive rollback demo --dry-run               # 查看快照，确认后 --yes
 golive preview draft.html                    # 热更新预览 + 风格面板
 golive clone https://example.com --save-only # 克隆公网页面
 golive styles                                # 查看 19 种 CSS 风格
-golive doctor                                # 环境体检
+golive doctor                                # 一屏环境体检
+golive serve status                          # 服务在跑吗？是哪个版本？
 golive skill install                         # 让 AI agent 学会正确使用 golive
 
 # v0.3 —— 在线编辑与水印
@@ -108,6 +115,26 @@ golive serve
 能改，每次覆盖前自动生成回滚快照。配置 `auth.provider: oidc` 后，
 编辑器直接认登录会话，无需 token 参数。
 
+## 升级
+
+```bash
+pip install -U html-golive
+golive serve restart     # 已在跑的服务不重启就还是旧代码
+golive doctor            # 确认 CLI 版本与运行中服务版本一致
+```
+
+两个最容易踩的坑：
+
+- **升级代码不会升级正在运行的服务。** 重启它，然后用 `golive doctor`
+  确认两个版本对上了。
+- **v0.7.0 之前 clone 的仓库 `git pull` 会失败。** 那次发布 force push
+  重写了 `main` 的历史。恢复命令见下面的文档（现在 `main` 已禁止
+  force push）。
+
+📖 **[docs/upgrading.md](docs/upgrading.md)** —— PyPI / pipx / git 三条升级
+路径、v0.7.0 历史重写的恢复步骤（有无本地改动两种）、0.6→0.7 数据层默认
+改为 SQLite 的行为变化，以及如何回退。
+
 ## 功能
 
 **发布与内容**
@@ -123,7 +150,9 @@ golive serve
 - 每站点 10 份快照回滚
 - 内置静态服务，带 JSON API 与健康检查端点
 - 热更新实时预览 + 风格切换面板
-- `golive doctor` 环境诊断、审计日志
+- `golive doctor` 一屏报告：CLI 与运行中服务的版本比对、三层后端的
+  路径与规模、skill 安装状态、审计日志
+- 后台服务管理：`golive serve start|status|stop|restart|logs`
 
 **数据与后端** *(v0.2；SQLite 数据层 v0.7)*
 - `window.TemplateAPI` / `window.SupabaseAPI` 注入——静态页面零服务端

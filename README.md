@@ -26,6 +26,7 @@ golive serve
 
 - [Why html-golive](#why-html-golive)
 - [Quickstart](#quickstart)
+- [Upgrading](#upgrading)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
@@ -75,8 +76,13 @@ golive publish page.html --style apple       # apply one of 19 CSS styles
 ### 3 · Serve
 
 ```bash
-golive serve --port 8787
+golive serve --port 8787          # foreground; Ctrl+C stops it
 # → http://<your-host>:8787/demo
+
+golive serve start                # or run it in the background
+golive serve status               # pid, port, version
+golive serve logs -f
+golive serve stop
 ```
 
 ### Everyday commands
@@ -88,7 +94,8 @@ golive rollback demo --dry-run               # inspect snapshots, then --yes
 golive preview draft.html                    # live preview + style panel
 golive clone https://example.com --save-only # snapshot a public page
 golive styles                                # list the 19 CSS styles
-golive doctor                                # environment health check
+golive doctor                                # one-screen health check
+golive serve status                          # is a server running? which version?
 golive skill install                         # teach your AI agent to drive golive
 
 # v0.3 — online editing & watermark
@@ -112,6 +119,26 @@ the site owner + maintainers, and every overwrite is preceded by a
 rollback snapshot. With `auth.provider: oidc` the editor accepts the
 login session instead of the token+header pair.
 
+## Upgrading
+
+```bash
+pip install -U html-golive
+golive serve restart     # a running server keeps the OLD code until restarted
+golive doctor            # confirms CLI version == running service version
+```
+
+Two things bite people:
+
+- **Updating the code does not update a running server.** Restart it, then
+  let `golive doctor` confirm the two versions match.
+- **Clones made before v0.7.0 cannot `git pull`.** That release
+  force-pushed `main` and rewrote history. Recovery commands are in the
+  guide below (force pushes to `main` are now blocked).
+
+📖 **[docs/upgrading.md](docs/upgrading.md)** — PyPI / pipx / git paths, the
+v0.7.0 history-rewrite recovery (with and without local changes), the
+0.6→0.7 SQLite data-layer default change, and how to roll back.
+
 ## Features
 
 **Publishing & content**
@@ -127,7 +154,9 @@ login session instead of the token+header pair.
 - Rollback with 10 snapshots per site
 - Built-in static server with JSON API and health endpoint
 - Live preview with hot reload and style-switch panel
-- `golive doctor` environment diagnostics, audit log
+- `golive doctor` one-screen report: CLI vs running-service version,
+  all three backends with paths and sizes, skill status, audit log
+- Background service management: `golive serve start|status|stop|restart|logs`
 
 **Data & backends** *(v0.2, SQLite data layer in v0.7)*
 - `window.TemplateAPI` / `window.SupabaseAPI` injection — static pages

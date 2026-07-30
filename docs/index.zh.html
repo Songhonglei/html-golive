@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>html-golive — self-hosted one-command HTML deployment</title>
-<meta name="description" content="Publish, secure, edit and manage static HTML pages on your own infrastructure. One pip install, one command, no cloud account required.">
+<title>html-golive — 自部署的一键 HTML 发布工具</title>
+<meta name="description" content="在自己的机器上发布、加固、在线编辑和管理静态 HTML 页面。一次 pip install，一条命令，不需要任何云账号。">
 <link rel="alternate" hreflang="en" href="index.html">
 <link rel="alternate" hreflang="zh-CN" href="index.zh.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
@@ -114,12 +114,12 @@ footer a{color:var(--muted)}
 <nav><div class="wrap">
   <a class="brand" href="#top"><span class="dot"></span>html-golive</a>
   <div class="links">
-    <a href="#features">Features</a>
-    <a href="#quickstart">Quickstart</a>
-    <a href="#architecture" class="hide-sm">Architecture</a>
-    <a href="https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md" class="hide-sm">Docs</a>
+    <a href="#features">功能</a>
+    <a href="#quickstart">快速开始</a>
+    <a href="#architecture" class="hide-sm">架构</a>
+    <a href="https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md" class="hide-sm">文档</a>
     <a href="https://github.com/Songhonglei/html-golive">GitHub</a>
-    <a href="index.zh.html" class="lang-link" hreflang="zh-CN">中文</a>
+    <a href="index.html" class="lang-link" hreflang="en">EN</a>
   </div>
 </div></nav>
 
@@ -130,15 +130,14 @@ footer a{color:var(--muted)}
     <img src="https://img.shields.io/pypi/pyversions/html-golive?color=58a6ff" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-8b949e" alt="MIT">
   </div>
-  <h1>Ship an HTML file.<br><span class="grad">Get a real website.</span></h1>
+  <h1>交出一个 HTML 文件，<br><span class="grad">拿回一个真正的网站。</span></h1>
   <p class="tagline">
-    Self-hosted, one-command HTML deployment. Publishing, versioned rollback,
-    an in-browser editor, a database for static pages, security scanning and an
-    admin console — all on infrastructure you own.
+    自部署、一条命令的 HTML 发布工具。发布、版本回滚、浏览器里直接改、
+    给静态页面用的数据库、凭证扫描和管理后台——全都跑在你自己的机器上。
   </p>
   <div class="cta">
-    <a class="btn primary" href="#quickstart">Get started →</a>
-    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive">★ Star on GitHub</a>
+    <a class="btn primary" href="#quickstart">开始使用 →</a>
+    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive">★ 在 GitHub 上 Star</a>
   </div>
 
   <div class="term-wrap">
@@ -147,147 +146,146 @@ footer a{color:var(--muted)}
       <pre><span class="p">$</span> <span class="c">pip install html-golive</span>
 <span class="p">$</span> <span class="c">golive publish q3-report.html</span>
 
-<span class="o">🔍 scanning for secrets… clean</span>
-<span class="o">🎨 style: minimal · assets bundled (4 → 1 file)</span>
-<span class="o">📦 published</span>
+<span class="o">🔍 扫描凭证与隐私… 干净</span>
+<span class="o">🎨 样式：minimal · 资源已内联（4 → 1 个文件）</span>
+<span class="o">📦 已发布</span>
 
-<span class="k">   slug</span>      q3-report
-<span class="k">   url </span>      <span class="u">http://localhost:8787/s/q3-report</span>
-<span class="k">   size</span>      86 KB · snapshot #1 saved</pre>
+<span class="k">   短域名</span>    q3-report
+<span class="k">   地址  </span>    <span class="u">http://localhost:8787/s/q3-report</span>
+<span class="k">   大小  </span>    86 KB · 已存快照 #1</pre>
     </div>
-    <button class="copy" data-copy="pip install html-golive">Copy</button>
+    <button class="copy" data-copy="pip install html-golive">复制</button>
   </div>
 </div></header>
 
 <section id="why"><div class="wrap">
-  <h2>Why it exists</h2>
+  <h2>为什么会有这个工具</h2>
   <p class="sub">
-    You have an HTML file — a report, a dashboard, an internal tool — and you need
-    it on a URL your colleagues can open. The usual answers are a cloud platform
-    that can't touch your data, or a bare nginx that gives you nothing but a file
-    server. html-golive is the middle ground: run it yourself, keep everything
-    inside your network, and still get the conveniences you expect.
+    你手上有个 HTML 文件——一份报告、一个看板、一个内部小工具——需要挂到
+    一个同事能打开的地址上。常见的两条路：要么用碰不到你数据的云平台，
+    要么起一个只当文件服务器的裸 nginx。html-golive 走中间：自己跑起来，
+    数据不出内网，同时该有的便利一样不少。
   </p>
   <div class="grid">
-    <div class="card"><span class="ic">🔒</span><h3>Your data stays put</h3>
-      <p>Runs entirely on your own machine or server. No account, no telemetry, no outbound calls by default — works airgapped.</p></div>
-    <div class="card"><span class="ic">🪶</span><h3>Zero dependencies to start</h3>
-      <p>The core install is standard-library only. Local filesystem plus SQLite; no database or object store to provision.</p></div>
-    <div class="card"><span class="ic">📈</span><h3>Grows with you</h3>
-      <p>Swap in Supabase or any S3-compatible store (MinIO, COS, OSS, TOS) with one yaml file. Same commands, bigger backend.</p></div>
+    <div class="card"><span class="ic">🔒</span><h3>数据留在你这儿</h3>
+      <p>完整跑在你自己的机器或服务器上。不用注册账号，没有埋点，默认零外呼——断网环境照样能用。</p></div>
+    <div class="card"><span class="ic">🪶</span><h3>起步零依赖</h3>
+      <p>核心安装只用标准库。本地文件系统加 SQLite，不用先去开数据库或对象存储。</p></div>
+    <div class="card"><span class="ic">📈</span><h3>跟着你一起长大</h3>
+      <p>一个 yaml 就能换成 Supabase 或任意 S3 兼容存储（MinIO / 腾讯 COS / 阿里 OSS / 火山 TOS）。命令不变，后端变大。</p></div>
   </div>
 </div></section>
 
 <section id="features"><div class="wrap">
-  <h2>What you get</h2>
-  <p class="sub">Everything below ships in the box — one install, no plugins to hunt down.</p>
+  <h2>你会得到什么</h2>
+  <p class="sub">下面这些都在安装包里——装一次，不用再去找插件。</p>
   <div class="grid">
-    <div class="card"><span class="ic">🚀</span><h3>Publish &amp; roll back</h3>
-      <p>Every publish snapshots the previous version. <code>golive rollback</code> returns to any of them instantly.</p></div>
-    <div class="card"><span class="ic">✏️</span><h3>Edit in the browser</h3>
-      <p>Owners and maintainers get an inline editor on the live page — fix a typo without touching the source file. Saves are scanned and snapshotted.</p></div>
-    <div class="card"><span class="ic">🗄️</span><h3>A database for static pages</h3>
-      <p><code>window.TemplateAPI</code> and <code>window.SupabaseAPI</code> are injected into your page, so plain HTML can read and write real rows.</p></div>
-    <div class="card"><span class="ic">🛡️</span><h3>Secrets scanning</h3>
-      <p>Rule-based detection of API keys, tokens and personal data before anything goes live — with optional LLM second-pass review.</p></div>
-    <div class="card"><span class="ic">🎨</span><h3>19 built-in styles</h3>
-      <p>Turn an unstyled document into something presentable with <code>--style</code>. Fonts come from public CDNs or your own mirror.</p></div>
-    <div class="card"><span class="ic">🧑‍💼</span><h3>Admin console</h3>
-      <p>A self-contained web portal at <code>/admin</code>: all sites, ownership transfer, maintainers, rollback, stats and an audit trail.</p></div>
-    <div class="card"><span class="ic">🔑</span><h3>Real authentication</h3>
-      <p>Static token for quick setups, or OIDC with one-line presets for Google, Auth0, Okta, Azure AD, Keycloak and Authentik.</p></div>
-    <div class="card"><span class="ic">🕸️</span><h3>Clone any page</h3>
-      <p><code>golive clone &lt;url&gt;</code> snapshots a public page, inlines its assets and republishes it as your own.</p></div>
-    <div class="card"><span class="ic">🐳</span><h3>Docker ready</h3>
-      <p>A Dockerfile and a compose file with an optional MinIO profile — from zero to a running server in one command.</p></div>
+    <div class="card"><span class="ic">🚀</span><h3>发布与回滚</h3>
+      <p>每次发布都会给上一版存快照，<code>golive rollback</code> 随时退回任意一版。</p></div>
+    <div class="card"><span class="ic">✏️</span><h3>在浏览器里改</h3>
+      <p>owner 和 maintainer 能在线上页面直接编辑——改个错别字不用回去动源文件。保存同样会扫描并存快照。</p></div>
+    <div class="card"><span class="ic">🗄️</span><h3>给静态页面的数据库</h3>
+      <p>页面里自动注入 <code>window.TemplateAPI</code> 和 <code>window.SupabaseAPI</code>，纯 HTML 也能读写真实数据行。</p></div>
+    <div class="card"><span class="ic">🛡️</span><h3>凭证扫描</h3>
+      <p>上线前用规则识别 API key、token 和个人信息，还可以选择让大模型再复核一遍。</p></div>
+    <div class="card"><span class="ic">🎨</span><h3>19 套内置样式</h3>
+      <p><code>--style</code> 把一份没有样式的文档变得能见人。字体走公共 CDN 或你自己的镜像。</p></div>
+    <div class="card"><span class="ic">🧑‍💼</span><h3>管理后台</h3>
+      <p><code>/admin</code> 是一个完全自包含的门户：站点总览、移交 owner、维护者、回滚、统计和审计日志。</p></div>
+    <div class="card"><span class="ic">🔑</span><h3>真实的身份认证</h3>
+      <p>图快用静态 token，正式环境走 OIDC——Google、Auth0、Okta、Azure AD、Keycloak、Authentik 都有一行预设。</p></div>
+    <div class="card"><span class="ic">🕸️</span><h3>克隆任意页面</h3>
+      <p><code>golive clone &lt;url&gt;</code> 抓取一个公开页面，内联它的资源，再作为你自己的站点重新发布。</p></div>
+    <div class="card"><span class="ic">🐳</span><h3>开箱即用的 Docker</h3>
+      <p>提供 Dockerfile 和 compose 文件（含可选 MinIO profile），一条命令从零到服务跑起来。</p></div>
   </div>
 </div></section>
 
 <section id="quickstart"><div class="wrap">
-  <h2>Quickstart</h2>
-  <p class="sub">Three steps, about a minute. No configuration file needed to begin.</p>
+  <h2>快速开始</h2>
+  <p class="sub">三步，大约一分钟。开始之前不需要写任何配置文件。</p>
   <div class="steps">
-    <div class="step"><h3>Install</h3>
-      <p>Python 3.9 or newer. Optional extras add image compression and S3 support.</p>
+    <div class="step"><h3>安装</h3>
+      <p>需要 Python 3.9 或更高版本。可选的 extras 提供图片压缩和 S3 支持。</p>
       <div class="term-wrap"><div class="snip"><span class="p">$</span> pip install html-golive</div>
-        <button class="copy" data-copy="pip install html-golive">Copy</button></div></div>
-    <div class="step"><h3>Publish a page</h3>
-      <p>Point it at any HTML file. It scans for secrets, applies a style, bundles assets and registers the site.</p>
+        <button class="copy" data-copy="pip install html-golive">复制</button></div></div>
+    <div class="step"><h3>发布一个页面</h3>
+      <p>指向任意 HTML 文件即可。它会扫描凭证、套用样式、内联资源并登记站点。</p>
       <div class="term-wrap"><div class="snip"><span class="p">$</span> golive publish report.html --style minimal</div>
-        <button class="copy" data-copy="golive publish report.html --style minimal">Copy</button></div></div>
-    <div class="step"><h3>Serve it</h3>
-      <p>Binds to localhost by default. Add <code>--host 0.0.0.0</code> when you're ready to share — pair it with a token or OIDC.</p>
+        <button class="copy" data-copy="golive publish report.html --style minimal">复制</button></div></div>
+    <div class="step"><h3>把它跑起来</h3>
+      <p>默认只监听 localhost。准备分享给别人时加上 <code>--host 0.0.0.0</code>，同时配好 token 或 OIDC。</p>
       <div class="term-wrap"><div class="snip"><span class="p">$</span> golive serve
-<span class="o">🚀 http://localhost:8787/  ·  admin portal: /admin</span></div>
-        <button class="copy" data-copy="golive serve">Copy</button></div></div>
+<span class="o">🚀 http://localhost:8787/  ·  管理后台：/admin</span></div>
+        <button class="copy" data-copy="golive serve">复制</button></div></div>
   </div>
 </div></section>
 
 <section id="architecture"><div class="wrap">
-  <h2>Architecture</h2>
+  <h2>架构</h2>
   <p class="sub">
-    Three pluggable interfaces. Start on the left column, move to the right when
-    you outgrow it — your commands and your pages don't change.
+    三层可插拔接口。从左边这列起步，撑不住了再往右换——你的命令和你的页面
+    都不用改。
   </p>
   <div class="arch">
-    <div class="layer"><h4>Storage</h4><ul>
-      <li><b>local</b> filesystem (default)</li>
+    <div class="layer"><h4>存储</h4><ul>
+      <li><b>local</b> 本地文件系统（默认）</li>
       <li><b>supabase</b> storage bucket</li>
       <li><b>s3</b> MinIO / COS / OSS / TOS</li></ul></div>
-    <div class="layer"><h4>Registry</h4><ul>
-      <li><b>sqlite</b> single file (default)</li>
-      <li><b>supabase</b> Postgres table</li></ul></div>
-    <div class="layer"><h4>Data</h4><ul>
-      <li><b>none</b> static pages only</li>
-      <li><b>postgrest</b> Supabase / any PostgREST</li></ul></div>
-    <div class="layer"><h4>Identity</h4><ul>
-      <li><b>none</b> loopback-only access</li>
-      <li><b>token</b> shared bearer token</li>
-      <li><b>oidc</b> Google, Okta, Keycloak…</li></ul></div>
+    <div class="layer"><h4>注册表</h4><ul>
+      <li><b>sqlite</b> 单文件（默认）</li>
+      <li><b>supabase</b> Postgres 表</li></ul></div>
+    <div class="layer"><h4>数据层</h4><ul>
+      <li><b>none</b> 只做静态页面</li>
+      <li><b>postgrest</b> Supabase / 任意 PostgREST</li></ul></div>
+    <div class="layer"><h4>身份</h4><ul>
+      <li><b>none</b> 仅本机访问</li>
+      <li><b>token</b> 共享令牌</li>
+      <li><b>oidc</b> Google、Okta、Keycloak…</li></ul></div>
   </div>
 </div></section>
 
 <section id="commands"><div class="wrap">
-  <h2>Command reference</h2>
-  <p class="sub">Thirteen commands cover the whole lifecycle. Full detail lives in the user manual.</p>
+  <h2>命令速查</h2>
+  <p class="sub">十三条命令覆盖整个生命周期，完整细节见用户手册。</p>
   <table>
-    <tr><th>Command</th><th>What it does</th></tr>
-    <tr><td><code>publish</code></td><td>Scan, style, bundle and deploy an HTML file</td></tr>
-    <tr><td><code>list</code></td><td>Show every registered site with size and owner</td></tr>
-    <tr><td><code>rollback</code></td><td>Restore a previous snapshot</td></tr>
-    <tr><td><code>serve</code></td><td>Run the HTTP server and the admin portal</td></tr>
-    <tr><td><code>preview</code></td><td>Serve a local file without registering it</td></tr>
-    <tr><td><code>clone</code></td><td>Snapshot a public page and republish it</td></tr>
-    <tr><td><code>maintainer</code></td><td>Grant or revoke edit rights on a site</td></tr>
-    <tr><td><code>admin</code></td><td>Open the admin console</td></tr>
-    <tr><td><code>styles</code></td><td>List the 19 built-in visual styles</td></tr>
-    <tr><td><code>data</code> / <code>db</code></td><td>Inspect and manage the data backend</td></tr>
-    <tr><td><code>migrate-check</code></td><td>Find environment-specific references in an HTML file</td></tr>
-    <tr><td><code>doctor</code></td><td>Diagnose configuration and connectivity</td></tr>
+    <tr><th>命令</th><th>作用</th></tr>
+    <tr><td><code>publish</code></td><td>扫描、套样式、内联资源并部署一个 HTML 文件</td></tr>
+    <tr><td><code>list</code></td><td>列出所有已登记站点，含大小和 owner</td></tr>
+    <tr><td><code>rollback</code></td><td>回滚到之前的某个快照</td></tr>
+    <tr><td><code>serve</code></td><td>启动 HTTP 服务和管理后台</td></tr>
+    <tr><td><code>preview</code></td><td>本地预览一个文件，不登记站点</td></tr>
+    <tr><td><code>clone</code></td><td>抓取一个公开页面并重新发布</td></tr>
+    <tr><td><code>maintainer</code></td><td>给某个站点授予或撤销编辑权限</td></tr>
+    <tr><td><code>admin</code></td><td>打开管理后台</td></tr>
+    <tr><td><code>styles</code></td><td>列出 19 套内置视觉样式</td></tr>
+    <tr><td><code>data</code> / <code>db</code></td><td>查看和管理数据后端</td></tr>
+    <tr><td><code>migrate-check</code></td><td>找出 HTML 里跟特定环境绑死的引用</td></tr>
+    <tr><td><code>doctor</code></td><td>诊断配置和连通性</td></tr>
   </table>
 </div></section>
 
 <section id="get"><div class="wrap" style="text-align:center">
-  <h2>Try it</h2>
+  <h2>试一下</h2>
   <p class="sub" style="margin:0 auto 30px">
-    MIT licensed. 232 tests, CI on Python 3.9 / 3.11 / 3.12.
-    Issues and pull requests welcome.
+    MIT 协议。232 个测试，CI 覆盖 Python 3.9 / 3.11 / 3.12。
+    欢迎提 issue 和 PR。
   </p>
   <div class="cta">
-    <a class="btn primary" href="https://pypi.org/project/html-golive/">Install from PyPI</a>
-    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive">Browse the source</a>
-    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md">Read the manual</a>
+    <a class="btn primary" href="https://pypi.org/project/html-golive/">从 PyPI 安装</a>
+    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive">浏览源码</a>
+    <a class="btn ghost" href="https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md">阅读手册</a>
   </div>
 </div></section>
 
 <footer><div class="wrap">
-  <div>MIT © 2026 Songhonglei · built with html-golive</div>
+  <div>MIT © 2026 Songhonglei · 本页由 html-golive 自己发布</div>
   <div class="foot-links">
-    <a href="index.zh.html" hreflang="zh-CN">中文</a>
+    <a href="index.html" hreflang="en">English</a>
     <a href="https://github.com/Songhonglei/html-golive">GitHub</a>
     <a href="https://pypi.org/project/html-golive/">PyPI</a>
-    <a href="https://github.com/Songhonglei/html-golive/blob/main/CHANGELOG.md">Changelog</a>
-    <a href="https://github.com/Songhonglei/html-golive/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/Songhonglei/html-golive/blob/main/CHANGELOG.md">更新日志</a>
+    <a href="https://github.com/Songhonglei/html-golive/blob/main/CONTRIBUTING.md">参与贡献</a>
   </div>
 </div></footer>
 

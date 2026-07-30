@@ -56,6 +56,14 @@ golive serve                               # visit /admin
 - Keep the admin portal self-contained — no external CDN, no frontend
   framework. It has to work on a machine with no internet access.
 
+## Documentation
+
+`docs/index.html` (English) and `docs/index.zh.html` (Chinese) are the
+project landing pages published via GitHub Pages. They share the same CSS
+and JavaScript — a test asserts those stay byte-identical — but the prose
+is maintained by hand. **If you change copy on one page, change it on the
+other in the same pull request.**
+
 ## Reporting bugs
 
 Include the golive version (`golive --version` or `pip show

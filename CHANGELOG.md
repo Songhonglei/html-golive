@@ -3,6 +3,68 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-07-30
+
+Zero-config data layer, an agent skill in the box, permission management,
+and a bilingual themeable portal.
+
+### Added
+- **SQLite data backend, now the default.** `window.TemplateAPI` works
+  out of the box with no cloud account: rows live in
+  `GOLIVE_HOME/data.db` and pages reach them through a PostgREST-shaped
+  `/api/data/<table>` endpoint served by `golive serve`. Supabase
+  remains available and unchanged; `data.backend: none` still disables
+  the layer entirely. Note that sqlite-backed pages must be opened
+  through `golive serve` — a `file://` copy has no server to talk to.
+- **An agent skill shipped inside the package**, plus
+  `golive skill install | status | path`. The installer detects common
+  agent skill directories, works offline from the bundled copy, can
+  pull the latest from GitHub with `--from-github`, backs up an existing
+  copy on `--force`, and reports version drift against the running
+  golive. The skill teaches an assistant to probe the environment with
+  `golive doctor` before acting, and states plainly that golive is
+  self-hosted and unrelated to any similarly named hosted or internal
+  tool.
+- **Permission management** — `/api/admin/permissions` with dual-source
+  superadmins: entries from `admin.admins` / `GOLIVE_ADMINS` are builtin
+  and cannot be deleted through the API (you can't lock yourself out),
+  while database-backed admins can be added and removed at runtime.
+  Bulk grant/revoke of maintainers across many sites reports applied,
+  skipped and failed slugs separately. New portal page renders all of
+  it; every write is audited.
+- **Light and dark portal themes** with a follow-system option,
+  persisted per browser and applied before first paint.
+- **Bilingual portal** (English / 中文), 138 translation keys with a
+  test asserting both dictionaries stay in sync.
+- **"Copy for your AI assistant" buttons** on setup screens. Instead of
+  handing you a yaml snippet to apply by hand, they copy a complete task
+  description — your real `GOLIVE_HOME`, the config path, the steps,
+  how to handle secrets, how to verify, and a documentation link — ready
+  to paste into an AI assistant.
+- **Chinese landing page** at `docs/index.zh.html` with two-way language
+  switching.
+
+### Security
+- `golive serve` now warns loudly at startup when the unauthenticated
+  in-page data API is bound to a routable address without a token or
+  OIDC configured. The data layer is deliberately open (the browser
+  calls it directly, like an embedded anon key) — this makes the
+  trade-off visible instead of surprising. Table access stays restricted
+  to the configured data table; the registry and SQLite metadata are not
+  reachable.
+
+### Fixed
+- Documentation described a "local SQLite data layer" that did not
+  exist — the three backend layers (storage / registry / data) are now
+  described separately, and the sqlite data layer is real.
+- Portal contrast fixes for WCAG AA on both themes, a CSS lock icon
+  replacing an emoji that rendered as tofu on machines without an emoji
+  font, and assorted spacing and alignment corrections found during
+  visual review.
+
+### Tests
+- 232 → 413.
+
 ## [0.6.0] - 2026-07-27
 
 Data management in the admin portal + audit rotation (M6).

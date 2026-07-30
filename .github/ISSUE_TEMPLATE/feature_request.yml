@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest something html-golive should be able to do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the situation you're in, not just the feature you have
+        in mind — it often turns out there's a simpler way to solve it.
+      placeholder: |
+        I publish ~50 report pages a week from CI and need to bulk-import
+        their data rows instead of clicking through the admin portal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like html-golive to do?
+      placeholder: |
+        A `golive data import rows.csv --model sales` command, and a
+        matching upload button in the data management tab.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What are you doing today instead?
+      description: Workarounds, other tools, or scripts you've written.

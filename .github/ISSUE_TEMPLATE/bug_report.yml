@@ -1,0 +1,65 @@
+name: Bug report
+description: Something doesn't work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: |
+        I ran `golive publish report.html --data-model sales` and expected
+        the page to load its rows, but window.TemplateAPI was undefined.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. golive publish ...
+        2. open http://localhost:8787/s/...
+        3. see error in console
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: golive version
+      description: "`pip show html-golive` or `golive --version`"
+      placeholder: "0.6.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.11.8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backends
+    attributes:
+      label: Which backends are you using?
+      multiple: true
+      options:
+        - local filesystem + SQLite (default)
+        - Supabase (registry / storage / data)
+        - S3-compatible storage (MinIO, COS, OSS, TOS…)
+        - OIDC authentication
+        - custom image uploader
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or config
+      description: >
+        Server output, browser console errors, or the relevant part of
+        golive.yaml. **Redact tokens, keys and internal hostnames.**
+      render: shell

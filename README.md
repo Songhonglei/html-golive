@@ -287,8 +287,25 @@ docker compose --profile minio up -d        # + local S3 stack for images
   watermarking, OpenAI-compatible LLM security review, generic OIDC~~ ✅ v0.3
 - ~~**M4 — docs & polish**: OIDC provider presets, editor image upload,
   persistent cookie secret, full user manual~~ ✅ v0.4
-- **M5 — collaboration & scale**: shared session store (redis), multi-user
-  editing conflicts UX, group-based ACLs, admin operations portal.
+- ~~**M5 — admin portal**: web operations console at `/admin`, role model
+  (superadmin/owner/maintainer), ownership transfer, audit trail~~ ✅ v0.5
+- ~~**M6 — data management**: data tab in the portal, audit log
+  rotation~~ ✅ v0.6
+- **Next**: bulk data import/export, aggregation for very large tables,
+  shared session store (redis), multi-user editing conflict UX,
+  group-based ACLs.
+
+## Contributing
+
+Issues and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, code
+conventions and what a good bug report looks like. The whole test suite
+runs offline with no cloud account:
+
+```bash
+pip install -e '.[image,dev]'
+python -m pytest tests/ -q
+```
 
 ## License
 

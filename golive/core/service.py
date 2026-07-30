@@ -286,6 +286,18 @@ def _spawn(host: str, port: int, config_path: str = "") -> subprocess.Popen:
     env["GOLIVE_HOME"] = str(get_home())      # pin: child must not re-resolve
     env.setdefault("PYTHONUNBUFFERED", "1")
 
+    # The child runs ``-m golive.cli``, which needs this golive on its
+    # import path. Inheriting cwd is not enough: tests and wizards run
+    # from temporary directories, and an editable checkout is only
+    # importable because *our* sys.path says so. Pass that along
+    # explicitly rather than hoping the child re-derives it.
+    pkg_root = str(Path(__file__).resolve().parents[2])
+    existing = env.get("PYTHONPATH", "")
+    parts = [p for p in existing.split(os.pathsep) if p]
+    if pkg_root not in parts:
+        parts.insert(0, pkg_root)
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+
     lf = log_path()
     lf.parent.mkdir(parents=True, exist_ok=True)
     handle = open(lf, "a", encoding="utf-8")  # noqa: SIM115 — child owns it
@@ -304,6 +316,23 @@ def _spawn(host: str, port: int, config_path: str = "") -> subprocess.Popen:
     finally:
         handle.close()                        # parent's copy; child keeps its own
     return proc
+
+
+def _log_tail_hint(lines: int = 12) -> str:
+    """Last few log lines, formatted for inclusion in an error message.
+
+    Returns "" when there is nothing useful to show, so callers can
+    concatenate it unconditionally.
+    """
+    try:
+        text = log_path().read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    tail = [ln for ln in text.strip().splitlines() if ln.strip()][-lines:]
+    if not tail:
+        return ""
+    return "\n--- last {} log line(s) ---\n{}".format(len(tail),
+                                                      "\n".join(tail))
 
 
 def start(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
@@ -371,12 +400,15 @@ def start(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
             }
         time.sleep(0.2)
 
-    # never answered — leave the process alone but tell the truth
+        # never answered — leave the process alone but tell the truth.
+    # Point at the log *and* quote its tail: "see the log" is useless
+    # advice in CI, and on a user's machine it saves a round trip.
     return {
         "ok": False, "state": "failed", "pid": proc.pid,
         "host": host, "port": port, "log": str(log_path()),
         "message": "started pid {} but /health did not answer within {:.0f}s. "
-                   "See {}".format(proc.pid, timeout, log_path()),
+                   "See {}{}".format(proc.pid, timeout, log_path(),
+                                     _log_tail_hint()),
     }
 
 

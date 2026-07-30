@@ -1,13 +1,21 @@
 """golive.server.authz — role resolution for the admin portal (M5).
 
 Roles (per request, per site):
-  superadmin  — email listed in admin.admins (golive.yaml) or GOLIVE_ADMINS
-                env (comma separated, env wins). A valid *token* auth is
-                also treated as superadmin: the static GOLIVE_TOKEN is
-                operator-held by definition.
+  superadmin  — email in the effective superadmin set (see below). A valid
+                *token* auth is also treated as superadmin: the static
+                GOLIVE_TOKEN is operator-held by definition.
   owner       — registry ``owner`` column matches the session email.
   maintainer  — email appears in the registry ``maintainers`` list.
   (none)      — authenticated but unrelated to the site.
+
+Superadmins come from two sources (M7), and the effective set is their
+union:
+  builtin  — ``admin.admins`` in golive.yaml, or the ``GOLIVE_ADMINS`` env
+             (comma separated, env wins over yaml). Read-only at runtime:
+             the permissions API refuses to delete these so an operator
+             cannot lock themselves out.
+  managed  — the ``managed_admins`` table in registry.db, maintained via
+             ``/api/admin/permissions/admins``.
 
 Identity sources, in order of trust:
   1. OIDC session (server-verified email)
@@ -23,8 +31,11 @@ import os
 from typing import Optional
 
 
-def get_admin_emails(cfg=None) -> list:
-    """Superadmin email list. env GOLIVE_ADMINS > yaml admin.admins."""
+def get_builtin_admin_emails(cfg=None) -> list:
+    """Config-declared superadmins. env GOLIVE_ADMINS > yaml admin.admins.
+
+    These are immutable at runtime — the API cannot remove them.
+    """
     env_val = os.environ.get("GOLIVE_ADMINS", "").strip()
     if env_val:
         return [a.strip().lower() for a in env_val.split(",") if a.strip()]
@@ -33,6 +44,25 @@ def get_admin_emails(cfg=None) -> list:
         cfg = get_config()
     return [str(a).strip().lower() for a in (cfg.admin.admins or [])
             if str(a).strip()]
+
+
+def get_managed_admin_emails() -> list:
+    """API-managed superadmins (registry.db). Never raises."""
+    try:
+        from golive.backends.registry.admin_store import get_managed_admins
+        return get_managed_admins().emails()
+    except Exception:  # noqa: BLE001 — a broken store must not deny builtins
+        return []
+
+
+def get_admin_emails(cfg=None) -> list:
+    """Effective superadmin set: builtin ∪ managed, sorted and unique."""
+    return sorted(set(get_builtin_admin_emails(cfg))
+                  | set(get_managed_admin_emails()))
+
+
+def is_builtin_admin(email: str, cfg=None) -> bool:
+    return (email or "").strip().lower() in get_builtin_admin_emails(cfg)
 
 
 class Identity:
@@ -46,11 +76,25 @@ class Identity:
         self.via_token = via_token
         self.is_superadmin = is_superadmin
 
+    @property
+    def is_builtin_admin(self) -> bool:
+        """True when superadmin status comes from config (not the API).
+
+        Token identities have no email and are operator-held, so they
+        count as builtin too.
+        """
+        if not self.is_superadmin:
+            return False
+        if self.via_token and not self.email:
+            return True
+        return is_builtin_admin(self.email)
+
     def as_dict(self) -> dict:
         return {
             "email": self.email,
             "via_token": self.via_token,
             "superadmin": self.is_superadmin,
+            "builtin": self.is_builtin_admin,
         }
 
 

@@ -21,9 +21,13 @@ Endpoints (dispatched from app.py):
   POST   /api/admin/data/rows                   create row {model, data}
   PATCH  /api/admin/data/rows/<id>              update row {data}
   DELETE /api/admin/data/rows/<id>              delete row
+  GET    /api/admin/permissions                 admins + per-site ACL (M7)
+  POST   /api/admin/permissions/admins          add a managed superadmin
+  DELETE /api/admin/permissions/admins          remove a managed superadmin
+  POST   /api/admin/permissions/bulk            grant/revoke across sites
 
-Data endpoints are superadmin-only (the data backend is shared across
-sites) and return 400 with a hint when no data backend is configured.
+Data and permissions endpoints are superadmin-only. Data endpoints
+return 400 with a hint when the data backend is disabled.
 
 This module is transport-free: ``handle()`` gets plain values and returns
 ``(status_code, payload_dict)`` — easy to unit-test without sockets.
@@ -119,6 +123,10 @@ def handle(method: str, path: str, query: dict, body: bytes,
     if rest[:1] == ["data"]:
         return _data_dispatch(method, rest[1:], query, body, identity)
 
+    if rest[:1] == ["permissions"]:
+        return _perm_dispatch(method, rest[1:], query, body, identity,
+                              registry)
+
     if len(rest) >= 2 and rest[0] == "sites":
         slug_ref = rest[1]
         site = registry.resolve(slug_ref)
@@ -159,6 +167,7 @@ def _me(identity: authz.Identity, registry) -> tuple:
     return 200, {
         "identity": identity.as_dict(),
         "role": "superadmin" if identity.is_superadmin else "user",
+        "builtin": identity.is_builtin_admin,
         "owned": owned,
         "maintained": maintained,
     }
@@ -489,3 +498,203 @@ def _data_row_delete(store, row_id, identity) -> tuple:
            {"model": row.get("model_code") or "", "id": row_id,
             "name": row.get("name") or ""})
     return 200, {"success": True, "deleted": row_id}
+
+
+# ── permission management (M7) ───────────────────────────────────────────────
+
+MAX_BULK_SLUGS = 200
+_BULK_ROLES = ("maintainer", "owner")
+
+
+def _perm_dispatch(method, rest, query, body, identity, registry) -> tuple:
+    """Route /api/admin/permissions/*. superadmin only."""
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    try:
+        if not rest and method == "GET":
+            return _perm_overview(registry)
+        if rest == ["admins"] and method == "POST":
+            return _perm_admin_add(body, identity)
+        if rest == ["admins"] and method == "DELETE":
+            return _perm_admin_remove(body, identity)
+        if rest == ["bulk"] and method == "POST":
+            return _perm_bulk(body, identity, registry)
+    except Exception as e:  # noqa: BLE001 — store failure -> 500, not a crash
+        return 500, {"error": f"permission store error: {e}"}
+    return _err(404, "unknown admin endpoint")
+
+
+def _managed_store():
+    from golive.backends.registry.admin_store import get_managed_admins
+    return get_managed_admins()
+
+
+def _perm_overview(registry) -> tuple:
+    """Superadmin sources + per-site owner/maintainer summary."""
+    from golive.server import authz
+
+    builtin = authz.get_builtin_admin_emails()
+    managed_rows = _managed_store().list()
+
+    sites_acl, maintainer_index = [], {}
+    for s in registry.list_all(limit=10000):
+        owner = (s.get("owner") or "").strip().lower()
+        maintainers = sorted({str(m).strip().lower()
+                              for m in (s.get("maintainers") or [])
+                              if str(m).strip()})
+        ref = s.get("slug") or s["site_id"]
+        sites_acl.append({
+            "site_id": s["site_id"],
+            "slug": s.get("slug") or "",
+            "name": s.get("name") or "",
+            "owner": owner,
+            "maintainers": maintainers,
+            "updated_at": s.get("updated_at") or "",
+        })
+        for m in maintainers:
+            maintainer_index.setdefault(m, []).append(ref)
+
+    sites_acl.sort(key=lambda r: (r["slug"] or r["site_id"]))
+    return 200, {
+        "builtin_admins": builtin,
+        "managed_admins": managed_rows,
+        "effective_admins": sorted(set(builtin)
+                                   | {r["email"] for r in managed_rows}),
+        "sites_acl": sites_acl,
+        "totals": {
+            "builtin": len(builtin),
+            "managed": len(managed_rows),
+            "sites": len(sites_acl),
+            "maintainers": len(maintainer_index),
+        },
+    }
+
+
+def _perm_body_email(body) -> tuple:
+    """Parse+validate {"email": ...}. Returns (err, email)."""
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object"), ""
+    email = str(data.get("email") or "").strip().lower()
+    if not _valid_email(email):
+        return _err(400, "body.email must be a valid email"), ""
+    return None, email
+
+
+def _perm_admin_add(body, identity) -> tuple:
+    err, email = _perm_body_email(body)
+    if err:
+        return err
+    from golive.server import authz
+    if authz.is_builtin_admin(email):
+        return 200, {"success": True, "email": email, "created": False,
+                     "builtin": True,
+                     "note": "already a builtin superadmin "
+                             "(admin.admins / GOLIVE_ADMINS)"}
+    created = _managed_store().add(email, added_by=_who(identity))
+    if created:
+        record(_who(identity), "perm.admin.add", "", {"email": email})
+    return 200, {"success": True, "email": email, "created": created,
+                 "builtin": False,
+                 "managed_admins": _managed_store().list()}
+
+
+def _perm_admin_remove(body, identity) -> tuple:
+    err, email = _perm_body_email(body)
+    if err:
+        return err
+    from golive.server import authz
+    if authz.is_builtin_admin(email):
+        return _err(400,
+                    f"{email} is a builtin superadmin (admin.admins in "
+                    "golive.yaml or GOLIVE_ADMINS env) and cannot be "
+                    "removed through the API — edit the config and "
+                    "restart instead")
+    removed = _managed_store().remove(email)
+    if not removed:
+        return _err(404, f"not a managed superadmin: {email}")
+    record(_who(identity), "perm.admin.remove", "", {"email": email})
+    return 200, {"success": True, "email": email, "removed": True,
+                 "managed_admins": _managed_store().list()}
+
+
+def _perm_bulk(body, identity, registry) -> tuple:
+    """Grant/revoke a role across many sites in one call."""
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+
+    email = str(data.get("email") or "").strip().lower()
+    if not _valid_email(email):
+        return _err(400, "body.email must be a valid email")
+
+    role = str(data.get("role") or "maintainer").strip().lower()
+    if role not in _BULK_ROLES:
+        return _err(400, "body.role must be "
+                         f"{' or '.join(_BULK_ROLES)}")
+
+    action = str(data.get("action") or "grant").strip().lower()
+    if action not in ("grant", "revoke"):
+        return _err(400, "body.action must be grant or revoke")
+
+    slugs = data.get("slugs")
+    if not isinstance(slugs, list) or not slugs:
+        return _err(400, "body.slugs must be a non-empty array")
+    if len(slugs) > MAX_BULK_SLUGS:
+        return _err(400, f"too many slugs (max {MAX_BULK_SLUGS})")
+    if role == "owner" and action == "revoke":
+        return _err(400, "owner cannot be revoked in bulk — transfer the "
+                         "site to another owner instead "
+                         "(POST /api/admin/sites/<slug>/transfer)")
+
+    applied, skipped, failed = [], [], []
+    for raw in slugs:
+        ref = str(raw or "").strip()
+        if not ref:
+            failed.append({"slug": raw, "error": "empty slug"})
+            continue
+        site = registry.resolve(ref)
+        if site is None:
+            failed.append({"slug": ref, "error": "unknown site"})
+            continue
+        try:
+            changed = _apply_bulk_one(registry, site, email, role, action)
+        except Exception as e:  # noqa: BLE001 — one bad row must not abort
+            failed.append({"slug": ref, "error": str(e)})
+            continue
+        (applied if changed else skipped).append(ref)
+
+    record(_who(identity), "perm.bulk", "",
+           {"email": email, "role": role, "action": action,
+            "requested": len(slugs), "applied": applied,
+            "skipped": skipped, "failed": [f["slug"] for f in failed]})
+    return 200, {
+        "success": True,
+        "email": email,
+        "role": role,
+        "action": action,
+        "applied": applied,
+        "skipped": skipped,
+        "failed": failed,
+    }
+
+
+def _apply_bulk_one(registry, site, email, role, action) -> bool:
+    """Apply one grant/revoke. Returns True when the site actually changed."""
+    site_id = site["site_id"]
+    if role == "owner":                     # grant only (guarded above)
+        if (site.get("owner") or "").strip().lower() == email:
+            return False
+        registry.set_owner(site_id, email)
+        return True
+    current = {str(m).strip().lower()
+               for m in (site.get("maintainers") or [])}
+    if action == "grant":
+        if email in current:
+            return False
+        registry.add_maintainer(site_id, email)
+        return True
+    if email not in current:
+        return False
+    registry.remove_maintainer(site_id, email)
+    return True

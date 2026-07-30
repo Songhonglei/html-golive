@@ -2,8 +2,11 @@
 """golive — self-hosted one-command HTML deployment CLI.
 
 Subcommands:
+  init      One command: data dir → skill → data layer → demos → serve
+  context   Which GOLIVE_HOME / config / registry am I actually using?
   publish   Publish a file / directory / zip archive
   list      List published sites
+  demo      Install / remove the two bundled example sites
   rollback  Roll a site back to a previous snapshot
   serve     Start the built-in HTTP server
   clone     Clone a public web page and publish it
@@ -25,7 +28,8 @@ from golive import __version__
 from golive.backends.registry.sqlite_store import SqliteRegistry
 from golive.backends.storage.local import LocalStorage
 from golive.core import publish_utils
-from golive.core.paths import get_home, get_registry_db, get_sites_dir
+from golive.core.paths import (get_data_db, get_home, get_registry_db,
+                               get_sites_dir)
 from golive.core.slug_checker import validate_slug
 from golive.security.scanner import run_scan
 
@@ -403,6 +407,15 @@ def cmd_maintainer(args) -> int:
 # ═════════════════════════════════ serve ════════════════════════════════════
 
 def cmd_serve(args) -> int:
+    """golive serve [start|status|stop|restart|logs] — HTTP server.
+
+    No sub-action = foreground server (unchanged since v0.1). The
+    sub-actions added in v0.7.1 manage a detached background process.
+    """
+    action = (getattr(args, "serve_action", "") or "").strip()
+    if action:
+        return _serve_manage(action, args)
+
     from golive.server.app import serve
     host = args.host
     if host is None:  # --host not given: golive.yaml server.host, else loopback
@@ -411,8 +424,107 @@ def cmd_serve(args) -> int:
             host = get_config().server.host or "127.0.0.1"
         except Exception:
             host = "127.0.0.1"
-    serve(host=host, port=args.port)
+    serve(host=host, port=args.port or DEFAULT_SERVE_PORT)
     return 0
+
+
+def _serve_default_host(args) -> str:
+    host = getattr(args, "host", None)
+    if host:
+        return host
+    try:
+        from golive.config import get_config
+        return get_config().server.host or "127.0.0.1"
+    except Exception:  # noqa: BLE001
+        return "127.0.0.1"
+
+
+def _serve_manage(action: str, args) -> int:
+    """Background lifecycle sub-actions for `golive serve`."""
+    from golive.core import service
+
+    cfg_path = getattr(args, "config", "") or ""
+    port_given = getattr(args, "port", None)
+    port = port_given or service.DEFAULT_PORT
+
+    if action == "start":
+        res = service.start(host=_serve_default_host(args), port=port,
+                            config_path=cfg_path)
+        if res["state"] == "started":
+            print(f"🚀 golive serve 已在后台启动（pid {res['pid']}）")
+            print(f"   地址:   http://localhost:{res['port']}/")
+            print(f"   管理台: http://localhost:{res['port']}/admin")
+            print(f"   日志:   {res['log']}")
+            print(f"   停止:   golive serve stop")
+            return 0
+        if res["state"] == "already-running":
+            print(f"ℹ️  golive 已在端口 {res['port']} 上运行"
+                  + (f"（pid {res['pid']}）" if res.get("pid") else ""))
+            print("   要应用新代码请运行：golive serve restart")
+            return 0
+        print(f"❌ 启动失败：{res['message']}", file=sys.stderr)
+        return 1
+
+    if action == "status":
+        st = service.status(port=port_given,
+                            host=getattr(args, "host", None))
+        if not st["running"]:
+            print("⏹  未运行")
+            if st["stale_pidfile"]:
+                print(f"   （pidfile 记录的进程已退出，"
+                      f"下次 start 会自动清理：{st['pidfile']}）")
+            if st["port_owner"] == "other":
+                print(f"   ⚠️  端口 {st['port']} 被其他程序占用。")
+            print(f"   启动：golive serve start")
+            return 1
+        pid = f"pid {st['pid']}" if st["pid"] else "pid 未知"
+        ver = st["version"] or "未知版本"
+        print(f"✅ 运行中  {ver}  {pid}  端口 {st['port']}")
+        if not st["managed"]:
+            print("   （不是由 golive serve start 启动的——可能是前台进程）")
+        if st["started_at"]:
+            print(f"   启动于: {st['started_at']}")
+        if not st["version_match"]:
+            print(f"   ⚠️  CLI 是 {st['cli_version']}，服务是 {st['version']}"
+                  f" —— 代码已更新但服务是旧的，运行：golive serve restart")
+        print(f"   地址:   http://localhost:{st['port']}/")
+        print(f"   日志:   {st['log']}")
+        return 0
+
+    if action == "stop":
+        res = service.stop()
+        icon = "✅" if res["ok"] else "⚠️ "
+        print(f"{icon} {res['message']}")
+        return 0 if res["ok"] else 1
+
+    if action == "restart":
+        res = service.restart(host=getattr(args, "host", None),
+                              port=port_given,
+                              config_path=cfg_path)
+        if res.get("stop", {}).get("message"):
+            print(f"   {res['stop']['message']}")
+        if res["state"] in ("started", "already-running"):
+            print(f"🔁 已重启：http://localhost:{res['port']}/"
+                  + (f"（pid {res['pid']}）" if res.get("pid") else ""))
+            return 0
+        print(f"❌ 重启失败：{res['message']}", file=sys.stderr)
+        return 1
+
+    if action == "logs":
+        n = getattr(args, "lines", 50)
+        if getattr(args, "follow", False):
+            return service.follow(n)
+        rows = service.tail(n)
+        if not rows:
+            print(f"（暂无日志：{service.log_path()}）")
+            print("   后台服务的日志在这里；前台 golive serve 直接打在终端上。")
+            return 0
+        for line in rows:
+            print(line)
+        return 0
+
+    print(f"❌ 未知 serve 子命令：{action}", file=sys.stderr)
+    return 1
 
 
 def cmd_admin(args) -> int:
@@ -513,73 +625,376 @@ def cmd_styles(args) -> int:
 
 # ═════════════════════════════════ doctor ═══════════════════════════════════
 
-def cmd_doctor(args) -> int:
-    import socket
+def _fmt_bytes(n: int) -> str:
+    """Human-readable size (doctor output only)."""
+    step = 1024.0
+    val = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if val < step or unit == "GB":
+            return f"{val:.0f} {unit}" if unit == "B" else f"{val:.1f} {unit}"
+        val /= step
+    return f"{val:.1f} GB"
 
-    print("🩺 golive doctor\n")
-    problems = 0
 
-    # 1. GOLIVE_HOME writable
+def _dir_size(path: Path) -> int:
+    total = 0
+    try:
+        for p in path.rglob("*"):
+            try:
+                if p.is_file():
+                    total += p.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return total
+
+
+def _doctor_home_info() -> dict:
+    """GOLIVE_HOME + where it came from + writability."""
+    import os as _os
+    info = {"path": "", "source": "default (~/.golive)", "writable": False,
+            "error": ""}
+    if _os.environ.get("GOLIVE_HOME", "").strip():
+        info["source"] = "$GOLIVE_HOME"
     try:
         home = get_home()
+        info["path"] = str(home)
         probe = home / ".doctor_probe"
         probe.write_text("ok")
         probe.unlink()
-        print(f"  ✅ GOLIVE_HOME 可写：{home}")
+        info["writable"] = True
     except Exception as e:  # noqa: BLE001
-        print(f"  ❌ GOLIVE_HOME 不可写：{e}")
-        problems += 1
+        info["error"] = str(e)
+    return info
 
-    # 2. registry DB
+
+def _doctor_storage_info(cfg) -> dict:
+    """Storage backend type, location and size."""
+    backend = (cfg.storage.backend if cfg else "") or "local"
+    out = {"backend": backend, "location": "", "sites": None,
+           "size_bytes": None, "detail": "", "error": ""}
     try:
-        reg = SqliteRegistry()
-        n = len(reg.list_all())
-        print(f"  ✅ 注册表可读：{get_registry_db()}（{n} 个站点）")
+        if backend in ("", "local"):
+            sites_dir = get_sites_dir()
+            out["backend"] = "local"
+            out["location"] = str(sites_dir)
+            count = sum(1 for p in sites_dir.iterdir() if p.is_dir())
+            size = _dir_size(sites_dir)
+            out["sites"] = count
+            out["size_bytes"] = size
+            out["detail"] = f"{count} 个站点, {_fmt_bytes(size)}"
+        elif backend == "s3":
+            out["location"] = (getattr(cfg.storage, "s3_bucket", "")
+                               or "(bucket 未配置)")
+            out["detail"] = getattr(cfg.storage, "s3_endpoint", "") or ""
+        elif backend == "supabase":
+            out["location"] = (getattr(cfg.storage, "supabase_bucket", "")
+                               or "golive-sites")
+            out["detail"] = getattr(cfg.supabase, "url", "") or ""
     except Exception as e:  # noqa: BLE001
-        print(f"  ❌ 注册表异常：{e}")
-        problems += 1
+        out["error"] = str(e)
+    return out
 
-    # 3. sites dir consistency
+
+def _doctor_registry_info(cfg) -> dict:
+    """Registry backend type, location, site count and orphan check."""
+    backend = (cfg.registry.backend if cfg else "") or "sqlite"
+    out = {"backend": backend, "location": "", "sites": None,
+           "missing_content": [], "detail": "", "error": ""}
     try:
-        reg = SqliteRegistry()
-        storage = LocalStorage()
-        missing = [s["site_id"] for s in reg.list_all()
-                   if not storage.exists(s["site_id"])]
-        if missing:
-            print(f"  ⚠️  {len(missing)} 个站点缺少内容文件：{', '.join(missing[:3])}...")
+        if backend in ("", "sqlite"):
+            out["backend"] = "sqlite"
+            out["location"] = str(get_registry_db())
+            reg = SqliteRegistry()
         else:
-            print(f"  ✅ 站点内容完整：{get_sites_dir()}")
+            from golive.backends.factory import get_registry
+            reg = get_registry(cfg)
+            out["location"] = (getattr(cfg.registry, "supabase_table", "")
+                               or "golive_sites")
+        sites = reg.list_all()
+        out["sites"] = len(sites)
+        out["detail"] = f"{len(sites)} 个站点"
+        if (cfg.storage.backend if cfg else "local") in ("", "local"):
+            storage = LocalStorage()
+            out["missing_content"] = [s["site_id"] for s in sites
+                                      if not storage.exists(s["site_id"])]
     except Exception as e:  # noqa: BLE001
-        print(f"  ❌ 站点目录检查失败：{e}")
-        problems += 1
+        out["error"] = str(e)
+    return out
 
-    # 4. serve port
-    port = args.port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.5)
-        in_use = s.connect_ex(("127.0.0.1", port)) == 0
-    if in_use:
-        print(f"  ℹ️  端口 {port} 已被占用（可能 golive serve 已在运行）")
-    else:
-        print(f"  ✅ 端口 {port} 空闲（golive serve --port {port} 可启动）")
 
-    # 5. optional deps
-    for mod, hint in (("bs4", "目录打包/克隆需要 beautifulsoup4"),
-                      ("requests", "克隆/资源内联需要 requests"),
-                      ("yaml", "安全扫描需要 pyyaml"),
-                      ("PIL", "图片压缩需要 Pillow（可选，pip install 'html-golive[image]'）")):
+def _doctor_data_info(cfg) -> dict:
+    """Data-layer backend type, location, table/row counts."""
+    backend = (cfg.data.backend if cfg else "") or "sqlite"
+    out = {"backend": backend, "location": "", "tables": None, "rows": None,
+           "detail": "", "error": ""}
+    try:
+        if backend == "none":
+            out["detail"] = "已禁用，data.backend: none"
+            return out
+        if backend in ("", "sqlite"):
+            import sqlite3
+            out["backend"] = "sqlite"
+            db = Path(getattr(cfg.data, "sqlite_path", "") or get_data_db())
+            out["location"] = str(db)
+            if not db.exists():
+                out["tables"], out["rows"] = 0, 0
+                out["detail"] = "尚未创建，首次使用时自动建表"
+                return out
+            with sqlite3.connect(str(db), timeout=5) as conn:
+                names = [r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name NOT LIKE 'sqlite_%'")]
+                rows = 0
+                for name in names:
+                    try:
+                        rows += conn.execute(
+                            f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+                    except Exception:  # noqa: BLE001
+                        continue
+            out["tables"], out["rows"] = len(names), rows
+            out["detail"] = (f"{len(names)} 张表, {rows} 行, "
+                             f"{_fmt_bytes(db.stat().st_size)}")
+        elif backend == "supabase":
+            out["location"] = (getattr(cfg.data, "templates_table", "")
+                               or "golive_templates")
+            configured = bool(getattr(cfg.supabase, "configured", False))
+            out["detail"] = ("configured" if configured
+                             else "⚠️ supabase 未配置（url / anon key 缺失）")
+    except Exception as e:  # noqa: BLE001
+        out["error"] = str(e)
+    return out
+
+
+def _doctor_service_info(port: int) -> dict:
+    """Version/pid of the golive server currently answering on ``port``."""
+    from golive.core import service
+    out = {"running": False, "pid": None, "port": port, "version": "",
+           "home": "", "data_backend": "", "version_match": True,
+           "port_owner": "free", "stale_pidfile": False, "managed": False,
+           "started_at": ""}
+    try:
+        st = service.status(port=port)
+    except Exception:  # noqa: BLE001 — doctor must never crash
+        return out
+    out.update({
+        "running": st["running"], "pid": st["pid"], "port": st["port"],
+        "version": st["version"], "version_match": st["version_match"],
+        "port_owner": st["port_owner"], "stale_pidfile": st["stale_pidfile"],
+        "managed": st["managed"], "started_at": st["started_at"],
+    })
+    health = st.get("health") or {}
+    out["home"] = str(health.get("home") or "")
+    out["data_backend"] = str(health.get("data_backend") or "")
+    return out
+
+
+def _doctor_skill_info() -> dict:
+    """Installed agent-skill locations and whether they match this golive."""
+    out = {"packaged_version": "", "installs": [], "in_sync": None,
+           "error": ""}
+    try:
+        from golive.core import skill_installer as si
+        st = si.status()
+        out["packaged_version"] = st.get("packaged_skill_version", "") or ""
+        out["installs"] = [{"path": i["path"], "version": i["version"]}
+                           for i in st.get("installs", [])]
+        out["in_sync"] = st.get("in_sync")
+    except Exception as e:  # noqa: BLE001
+        out["error"] = str(e)
+    return out
+
+
+def _doctor_deps_info() -> list:
+    specs = (("bs4", "目录打包/克隆需要 beautifulsoup4", True),
+             ("requests", "克隆/资源内联需要 requests", True),
+             ("yaml", "安全扫描需要 pyyaml", True),
+             ("PIL", "图片压缩需要 Pillow（可选，pip install "
+                     "'html-golive[image]'）", False))
+    out = []
+    for mod, hint, required in specs:
         try:
             __import__(mod)
-            print(f"  ✅ 依赖 {mod} 可用")
+            ok = True
         except ImportError:
-            level = "⚠️ " if mod == "PIL" else "❌"
-            print(f"  {level} 依赖 {mod} 缺失 — {hint}")
-            if mod != "PIL":
-                problems += 1
+            ok = False
+        out.append({"module": mod, "available": ok, "required": required,
+                    "hint": hint})
+    return out
 
+
+def _doctor_collect(port: int) -> dict:
+    """Gather the whole report (shared by the text and --json renderers)."""
+    import golive
+
+    try:
+        from golive.config import get_config
+        cfg = get_config()
+    except Exception:  # noqa: BLE001
+        cfg = None
+
+    admin_url = ""
+    try:
+        base = cfg.server.public_base if cfg else ""
+    except Exception:  # noqa: BLE001
+        base = ""
+    admin_url = f"{base}/admin" if base else f"http://localhost:{port}/admin"
+
+    return {
+        "cli_version": golive.__version__,
+        "home": _doctor_home_info(),
+        "service": _doctor_service_info(port),
+        "storage": _doctor_storage_info(cfg),
+        "registry": _doctor_registry_info(cfg),
+        "data": _doctor_data_info(cfg),
+        "skill": _doctor_skill_info(),
+        "deps": _doctor_deps_info(),
+        "admin_url": admin_url,
+    }
+
+
+def _doctor_problems(rep: dict) -> list:
+    """Blocking issues only — warnings are printed but do not fail doctor."""
+    problems = []
+    if not rep["home"]["writable"]:
+        problems.append(f"GOLIVE_HOME 不可写：{rep['home']['error']}")
+    if rep["registry"]["error"]:
+        problems.append(f"注册表异常：{rep['registry']['error']}")
+    if rep["storage"]["error"]:
+        problems.append(f"存储异常：{rep['storage']['error']}")
+    if rep["data"]["error"]:
+        problems.append(f"数据层异常：{rep['data']['error']}")
+    for dep in rep["deps"]:
+        if dep["required"] and not dep["available"]:
+            problems.append(f"依赖 {dep['module']} 缺失 — {dep['hint']}")
+    return problems
+
+
+def _disp_width(text: str) -> int:
+    """Display width: East-Asian wide glyphs and emoji count as two cells."""
+    import unicodedata
+    width = 0
+    for ch in text:
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
+
+
+def _pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - _disp_width(text))
+
+
+def _doctor_render(rep: dict, port: int) -> None:
+    """One screen: version, service, three backends, skill, portal."""
+    label_w, value_w = 16, 46
+
+    def row(label: str, value: str, note: str = "") -> None:
+        if note:
+            print(f"{_pad(label, label_w)} {_pad(value, value_w)}  "
+                  f"{note}".rstrip())
+        else:
+            print(f"{_pad(label, label_w)} {value}".rstrip())
+
+    def paren(detail: str) -> str:
+        """Wrap a detail string in brackets without doubling them up."""
+        if not detail:
+            return ""
+        if detail[0] in "（(⚠❌✅":
+            return detail
+        return f"（{detail}）"
+
+    print("🩺 golive doctor\n")
+    row("golive", rep["cli_version"], "(CLI)")
+
+    svc = rep["service"]
+    if svc["running"]:
+        ver = svc["version"] or "版本未知"
+        pid = f"pid {svc['pid']}" if svc["pid"] else "pid ?"
+        if not svc["version"]:
+            note = "ℹ️  该服务不报版本"
+        elif svc["version_match"]:
+            note = "✅"
+        else:
+            note = "⚠️  版本不一致，建议重启"
+        row("running service", f"{ver}  {pid}  port {svc['port']}", note)
+        if not svc["version_match"]:
+            print(f"{' ' * label_w} 代码已更新（CLI {rep['cli_version']}）但服务"
+                  f"还是旧的（{svc['version']}）—— 运行：golive serve restart")
+        elif not svc["version"]:
+            print(f"{' ' * label_w} 该服务的 /health 没有返回版本号"
+                  f"（0.7.x 及更早版本）—— 很可能是旧代码，"
+                  f"建议 golive serve restart")
+    elif svc["port_owner"] == "other":
+        row("running service", "not running",
+            f"⚠️  端口 {svc['port']} 被其他程序占用")
+    else:
+        row("running service", "not running",
+            f"（启动：golive serve start --port {svc['port']}）")
+    if svc["stale_pidfile"]:
+        print(f"{' ' * label_w} ℹ️  pidfile 里的进程已退出，"
+              f"下次 golive serve start 会自动清理")
+
+    home = rep["home"]
+    row("GOLIVE_HOME", home["path"] or "(不可用)",
+        f"(from {home['source']})" if home["writable"]
+        else f"❌ 不可写：{home['error']}")
+
+    st = rep["storage"]
+    row("storage", f"{st['backend']} → {st['location'] or '(未知)'}",
+        paren(st["detail"]) or (f"❌ {st['error']}" if st["error"] else ""))
+
+    rg = rep["registry"]
+    row("registry", f"{rg['backend']} → {rg['location'] or '(未知)'}",
+        paren(rg["detail"]) or (f"❌ {rg['error']}" if rg["error"] else ""))
+    if rg["missing_content"]:
+        miss = rg["missing_content"]
+        print(f"{' ' * label_w} ⚠️  {len(miss)} 个站点缺少内容文件："
+              f"{', '.join(miss[:3])}{' ...' if len(miss) > 3 else ''}")
+
+    dt = rep["data"]
+    row("data backend", f"{dt['backend']} → {dt['location'] or '(无)'}",
+        paren(dt["detail"]) or (f"❌ {dt['error']}" if dt["error"] else ""))
+
+    sk = rep["skill"]
+    if sk["error"]:
+        row("skill", "检查失败", f"⚠️  {sk['error']}")
+    elif not sk["installs"]:
+        row("skill", "未安装", "（安装：golive skill install）")
+    else:
+        for item in sk["installs"]:
+            ver = item["version"] or "(无版本号)"
+            mark = "✅" if item["version"] == sk["packaged_version"] else \
+                "⚠️  与 CLI 不一致，golive skill install --force"
+            row("skill", f"{item['path']}  {ver}", mark)
+
+    row("admin portal", rep["admin_url"])
+
+    missing_deps = [d for d in rep["deps"] if not d["available"]]
+    if missing_deps:
+        print()
+        for dep in missing_deps:
+            level = "❌" if dep["required"] else "⚠️ "
+            print(f"  {level} 依赖 {dep['module']} 缺失 — {dep['hint']}")
+
+
+def cmd_doctor(args) -> int:
+    port = args.port
+    rep = _doctor_collect(port)
+    problems = _doctor_problems(rep)
+    rep["problems"] = problems
+    rep["ok"] = not problems
+
+    if getattr(args, "json", False):
+        import json as _json
+        print(_json.dumps(rep, ensure_ascii=False, indent=2, default=str))
+        return 1 if problems else 0
+
+    _doctor_render(rep, port)
     print()
     if problems:
-        print(f"发现 {problems} 个问题，请按上方提示修复。")
+        print(f"发现 {len(problems)} 个问题：")
+        for prob in problems:
+            print(f"  ❌ {prob}")
         return 1
     print("✅ 环境健康。")
     return 0
@@ -717,31 +1132,12 @@ def cmd_skill(args) -> int:
             return 0
 
         if action == "status":
-            st = si.status()
-            print(f"golive 版本：        {st['golive_version']}")
-            print(f"包内 skill 版本：    "
-                  f"{st['packaged_skill_version'] or '(未知)'}")
-            print(f"包内 skill 路径：    {st['packaged_skill_path']}")
-            if not st["installs"]:
-                print("\nℹ️  尚未在任何已知位置安装。运行："
-                      "\n   golive skill install")
-                return 0
-            print("\n已安装：")
-            for item in st["installs"]:
-                mark = "✅" if item["version"] == \
-                    st["packaged_skill_version"] else "⚠️ "
-                ver = item["version"] or "(无版本号)"
-                print(f"  {mark} {ver}  {item['path']}")
-                if item["error"]:
-                    print(f"      ⚠️  {item['error']}")
-            if st["stale"]:
-                print("\n⚠️  版本与当前 golive 不一致，同步："
-                      "\n   golive skill install --force")
-                return 0
-            print("\n✅ 已是最新。")
-            return 0
+            return _skill_status(si)
 
         # install
+        if getattr(args, "list_targets", False):
+            return _skill_list_targets(si)
+
         res = si.install(target=args.target or None,
                          from_github=args.from_github,
                          force=args.force)
@@ -759,6 +1155,137 @@ def cmd_skill(args) -> int:
               "然后让它执行 `golive doctor` 验证。")
         return 0
     except si.SkillInstallError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return 1
+
+
+def _skill_list_targets(si) -> int:
+    """`golive skill install --list-targets` — look, don't touch."""
+    cands = si.detect_targets()
+    viable = [c for c in cands if c.exists or c.agent_present]
+    print("探测到的 skill 安装位置（按推荐顺序）：\n")
+    if viable:
+        for i, c in enumerate(viable, 1):
+            print(f"  [{i}] {c.describe()}")
+    else:
+        print("  （没有找到任何已安装的 agent）")
+    others = [c for c in cands if c not in viable]
+    if others:
+        print("\n其余候选约定（目录都不存在，建好后会被自动识别）：")
+        for c in others:
+            print(f"      {c.path}  [{c.agent}]")
+    print("\n安装到第一个："
+          "\n  golive skill install"
+          "\n安装到指定目录："
+          "\n  golive skill install --target <DIR>")
+    return 0
+
+
+def _skill_status(si) -> int:
+    """Version comparison across *every* detected location."""
+    st = si.status()
+    print(f"golive 版本：        {st['golive_version']}")
+    print(f"包内 skill 版本：    "
+          f"{st['packaged_skill_version'] or '(未知)'}")
+    print(f"包内 skill 路径：    {st['packaged_skill_path']}")
+    if not st["installs"]:
+        print("\nℹ️  在 "
+              f"{len(st['candidates'])} 个已知位置均未发现安装。运行："
+              "\n   golive skill install"
+              "\n   （先看看有哪些位置：golive skill install --list-targets）")
+        return 0
+    print(f"\n在 {st['install_count']} 个位置发现已安装：")
+    for item in st["installs"]:
+        mark = "✅" if item["version"] == \
+            st["packaged_skill_version"] else "⚠️ "
+        ver = item["version"] or "(无版本号)"
+        agent = item.get("agent", "")
+        print(f"  {mark} {ver}  {item['path']}"
+              f"{'  [' + agent + ']' if agent else ''}")
+        if item["error"]:
+            print(f"      ⚠️  {item['error']}")
+    if st["install_count"] > 1:
+        print("\nℹ️  多个位置各有一份副本；升级 golive 后记得逐个 "
+              "--force 同步，否则不同 agent 会读到不同版本。")
+    if st["stale"]:
+        print("\n⚠️  版本与当前 golive 不一致，同步："
+              "\n   golive skill install --force")
+        return 0
+    print("\n✅ 已是最新。")
+    return 0
+
+
+# ═════════════════════════════════ context ══════════════════════════════════
+
+def cmd_context(args) -> int:
+    """golive context — which GOLIVE_HOME / config / data am I using?"""
+    import json as _json
+
+    from golive.core import context as ctx
+    info = ctx.collect(port=args.port)
+    if args.json:
+        print(_json.dumps(info, ensure_ascii=False, indent=2, default=str))
+        return 0
+    print(ctx.render(info))
+    return 0
+
+
+# ═════════════════════════════════ init ═════════════════════════════════════
+
+def cmd_init(args) -> int:
+    """golive init — one command from pip install to three working URLs."""
+    from golive.core.init_wizard import InitOptions, run
+
+    code, _steps = run(InitOptions(
+        home=args.home,
+        port=args.port,
+        host=args.host or "127.0.0.1",
+        skip_skill=args.skip_skill,
+        no_serve=args.no_serve,
+        skill_target=args.skill_target,
+    ))
+    return code
+
+
+# ═════════════════════════════════ demo ═════════════════════════════════════
+
+def cmd_demo(args) -> int:
+    """golive demo <install|remove|status> — the two bundled examples."""
+    from golive.core import demo
+
+    try:
+        if args.demo_action == "status":
+            st = demo.status()
+            print(f"示例页：{st['published']}/{st['total']} 已发布\n")
+            for d in st["demos"]:
+                mark = "✅" if d["published"] else "  "
+                print(f"  {mark} /{d['slug']:<12} {d['description']}")
+            if st["published"] < st["total"]:
+                print("\n发布：golive demo install")
+            return 0
+
+        if args.demo_action == "install":
+            res = demo.install()
+            for d in res["demos"]:
+                verb = "已发布" if d["action"] == "created" else "已更新"
+                print(f"✅ {verb} /{d['slug']}  —  {d['description']}")
+            u = demo.urls(port=args.port)
+            print(f"\n   静态示例：{u['demo-static']}")
+            print(f"   CRUD示例：{u['demo-crud']}")
+            print(f"   （服务未启动就运行：golive serve --port {args.port}）")
+            return 0
+
+        # remove
+        res = demo.remove(drop_data=not args.keep_data)
+        if res["removed"]:
+            print(f"✅ 已删除示例站点：{', '.join(res['removed'])}")
+        if res["missing"]:
+            print(f"ℹ️  本来就不存在：{', '.join(res['missing'])}")
+        if res["rows_deleted"]:
+            print(f"   顺带清理了 {res['rows_deleted']} 条示例待办数据"
+                  "（--keep-data 可保留）")
+        return 0
+    except demo.DemoError as e:
         print(f"❌ {e}", file=sys.stderr)
         return 1
 
@@ -821,9 +1348,20 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_maintainer)
 
     # serve
-    p = sub.add_parser("serve", help="启动内置 HTTP 服务")
-    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
-    p.add_argument("--host", default=None, help="bind address (default: server.host in golive.yaml, else 127.0.0.1; use 0.0.0.0 to expose)")
+    p = sub.add_parser("serve", help="启动内置 HTTP 服务（不带子命令=前台运行）")
+    p.add_argument("serve_action", nargs="?", default="",
+                   choices=["", "start", "status", "stop", "restart", "logs"],
+                   help="start/status/stop/restart/logs：后台服务管理；"
+                        "省略则前台运行（与历史行为一致）")
+    p.add_argument("--port", type=int, default=None,
+                   help=f"监听端口（默认 {DEFAULT_SERVE_PORT}）")
+    p.add_argument("--host", default=None,
+                   help="bind address (default: server.host in golive.yaml, "
+                        "else 127.0.0.1; use 0.0.0.0 to expose)")
+    p.add_argument("-n", "--lines", type=int, default=50,
+                   help="logs：显示最后 N 行（默认 50）")
+    p.add_argument("-f", "--follow", action="store_true",
+                   help="logs：持续跟随输出（Ctrl+C 退出）")
     p.set_defaults(func=cmd_serve)
 
     # admin
@@ -893,6 +1431,8 @@ def main(argv=None) -> int:
     # doctor
     p = sub.add_parser("doctor", help="环境健康检查")
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
+    p.add_argument("--json", action="store_true",
+                   help="输出机器可读的 JSON 报告")
     p.set_defaults(func=cmd_doctor)
 
     # skill
@@ -902,13 +1442,56 @@ def main(argv=None) -> int:
                         "status：版本比对；path：打印包内 skill 目录")
     p.add_argument("--target", default="",
                    help="安装目标目录（不指定则自动探测常见位置）")
+    p.add_argument("--list-targets", action="store_true",
+                   help="只列出探测到的安装位置，不做任何改动")
     p.add_argument("--from-github", action="store_true",
                    help="从 GitHub 拉取最新 skill（默认用包内版本，离线可用）")
     p.add_argument("--force", action="store_true",
                    help="覆盖已存在的同名 skill（先自动备份）")
     p.set_defaults(func=cmd_skill)
 
+    # init
+    p = sub.add_parser("init",
+                       help="一条命令跑通：目录 → skill → 数据层 → 示例页 → 服务")
+    p.add_argument("--home", default="", metavar="DIR",
+                   help="数据目录（默认 ~/.golive）；指定后会持久化，"
+                        "之后所有 CLI/服务都指向这里")
+    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="服务监听地址（默认仅本机）")
+    p.add_argument("--skip-skill", action="store_true",
+                   help="不安装 AI agent skill")
+    p.add_argument("--skill-target", default="", metavar="DIR",
+                   help="skill 安装目录（跳过自动探测）")
+    p.add_argument("--no-serve", action="store_true",
+                   help="校验完就退出，不驻留服务")
+    p.set_defaults(func=cmd_init)
+
+    # context
+    p = sub.add_parser("context",
+                       help="我现在到底在用哪套配置？（只读，不创建任何目录）")
+    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
+                   help="探测该端口上是否有服务在跑")
+    p.add_argument("--json", action="store_true", help="输出 JSON")
+    p.set_defaults(func=cmd_context)
+
+    # demo
+    p = sub.add_parser("demo", help="内置示例页（介绍页 + 真能用的待办清单）")
+    p.add_argument("demo_action", choices=["install", "remove", "status"],
+                   help="install：发布两个示例；remove：清理；status：看状态")
+    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
+                   help="URL 提示中的 serve 端口")
+    p.add_argument("--keep-data", action="store_true",
+                   help="remove 时保留示例待办数据")
+    p.set_defaults(func=cmd_demo)
+
     args = parser.parse_args(argv)
+
+    # Make `golive init --home <DIR>` stick: export the recorded home into
+    # the environment *before* the config loader looks for golive.yaml, so
+    # the CLI and the server can never end up on different data dirs.
+    from golive.core.paths import bootstrap_home_env
+    bootstrap_home_env()
 
     from golive.config import ConfigError, load_config, set_config
     try:

@@ -8,6 +8,8 @@ import unittest
 import urllib.error
 import urllib.request
 
+from tests import lan_ip_or_none
+
 
 def _free_port() -> int:
     s = socket.socket()
@@ -45,8 +47,8 @@ class TestApiReadProtection(unittest.TestCase):
 
     def test_remote_denied_without_auth(self):
         port = self._start()
-        lan_ip = socket.gethostbyname(socket.gethostname())
-        if lan_ip.startswith("127."):
+        lan_ip = lan_ip_or_none()
+        if lan_ip is None:
             self.skipTest("no non-loopback interface available")
         with self.assertRaises(urllib.error.HTTPError) as cm:
             urllib.request.urlopen(
@@ -57,8 +59,8 @@ class TestApiReadProtection(unittest.TestCase):
         os.environ["GOLIVE_TOKEN"] = "t-0401-secret"
         try:
             port = self._start()
-            lan_ip = socket.gethostbyname(socket.gethostname())
-            if lan_ip.startswith("127."):
+            lan_ip = lan_ip_or_none()
+            if lan_ip is None:
                 self.skipTest("no non-loopback interface available")
             req = urllib.request.Request(
                 f"http://{lan_ip}:{port}/api/sites",

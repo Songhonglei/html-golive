@@ -47,6 +47,7 @@ include = ["golive*"]
 [tool.setuptools.package-data]
 "golive" = [
     "resources/css_styles/*.css",
+    "resources/demo/*.html",
     "resources/skill/SKILL.md",
     "resources/skill/references/*.md",
 ]

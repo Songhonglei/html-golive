@@ -2,7 +2,7 @@
 
 Routes:
   GET  /                          site index (name + links)
-  GET  /health                    {"status": "ok"}
+  GET  /health                    {"status","version","home","data_backend","pid"}
   GET  /api/sites                 registry listing (token / session protected)
   GET  /s/<site_id>               site HTML by id
   GET  /<slug>                    site HTML by slug
@@ -47,6 +47,32 @@ def _lan_ip() -> str:
             return s.getsockname()[0]
     except Exception:
         return "127.0.0.1"
+
+
+def _health_payload() -> dict:
+    """Body of ``GET /health``.
+
+    Deliberately more than ``{"status": "ok"}``: a user updated the code,
+    left the old server running and spent a while wondering why the page
+    behaved like the previous version. ``version`` + ``pid`` + ``home``
+    make that diagnosable in one request — ``golive doctor`` and
+    ``golive context`` both compare these against the local CLI.
+
+    Shape is a contract; add fields, never rename or remove them.
+    """
+    from golive import __version__
+    payload = {"status": "ok", "version": __version__, "pid": os.getpid()}
+    try:
+        from golive.core.paths import peek_home
+        payload["home"] = str(peek_home())
+    except Exception:  # noqa: BLE001 — /health must never 500
+        payload["home"] = ""
+    try:
+        from golive.config import get_config
+        payload["data_backend"] = get_config().data.backend or "none"
+    except Exception:  # noqa: BLE001
+        payload["data_backend"] = ""
+    return payload
 
 
 def _make_oidc():
@@ -216,7 +242,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
 
         if path == "/health":
-            self._send_json(200, {"status": "ok"})
+            self._send_json(200, _health_payload())
             return
 
         if path.startswith("/auth/"):

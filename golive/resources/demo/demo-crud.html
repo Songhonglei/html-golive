@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>golive demo — 待办清单（真数据）</title>
+<style>
+  :root{
+    --ink:#12151c; --muted:#5d6675; --line:#e4e7ec; --bg:#fbfbfd;
+    --card:#fff; --accent:#2f6df6; --accent-soft:#eef3ff;
+    --danger:#d1435b; --ok:#1a8a5a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,
+         "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  .wrap{max-width:620px;margin:0 auto;padding:52px 20px 80px}
+  .badge{
+    display:inline-block;padding:3px 10px;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent);
+    font-size:12px;font-weight:600;letter-spacing:.04em;
+  }
+  h1{font-size:28px;margin:14px 0 8px;letter-spacing:-.02em}
+  .lede{color:var(--muted);margin:0 0 28px}
+  .panel{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;
+  }
+  .row{display:flex;gap:10px}
+  input[type=text]{
+    flex:1;min-width:0;padding:11px 13px;font:inherit;font-size:15px;
+    border:1px solid var(--line);border-radius:9px;background:#fff;color:inherit;
+  }
+  input[type=text]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  button{
+    font:inherit;font-size:14.5px;border-radius:9px;cursor:pointer;
+    border:1px solid transparent;padding:11px 18px;
+    background:var(--accent);color:#fff;font-weight:600;
+  }
+  button:hover{filter:brightness(1.06)}
+  button:disabled{opacity:.5;cursor:not-allowed;filter:none}
+  ul{list-style:none;margin:20px 0 0;padding:0}
+  li{
+    display:flex;align-items:center;gap:11px;padding:11px 2px;
+    border-bottom:1px solid var(--line);
+  }
+  li:last-child{border-bottom:none}
+  li input[type=checkbox]{width:17px;height:17px;flex:none;cursor:pointer;accent-color:var(--accent)}
+  .title{flex:1;min-width:0;word-break:break-word}
+  .done .title{text-decoration:line-through;color:var(--muted)}
+  .icon{
+    background:none;border:none;padding:5px 7px;font-size:15px;
+    color:var(--muted);border-radius:7px;
+  }
+  .icon:hover{background:#f1f3f7;color:var(--danger)}
+  .empty,.loading{color:var(--muted);text-align:center;padding:26px 0;font-size:14.5px}
+  .bar{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:16px;font-size:13.5px;color:var(--muted);
+  }
+  .note{
+    margin-top:22px;padding:16px 18px;border-radius:11px;
+    background:var(--accent-soft);border:1px solid #d7e3ff;font-size:14px;
+    color:#31405c;
+  }
+  .note b{color:var(--ink)}
+  .note code{
+    background:#fff;border-radius:5px;padding:1px 5px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .err{
+    margin-top:16px;padding:13px 16px;border-radius:10px;font-size:14px;
+    background:#fdeff1;border:1px solid #f6ccd4;color:#8d2338;display:none;
+  }
+  .err.show{display:block}
+  a{color:var(--accent)}
+  footer{margin-top:30px;text-align:center;font-size:13.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="badge">DEMO · CRUD</span>
+  <h1>待办清单</h1>
+  <p class="lede">每一次勾选、改名、删除都真的写进了本机 SQLite。
+     加几条，然后<b>刷新浏览器</b>——数据还在。</p>
+
+  <div class="panel">
+    <div class="row">
+      <input id="new-todo" type="text" placeholder="要做点什么？回车添加"
+             autocomplete="off" maxlength="200">
+      <button id="add-btn" type="button">添加</button>
+    </div>
+
+    <div id="err" class="err"></div>
+    <ul id="list"></ul>
+    <div id="state" class="loading">正在读取…</div>
+
+    <div class="bar">
+      <span id="count"></span>
+      <span id="model"></span>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>这里发生了什么：</b>页面调用 <code>window.TemplateAPI</code>，
+    golive 在发布时注入了数据层 JS；它请求
+    <code>/api/data/golive_templates</code>，由
+    <code>golive serve</code> 读写 <code>$GOLIVE_HOME/data.db</code>。
+    没有云服务，没有 API key。命令行也能看到同一批数据：
+    <code>golive data list --model-code golive_demo_todo</code>。
+  </div>
+
+  <footer><a href="/demo-static">← 回到介绍页</a> · <a href="/admin">管理后台</a></footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var MODEL = 'golive_demo_todo';
+  var listEl  = document.getElementById('list');
+  var stateEl = document.getElementById('state');
+  var errEl   = document.getElementById('err');
+  var countEl = document.getElementById('count');
+  var inputEl = document.getElementById('new-todo');
+  var addBtn  = document.getElementById('add-btn');
+  var items   = [];
+
+  document.getElementById('model').textContent = 'modelCode: ' + MODEL;
+
+  function showErr(msg) {
+    errEl.textContent = '❌ ' + msg;
+    errEl.className = 'err show';
+  }
+  function clearErr() { errEl.className = 'err'; errEl.textContent = ''; }
+
+  function parseContent(raw) {
+    if (raw === null || raw === undefined) return {};
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch (e) { return {}; }
+    }
+    return raw;
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+    if (!items.length) {
+      stateEl.textContent = '还没有待办 —— 上面加一条试试。';
+      stateEl.className = 'empty';
+      countEl.textContent = '';
+      return;
+    }
+    stateEl.textContent = '';
+    stateEl.className = '';
+    items.forEach(function (it) {
+      var li = document.createElement('li');
+      if (it.done) li.className = 'done';
+
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!it.done;
+      cb.title = '标记完成';
+      cb.addEventListener('change', function () { toggle(it, cb.checked); });
+
+      var span = document.createElement('span');
+      span.className = 'title';
+      span.textContent = it.title;
+      span.title = '点击重命名';
+      span.addEventListener('click', function () { rename(it); });
+
+      var del = document.createElement('button');
+      del.className = 'icon';
+      del.type = 'button';
+      del.textContent = '🗑';
+      del.title = '删除';
+      del.addEventListener('click', function () { remove(it); });
+
+      li.appendChild(cb); li.appendChild(span); li.appendChild(del);
+      listEl.appendChild(li);
+    });
+    var left = items.filter(function (i) { return !i.done; }).length;
+    countEl.textContent = items.length + ' 条 · ' + left + ' 条未完成';
+  }
+
+  /* ── READ ── */
+  function load() {
+    return TemplateAPI.listAll({ modelCode: MODEL, pageSize: 100 })
+      .then(function (res) {
+        items = (res.list || []).map(function (row) {
+          var c = parseContent(row.templateContent);
+          return {
+            id: row.templateId,
+            title: c.title || row.templateName,
+            done: !!c.done,
+            createdAt: c.createdAt || row.createTime,
+          };
+        }).sort(function (a, b) {
+          return String(a.createdAt) < String(b.createdAt) ? -1 : 1;
+        });
+        clearErr();
+        render();
+      })
+      .catch(function (e) {
+        stateEl.textContent = '';
+        showErr('读取失败：' + e.message +
+                '（golive serve 在跑吗？data.backend 是 sqlite 吗？）');
+      });
+  }
+
+  /* ── CREATE ── */
+  function add() {
+    var title = inputEl.value.trim();
+    if (!title) return;
+    addBtn.disabled = true;
+    TemplateAPI.create({
+      modelCode: MODEL,
+      name: 'todo-' + Date.now(),
+      content: { title: title, done: false, createdAt: new Date().toISOString() },
+      desc: 'golive demo todo',
+    }).then(function () {
+      inputEl.value = '';
+      return load();
+    }).catch(function (e) {
+      showErr('添加失败：' + e.message);
+    }).then(function () { addBtn.disabled = false; });
+  }
+
+  /* ── UPDATE ── */
+  function toggle(it, done) {
+    TemplateAPI.update(it.id, {
+      content: { title: it.title, done: done, createdAt: it.createdAt },
+    }).then(load).catch(function (e) { showErr('更新失败：' + e.message); });
+  }
+
+  function rename(it) {
+    var next = window.prompt('改成：', it.title);
+    if (next === null) return;
+    next = next.trim();
+    if (!next || next === it.title) return;
+    TemplateAPI.update(it.id, {
+      content: { title: next, done: it.done, createdAt: it.createdAt },
+    }).then(load).catch(function (e) { showErr('重命名失败：' + e.message); });
+  }
+
+  /* ── DELETE ── */
+  function remove(it) {
+    TemplateAPI.delete(it.id)
+      .then(load)
+      .catch(function (e) { showErr('删除失败：' + e.message); });
+  }
+
+  addBtn.addEventListener('click', add);
+  inputEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') add();
+  });
+
+  /* the injected data layer fires this once window.TemplateAPI is mounted */
+  if (window.TemplateAPI) {
+    load();
+  } else {
+    document.addEventListener('templateapi:ready', load);
+    setTimeout(function () {
+      if (!window.TemplateAPI) {
+        stateEl.textContent = '';
+        showErr('数据层没有注入。发布时要带 --data-model ' + MODEL +
+                '，并确认 golive.yaml 里 data.backend 为 sqlite。');
+      }
+    }, 3000);
+  }
+})();
+</script>
+</body>
+</html>

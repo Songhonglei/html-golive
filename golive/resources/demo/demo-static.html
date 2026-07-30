@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>golive — 本地一条命令发网页</title>
+<style>
+  :root{
+    --ink:#12151c; --muted:#5d6675; --line:#e4e7ec;
+    --bg:#fbfbfd; --card:#fff; --accent:#2f6df6; --accent-soft:#eef3ff;
+    --code-bg:#12151c; --code-ink:#e6e9ef;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,
+         "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  .wrap{max-width:780px;margin:0 auto;padding:56px 20px 80px}
+  header{margin-bottom:40px}
+  .badge{
+    display:inline-block;padding:3px 10px;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent);
+    font-size:12px;font-weight:600;letter-spacing:.04em;
+  }
+  h1{font-size:30px;line-height:1.25;margin:14px 0 10px;letter-spacing:-.02em}
+  .lede{color:var(--muted);font-size:17px;margin:0}
+  h2{font-size:19px;margin:40px 0 14px;letter-spacing:-.01em}
+  section{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:22px 24px;margin-bottom:18px;
+  }
+  section h2{margin-top:0}
+  p{margin:0 0 12px}
+  p:last-child{margin-bottom:0}
+  ul{margin:0;padding-left:20px}
+  li{margin:7px 0}
+  code{
+    background:#f1f3f7;border-radius:5px;padding:1.5px 6px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13.5px;
+  }
+  pre{
+    background:var(--code-bg);color:var(--code-ink);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;margin:0 0 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13.5px;line-height:1.7;
+  }
+  pre:last-child{margin-bottom:0}
+  pre code{background:none;padding:0;color:inherit;font-size:inherit}
+  .cmt{color:#8a93a3}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);
+        vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:13px;
+     text-transform:uppercase;letter-spacing:.05em}
+  tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+  a{color:var(--accent)}
+  .next{
+    background:var(--accent-soft);border-color:#d7e3ff;
+  }
+  footer{margin-top:36px;color:var(--muted);font-size:13.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="badge">DEMO · STATIC</span>
+  <h1>golive 跑起来了 🎉</h1>
+  <p class="lede">这个页面本身就是 golive 发布的——它现在由你机器上的
+    <code>golive serve</code> 提供服务，没有任何外部依赖。</p>
+</header>
+
+<section>
+  <h2>golive 是什么</h2>
+  <p>一个自托管的 HTML 发布工具：把一个 HTML 文件、一个目录或一个压缩包变成
+     一个可访问的地址，附带回滚、在线编辑、权限、水印和一个零配置的数据层。
+     所有内容都留在你自己的机器或内网里。</p>
+  <p>你可以把它理解成「装在本机的 Vercel」——但不需要账号、不需要联网、
+     不会把你的页面传到任何第三方。</p>
+</section>
+
+<section>
+  <h2>常用命令</h2>
+  <table>
+    <tr><th>做什么</th><th>命令</th></tr>
+    <tr><td>我现在在用哪套配置？</td><td><code>golive context</code></td></tr>
+    <tr><td>环境体检</td><td><code>golive doctor</code></td></tr>
+    <tr><td>发布一个页面</td><td><code>golive publish page.html --slug demo</code></td></tr>
+    <tr><td>更新已有站点</td><td><code>golive publish new.html --update demo</code></td></tr>
+    <tr><td>看看发过什么</td><td><code>golive list</code></td></tr>
+    <tr><td>回滚到上一版</td><td><code>golive rollback demo --yes</code></td></tr>
+    <tr><td>启动服务</td><td><code>golive serve --port 8787</code></td></tr>
+    <tr><td>装 AI agent skill</td><td><code>golive skill install</code></td></tr>
+    <tr><td>看有哪些 skill 安装位置</td><td><code>golive skill install --list-targets</code></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>发一个自己的页面</h2>
+  <pre><code><span class="cmt"># 1. 随便写点什么</span>
+echo '&lt;h1&gt;Hello golive&lt;/h1&gt;' &gt; hello.html
+
+<span class="cmt"># 2. 发布（--slug 决定访问路径）</span>
+golive publish hello.html --slug hello
+
+<span class="cmt"># 3. 打开 http://localhost:8787/hello</span></code></pre>
+  <p>改完再发一次就是更新，旧版本自动存成快照，
+     <code>golive rollback hello</code> 随时退回去。</p>
+</section>
+
+<section>
+  <h2>数据层：页面可以存数据</h2>
+  <p>页面里直接调 <code>window.TemplateAPI</code> 就能读写数据，
+     golive 默认用本机 SQLite（<code>$GOLIVE_HOME/data.db</code>）接住它——
+     不用注册任何云服务，也不用配 API key。</p>
+  <pre><code>TemplateAPI.create({ name: 'note-1', content: { text: '记一笔' } });
+TemplateAPI.listAll({ pageSize: 50 }).then(r =&gt; console.log(r.list));</code></pre>
+  <p>想看它是真的能用？去隔壁 <a href="/demo-crud">demo-crud</a>
+     加几条待办，然后刷新页面——数据还在。</p>
+</section>
+
+<section class="next">
+  <h2>下一步</h2>
+  <ul>
+    <li><a href="/demo-crud">demo-crud</a> — 一个真能用的待办清单，验证数据层</li>
+    <li><a href="/admin">管理后台</a> — 站点列表、数据表、审计日志</li>
+    <li><code>golive context</code> — 一屏看清数据目录、注册表、数据层在哪</li>
+    <li>不需要这两个示例了：<code>golive demo remove</code></li>
+  </ul>
+</section>
+
+<footer>由 golive 自托管 · 本页面与你机器之外的任何服务无关</footer>
+
+</div>
+</body>
+</html>

@@ -100,7 +100,7 @@ _PAGE_TEMPLATE = r"""<!DOCTYPE html>
    Every colour below is a variable so the two themes stay in sync. */
 :root, :root[data-theme="dark"]{
   --bg:#0f1419;--panel:#171e26;--panel2:#1d2630;--line:#2a3542;
-  --text:#dce3ea;--muted:#8296a8;--accent:#4da3ff;--accent2:#2f80e0;
+  --text:#dce3ea;--muted:#8296a8;--accent:#4da3ff;--accent2:#2a76d2;
   --ok:#3fb96f;--warn:#e0a63c;--danger:#e05c5c;--radius:10px;
   --on-accent:#ffffff;
   --btn-hover:#243040;
@@ -137,7 +137,11 @@ button.primary{background:var(--accent2);border-color:var(--accent2);
 button.primary:hover{background:var(--accent)}
 button.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
 button.danger:hover{background:var(--danger-soft)}
-button:disabled{opacity:.45;cursor:not-allowed}
+/* disabled stays legible (contrast >= 5:1); it reads as inactive via the
+   flat background and muted colour, not by fading into the page. */
+button:disabled{cursor:not-allowed;color:var(--muted);
+  background:transparent;border-style:dashed}
+button:disabled:hover{background:transparent}
 input,select{font:inherit;background:var(--bg);color:var(--text);
   border:1px solid var(--line);border-radius:6px;padding:6px 10px}
 input:focus{outline:1px solid var(--accent)}
@@ -246,15 +250,15 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;
   margin-bottom:16px;color:var(--text)}
 .guide-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-.codeblock{position:relative;margin-bottom:16px}
+.codeblock{position:relative;margin-bottom:22px}
 .codeblock pre{background:var(--code-bg);border:1px solid var(--line);
-  border-radius:8px;padding:13px 15px;font:12px/1.75 ui-monospace,monospace;
+  border-radius:8px;padding:15px 18px;font:12px/1.75 ui-monospace,monospace;
   overflow-x:auto;color:var(--text)}
 .codeblock .cb-copy{position:absolute;top:8px;right:8px;font-size:11.5px;
   padding:3px 9px;background:var(--panel);color:var(--muted)}
 .codeblock .cb-copy:hover{color:var(--text)}
 .codeblock .cb-copy.ok{color:var(--ok);border-color:var(--ok)}
-.guide .cb-label{font-size:12px;color:var(--muted);margin-bottom:6px;
+.guide .cb-label{font-size:12px;color:var(--muted);margin-bottom:7px;
   text-transform:uppercase;letter-spacing:.04em}
 .guide .doclink{font-size:13px}
 
@@ -264,13 +268,22 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
 .perm-block h3{font-size:14px;margin-bottom:4px}
 .perm-block .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
 .perm-block table{margin-top:4px}
-.lock{color:var(--muted);cursor:help}
+/* A padlock drawn in CSS: the portal ships no fonts, and an emoji glyph
+   renders as tofu wherever the system has no emoji font installed. */
+.lock{display:inline-block;position:relative;width:11px;height:9px;
+  border:1.5px solid var(--muted);border-radius:2px;margin-top:5px;
+  cursor:help}
+.lock::before{content:"";position:absolute;left:50%;top:-6px;
+  width:7px;height:6px;margin-left:-4.5px;border:1.5px solid var(--muted);
+  border-bottom:none;border-radius:4px 4px 0 0}
 .chks{display:flex;flex-wrap:wrap;gap:8px;max-height:210px;overflow-y:auto;
   border:1px solid var(--line);border-radius:8px;padding:10px;
   background:var(--bg);margin-bottom:10px}
-.chks label{display:inline-flex;gap:6px;align-items:center;font-size:13px;
+.chks label{display:inline-flex;gap:7px;align-items:center;font-size:13px;
   background:var(--panel2);border:1px solid var(--line);border-radius:999px;
-  padding:3px 11px;cursor:pointer}
+  padding:4px 12px;cursor:pointer;line-height:1.4}
+.chks label input{margin:0;flex:0 0 auto}
+#perm-bulk .chks{margin-bottom:16px}
 .mine dt{color:var(--muted);font-size:12px;text-transform:uppercase;
   letter-spacing:.04em;margin-top:10px}
 .mine dd{margin:3px 0 0;word-break:break-all}
@@ -681,10 +694,11 @@ en: {
   "confirm.deladmin": "Remove {email} from the superadmin list?",
   "confirm.revoke": "Revoke maintainer rights for {email} on {n} site(s)?",
   "guide.data.title": "No data backend configured",
-  "guide.data.what": "The data page manages TemplateAPI rows (the golive_templates table). It needs a Supabase / PostgREST data backend.",
+  "guide.data.what": "The data page manages TemplateAPI rows (the golive_templates table). It needs a data backend — sqlite for a single machine, Supabase / PostgREST when several people share it.",
+  "guide.sqlite": "Quickest path: the built-in sqlite backend",
   "guide.data.hint": "Short on time? Hand the button below to your AI assistant — it produces a full task description with your real paths, the config to write and how to verify it.",
   "guide.copyagent": "📋 Copy for your AI assistant",
-  "guide.cfg": "Config to add (golive.yaml)",
+  "guide.cfg": "Or a shared backend (golive.yaml)",
   "guide.env": "Set the key as an environment variable (never in the file)",
   "guide.verify": "Then create the table and restart",
   "guide.docs": "Read the full documentation →",
@@ -723,7 +737,8 @@ en: {
   "perms.bulk.none": "Clear selection",
   "perms.bulk.needemail": "Enter an email first",
   "perms.bulk.needsites": "Select at least one site",
-  "perms.bulk.done": "Updated {n} site(s)"
+  "perms.bulk.done": "Updated {n} site(s)",
+  "perms.bulk.failed": "{n} site(s) could not be updated"
 },
 zh: {
   "gate.hint": "该服务启用了 Token 认证，请输入访问令牌（GOLIVE_TOKEN）。令牌仅保存在本浏览器的 sessionStorage。",
@@ -821,10 +836,11 @@ zh: {
   "confirm.deladmin": "把 {email} 从超管名单里移除？",
   "confirm.revoke": "撤销 {email} 在 {n} 个站点上的 maintainer 权限？",
   "guide.data.title": "未配置数据后端",
-  "guide.data.what": "数据管理页管理 TemplateAPI 模板行（golive_templates 表），需要一个 Supabase / PostgREST 数据后端。",
+  "guide.data.what": "数据管理页管理 TemplateAPI 模板行（golive_templates 表），需要一个数据后端——本机自用选 sqlite，多人共享选 Supabase / PostgREST。",
+  "guide.sqlite": "最快的方式：用内置的 sqlite 后端",
   "guide.data.hint": "不想自己动手？点下面的按钮，把生成的任务描述丢给你的 AI 助手——里面已经带上了你机器上的真实路径、要写的配置和验证方式。",
   "guide.copyagent": "📋 复制给 AI 助手",
-  "guide.cfg": "要写入的配置（golive.yaml）",
+  "guide.cfg": "或者用共享后端（golive.yaml）",
   "guide.env": "密钥走环境变量，不要写进配置文件",
   "guide.verify": "然后建表并重启",
   "guide.docs": "查看完整文档 →",
@@ -863,7 +879,8 @@ zh: {
   "perms.bulk.none": "清空选择",
   "perms.bulk.needemail": "请先填写邮箱",
   "perms.bulk.needsites": "请至少选择一个站点",
-  "perms.bulk.done": "已更新 {n} 个站点"
+  "perms.bulk.done": "已更新 {n} 个站点",
+  "perms.bulk.failed": "{n} 个站点更新失败"
 }
 };
 
@@ -1541,26 +1558,61 @@ function golivePaths(){
   };
 }
 
-var DATA_YAML = [
-  "data:",
-  "  backend: supabase",
-  "supabase:",
-  "  url: https://YOUR-PROJECT.supabase.co",
-  "  # the key itself never goes in this file — see the env step below",
-  "  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY"
-].join("\n");
+var DATA_SNIPPETS = {
+en: {
+  sqlite: [
+    "data:",
+    "  backend: sqlite      # zero-config: a file inside GOLIVE_HOME"
+  ].join("\n"),
+  yaml: [
+    "data:",
+    "  backend: supabase",
+    "supabase:",
+    "  url: https://YOUR-PROJECT.supabase.co",
+    "  # the key itself never goes in this file — see the env step below",
+    "  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY"
+  ].join("\n"),
+  env: [
+    "export GOLIVE_SUPABASE_SERVICE_KEY='your-service-role-key'",
+    "# make it permanent: append the line to ~/.bashrc or ~/.zshrc,",
+    "# or put it in the environment of whatever supervises golive."
+  ].join("\n"),
+  verify: [
+    "golive db init --sql   # print the CREATE TABLE statement",
+    "golive doctor          # confirm the data backend is reachable",
+    "golive serve           # restart, then open /admin -> Data"
+  ].join("\n")
+},
+zh: {
+  sqlite: [
+    "data:",
+    "  backend: sqlite      # 零配置：数据存在 GOLIVE_HOME 下的一个文件里"
+  ].join("\n"),
+  yaml: [
+    "data:",
+    "  backend: supabase",
+    "supabase:",
+    "  url: https://YOUR-PROJECT.supabase.co",
+    "  # 密钥本身不要写在这个文件里，见下面的环境变量步骤",
+    "  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY"
+  ].join("\n"),
+  env: [
+    "export GOLIVE_SUPABASE_SERVICE_KEY='你的 service role key'",
+    "# 想长期生效：把这行追加到 ~/.bashrc 或 ~/.zshrc，",
+    "# 或者写进托管 golive 的那个进程的环境变量里。"
+  ].join("\n"),
+  verify: [
+    "golive db init --sql   # 打印建表 SQL",
+    "golive doctor          # 确认数据后端连通",
+    "golive serve           # 重启，然后打开 /admin -> 数据管理"
+  ].join("\n")
+}
+};
 
-var DATA_ENV = [
-  "export GOLIVE_SUPABASE_SERVICE_KEY='your-service-role-key'",
-  "# make it permanent: append the line to ~/.bashrc or ~/.zshrc,",
-  "# or put it in the environment of whatever supervises golive."
-].join("\n");
-
-var DATA_VERIFY = [
-  "golive db init --sql   # print the CREATE TABLE statement, run it in Supabase",
-  "golive doctor          # confirm the data backend is reachable",
-  "golive serve           # restart, then open /admin -> Data"
-].join("\n");
+function snip(name){
+  var pack = DATA_SNIPPETS[state.lang] || DATA_SNIPPETS.en;
+  return pack[name];
+}
 
 function dataAgentPrompt(){
   var p = golivePaths();
@@ -1570,7 +1622,7 @@ function dataAgentPrompt(){
     return [
       "我在用 html-golive（一个自部署的 HTML 发布工具，当前版本 v" + ver +
         "，命令行入口是 golive）。",
-      "请帮我把它的数据后端配置成 Supabase / PostgREST，让管理门户的「数据管理」页可用。",
+      "请帮我把它的数据后端配置好，让管理门户的「数据管理」页可用。",
       "",
       "我的环境：",
       "- GOLIVE_HOME：" + p.home,
@@ -1578,15 +1630,22 @@ function dataAgentPrompt(){
       (p.resolved ? "" :
         "- 注意：上面的路径没能自动识别，请先运行 `golive doctor` 确认真实路径。"),
       "",
-      "请按这些步骤做：",
+      "先问我一句想用哪种后端，再往下做：",
+      "",
+      "【方案 A：sqlite，零配置，本机自用推荐】",
       "1. 编辑（或创建）上面的配置文件，加入：",
-      DATA_YAML,
+      snip("sqlite"),
+      "2. 重启 `golive serve`，打开 /admin 的「数据管理」页确认。",
+      "",
+      "【方案 B：Supabase / PostgREST，多人共享时用】",
+      "1. 编辑配置文件，加入：",
+      snip("yaml"),
       "2. 密钥不要写进配置文件，用环境变量传入：",
-      DATA_ENV,
-      "3. 建表：运行 `golive db init --sql` 拿到建表 SQL，在 Supabase 的 SQL " +
-        "editor 里执行。",
-      "4. 验证：运行 `golive doctor` 确认数据后端连通，然后重启 `golive serve`。",
-      "5. 打开管理门户的 /admin 页面，进入「数据管理」，能看到模型列表就算成功。",
+      snip("env"),
+      "3. 建表：运行 `golive db init --sql` 拿到建表 SQL，在 Supabase 的 " +
+        "SQL editor 里执行。",
+      "4. 验证：",
+      snip("verify"),
       "",
       "参考文档：" + docs,
       "如果哪一步失败，请把报错原文贴给我，不要跳过。"
@@ -1595,8 +1654,8 @@ function dataAgentPrompt(){
   return [
     "I'm using html-golive (a self-hosted HTML deployment tool, version v" +
       ver + ", CLI entry point: golive).",
-    "Please configure its data backend to use Supabase / PostgREST so the " +
-      "\"Data\" page in the admin portal works.",
+    "Please configure its data backend so the \"Data\" page in the admin " +
+      "portal works.",
     "",
     "My environment:",
     "- GOLIVE_HOME: " + p.home,
@@ -1605,17 +1664,22 @@ function dataAgentPrompt(){
       "- Note: those paths could not be detected automatically — run " +
       "`golive doctor` first to confirm the real ones."),
     "",
-    "Steps:",
+    "Ask me which backend I want, then proceed:",
+    "",
+    "[Option A: sqlite — zero config, best for a single machine]",
     "1. Edit (or create) the config file above and add:",
-    DATA_YAML,
+    snip("sqlite"),
+    "2. Restart `golive serve` and check /admin -> Data.",
+    "",
+    "[Option B: Supabase / PostgREST — when several people share it]",
+    "1. Edit the config file and add:",
+    snip("yaml"),
     "2. Never put the key in the file — pass it through the environment:",
-    DATA_ENV,
+    snip("env"),
     "3. Create the table: run `golive db init --sql` to print the SQL and " +
       "execute it in the Supabase SQL editor.",
-    "4. Verify: run `golive doctor` to confirm the backend is reachable, " +
-      "then restart `golive serve`.",
-    "5. Open /admin in the portal and go to \"Data\" — seeing the model list " +
-      "means it worked.",
+    "4. Verify:",
+    snip("verify"),
     "",
     "Reference docs: " + docs,
     "If any step fails, paste the exact error back to me instead of skipping it."
@@ -1654,9 +1718,10 @@ function renderDataGuide(){
         '" target="_blank" rel="noopener noreferrer">' +
         esc(t("guide.docs")) + "</a>" : "") +
     "</div>" +
-    codeBlock(t("guide.cfg"), DATA_YAML) +
-    codeBlock(t("guide.env"), DATA_ENV) +
-    codeBlock(t("guide.verify"), DATA_VERIFY);
+    codeBlock(t("guide.sqlite"), snip("sqlite")) +
+    codeBlock(t("guide.cfg"), snip("yaml")) +
+    codeBlock(t("guide.env"), snip("env")) +
+    codeBlock(t("guide.verify"), snip("verify"));
   box.innerHTML = html;
   wireCopyButtons(box);
   var agentBtn = $("data-agent-copy");
@@ -1668,6 +1733,23 @@ function renderDataGuide(){
 }
 
 // ── permissions (M7) ───────────────────────────────────────────
+// The API may return admins either as plain email strings or as objects
+// carrying provenance ({email, added_by, added_at}); both are accepted.
+function adminEmail(entry){
+  if (entry && typeof entry === "object") return entry.email || "";
+  return String(entry == null ? "" : entry);
+}
+function adminEmails(list){
+  return (list || []).map(adminEmail).filter(function(e){ return !!e; });
+}
+function adminMeta(entry){
+  if (!entry || typeof entry !== "object") return "";
+  var by = entry.added_by || "";
+  var at = String(entry.added_at || "").replace("T", " ").slice(0, 19);
+  if (!by && !at) return "";
+  return (by ? by : "?") + (at ? " · " + at : "");
+}
+
 function loadPerms(){
   api("GET", "/api/admin/permissions").then(function(d){
     state.perms = d;
@@ -1696,11 +1778,11 @@ function permSourceLabel(){
   var d = state.perms || {};
   var email = (who.email || "").toLowerCase();
   if (who.superadmin){
-    var builtin = (d.builtin_admins || []).map(function(x){
-      return String(x).toLowerCase(); });
+    var builtin = adminEmails(d.builtin_admins).map(function(x){
+      return x.toLowerCase(); });
     if (email && builtin.indexOf(email) >= 0) return t("perms.src.builtin");
-    var managed = (d.managed_admins || []).map(function(x){
-      return String(x).toLowerCase(); });
+    var managed = adminEmails(d.managed_admins).map(function(x){
+      return x.toLowerCase(); });
     if (email && managed.indexOf(email) >= 0) return t("perms.src.db");
     return t("perms.src.token");
   }
@@ -1726,16 +1808,24 @@ function renderPermAdmins(){
   var d = state.perms || {};
   var tb = $("perm-admin-rows");
   var out = [];
-  (d.builtin_admins || []).forEach(function(em){
+  (d.builtin_admins || []).forEach(function(entry){
+    var em = adminEmail(entry);
+    if (!em) return;
     out.push("<tr><td>" + esc(em) + "</td><td>" +
-      '<span class="badge superadmin">' + esc(t("perms.admins.builtin")) +
+      '<span class="badge">' + esc(t("perms.admins.builtin")) +
       "</span></td>" +
       '<td class="actions"><span class="lock" title="' +
-      esc(t("perms.admins.locktip")) + '">\u{1F512}</span></td></tr>');
+      esc(t("perms.admins.locktip")) + '" aria-label="' +
+      esc(t("perms.admins.builtin")) + '"></span></td></tr>');
   });
-  (d.managed_admins || []).forEach(function(em){
+  (d.managed_admins || []).forEach(function(entry){
+    var em = adminEmail(entry);
+    if (!em) return;
+    var meta = adminMeta(entry);
     out.push('<tr data-admin="' + esc(em) + '"><td>' + esc(em) +
-      '</td><td><span class="badge">' + esc(t("perms.admins.managed")) +
+      (meta ? '<div style="color:var(--muted);font-size:11.5px">' +
+        esc(meta) + "</div>" : "") +
+      '</td><td><span class="badge maintainer">' + esc(t("perms.admins.managed")) +
       "</span></td>" +
       '<td class="actions"><button class="danger" data-act="rm">' +
       esc(t("btn.remove")) + "</button></td></tr>");
@@ -1837,8 +1927,15 @@ function bulkApply(action){
   api("POST", "/api/admin/permissions/bulk", {
     email: em, role: "maintainer", slugs: slugs, action: action
   }).then(function(r){
-    var n = (r && typeof r.changed === "number") ? r.changed : slugs.length;
+    r = r || {};
+    var n = slugs.length;
+    if (Array.isArray(r.applied)) n = r.applied.length;
+    else if (typeof r.changed === "number") n = r.changed;
     toast(t("perms.bulk.done", {n: n}));
+    var failed = Array.isArray(r.failed) ? r.failed : [];
+    if (failed.length){
+      toast(t("perms.bulk.failed", {n: failed.length}), true);
+    }
     bulkSetAll(false);
     loadPerms();
   }).catch(function(e){ toast(e.message, true); });

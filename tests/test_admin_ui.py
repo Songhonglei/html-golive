@@ -246,24 +246,39 @@ class TestAgentGuidance(unittest.TestCase):
         """Tool + goal + real paths + steps + verification + docs URL."""
         html = self._render()
         start = html.index("function dataAgentPrompt()")
-        prompt = html[start:html.index("function codeBlock(", start)]
+        prompt = html[start:html.index("\n}\n", start)]
         # 1. which tool, with a version
         self.assertIn("html-golive", prompt)
         self.assertIn("BOOT.version", prompt)
-        # 2. the goal
+        # 2. the goal, offering both backends
         self.assertIn("Supabase", prompt)
+        self.assertIn('snip("sqlite")', prompt)
         # 3. real paths
         self.assertIn("GOLIVE_HOME", prompt)
         self.assertIn("p.home", prompt)
         self.assertIn("p.config", prompt)
         # 4. concrete steps incl. env-var handling for the key
-        self.assertIn("DATA_YAML", prompt)
-        self.assertIn("DATA_ENV", prompt)
+        self.assertIn('snip("yaml")', prompt)
+        self.assertIn('snip("env")', prompt)
         # 5. verification
+        self.assertIn('snip("verify")', prompt)
         self.assertIn("golive doctor", prompt)
         self.assertIn("golive serve", prompt)
         # 6. documentation link
         self.assertIn("BOOT.docs_url", prompt)
+
+    def test_snippets_exist_for_both_languages(self):
+        """The embedded yaml/shell comments are localised, not English-only."""
+        html = self._render()
+        start = html.index("var DATA_SNIPPETS = {")
+        blob = html[start:html.index("\n};\n", start)]
+        en_part, zh_part = blob.split("\nzh: {", 1)
+        for key in ("sqlite:", "yaml:", "env:", "verify:"):
+            self.assertIn(key, en_part, f"en {key}")
+            self.assertIn(key, zh_part, f"zh {key}")
+        # the Chinese pack must actually contain Chinese comments
+        self.assertRegex(zh_part, r"#\s*[\u4e00-\u9fff]")
+        self.assertNotRegex(en_part, r"[\u4e00-\u9fff]")
 
     def test_prompt_uses_generic_assistant_wording(self):
         """No vendor names — 'your AI assistant' must stay product-neutral."""
@@ -359,6 +374,15 @@ class TestPermissionsView(unittest.TestCase):
         self.assertIn("managed_admins", html)
         self.assertIn('"perms.admins.locktip"', html)
         self.assertIn('class="lock"', html)
+
+    def test_lock_icon_needs_no_emoji_font(self):
+        """The portal bundles no fonts — an emoji glyph would be tofu."""
+        html = self._render()
+        css = html[html.index("<style>"):html.index("</style>")]
+        self.assertIn(".lock{", css)
+        self.assertIn(".lock::before", css)
+        self.assertNotIn("\\u{1F512}", html)
+        self.assertNotIn("\U0001F512", html)
 
     def test_dangerous_actions_confirm(self):
         html = self._render()

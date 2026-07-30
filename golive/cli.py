@@ -977,8 +977,29 @@ def _doctor_render(rep: dict, port: int) -> None:
             print(f"  {level} 依赖 {dep['module']} 缺失 — {dep['hint']}")
 
 
+def _doctor_target_port(args) -> int:
+    """Which port doctor should look at.
+
+    An explicit ``--port`` always wins. Otherwise prefer the port the
+    managed server actually recorded in its pidfile: a user who ran
+    ``golive serve start --port 9000`` should not be told "not running"
+    just because doctor guessed the default.
+    """
+    explicit = getattr(args, "port", None)
+    if explicit and explicit != DEFAULT_SERVE_PORT:
+        return int(explicit)
+    try:
+        from golive.core import service
+        recorded = service.recorded_port()
+        if recorded:
+            return int(recorded)
+    except Exception:       # noqa: BLE001 — doctor must never crash
+        pass
+    return int(explicit or DEFAULT_SERVE_PORT)
+
+
 def cmd_doctor(args) -> int:
-    port = args.port
+    port = _doctor_target_port(args)
     rep = _doctor_collect(port)
     problems = _doctor_problems(rep)
     rep["problems"] = problems
@@ -1242,6 +1263,7 @@ def cmd_init(args) -> int:
         host=args.host or "127.0.0.1",
         skip_skill=args.skip_skill,
         no_serve=args.no_serve,
+        background=getattr(args, "background", False),
         skill_target=args.skill_target,
     ))
     return code
@@ -1465,6 +1487,8 @@ def main(argv=None) -> int:
                    help="skill 安装目录（跳过自动探测）")
     p.add_argument("--no-serve", action="store_true",
                    help="校验完就退出，不驻留服务")
+    p.add_argument("--background", action="store_true",
+                   help="校验后把服务转入后台，关掉终端也保持在线")
     p.set_defaults(func=cmd_init)
 
     # context

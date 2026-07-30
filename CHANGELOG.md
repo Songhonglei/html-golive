@@ -3,6 +3,56 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] - 2026-07-30
+
+Getting started should take two minutes, not an afternoon. Everything in
+this release comes from watching someone install 0.7.0 for the first time.
+
+### Added
+- **`golive init`** — one command from nothing to three working URLs. It
+  picks a data directory, checks the environment, installs the agent
+  skill, sets up the data layer, publishes two demo pages, starts the
+  server, and then actually verifies over HTTP that all of it works
+  before telling you it succeeded. Re-running it is safe: existing sites
+  and data are left alone. Add `--background` to keep the server up after
+  you close the terminal.
+- **`golive context`** — shows which configuration is actually in effect
+  and *where each value came from* (`$GOLIVE_HOME`, a pointer file, or a
+  default). This is the answer to "I published a site but `golive list`
+  shows nothing": the CLI and the server were reading different homes.
+- **`golive demo install`** — a static intro page and a working to-do
+  list backed by the SQLite data layer, so you can confirm persistence
+  yourself: add an item, refresh, it is still there.
+- **`golive serve start | status | stop | restart | logs`** — run the
+  server in the background instead of holding a terminal open. Bare
+  `golive serve` still runs in the foreground exactly as before.
+- **`docs/upgrading.md`** — upgrade paths for PyPI and git users,
+  including recovery steps for the v0.7.0 history rewrite.
+
+### Changed
+- **The agent skill installer now recognises Codex and Cursor**, and
+  detects agents by their own directory rather than requiring a
+  `skills/` folder to already exist — a freshly installed Codex has
+  `~/.codex/` but no `~/.codex/skills/`, so it used to be skipped
+  entirely and the skill landed somewhere the agent never reads. When
+  several agents are present you get to choose; `--list-targets` shows
+  what was found without installing anything.
+- **`golive doctor` is now the one place to verify an installation**: CLI
+  version, running server version (and a warning when they differ, which
+  is what happens when you upgrade but forget to restart), all three
+  backends with real paths and sizes, skill status, and the portal URL.
+  It also finds the server on whatever port it is actually running on
+  instead of assuming the default.
+- **`/health` reports version, home, data backend and pid**, which is
+  what makes the version check above possible.
+
+### Fixed
+- `golive init` used to print three URLs and then take the server down
+  with it when the command exited, leaving the user with three dead
+  links.
+- Hostname resolution and path comparison in the test suite no longer
+  fail on macOS, and CI now runs there.
+
 ## [0.7.0] - 2026-07-30
 
 Zero-config data layer, an agent skill in the box, permission management,

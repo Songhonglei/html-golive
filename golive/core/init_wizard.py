@@ -37,18 +37,20 @@ DEFAULT_PORT = 8787
 class InitOptions:
     """Everything ``golive init`` can be told to do."""
 
-    __slots__ = ("home", "port", "host", "skip_skill", "no_serve",
+    __slots__ = ("home", "port", "host", "skip_skill", "no_serve", "background",
                  "skill_target", "interactive", "stream")
 
     def __init__(self, home: str = "", port: int = DEFAULT_PORT,
                  host: str = "127.0.0.1", skip_skill: bool = False,
-                 no_serve: bool = False, skill_target: str = "",
+                 no_serve: bool = False, background: bool = False,
+                 skill_target: str = "",
                  interactive: Optional[bool] = None, stream=None):
         self.home = home
         self.port = port
         self.host = host
         self.skip_skill = skip_skill
         self.no_serve = no_serve
+        self.background = background
         self.skill_target = skill_target
         self.interactive = interactive
         self.stream = stream
@@ -335,7 +337,27 @@ def run(opts: Optional[InitOptions] = None) -> tuple:
             print("\n（服务由另一个进程提供，本命令不接管它。）", file=out)
             return (0 if verified else 1), steps
 
-        print("\n   Ctrl+C 停止服务", file=out)
+        if opts.background:
+            # Hand the port over to a detached server so the user can close
+            # this terminal and still have the pages up.
+            srv.shutdown()
+            srv.server_close()
+            srv = None
+            from golive.core import service
+            try:
+                info = service.start(port=opts.port, host=opts.host)
+                print(f"\n（服务已转入后台，pid {info.get('pid')}。"
+                      f"管理：golive serve status / logs / stop）", file=out)
+            except Exception as e:
+                print(f"\n⚠️  转入后台失败：{e}", file=out)
+                print(f"   页面暂时不可访问，请手动运行："
+                      f"golive serve start --port {opts.port}", file=out)
+                return 1, steps
+            return (0 if verified else 1), steps
+
+        print("\n   Ctrl+C 停止服务"
+              f"（想关掉终端也保持在线：golive init --background，"
+              f"或 golive serve start --port {opts.port}）", file=out)
         try:
             srv.serve_forever()
         except KeyboardInterrupt:

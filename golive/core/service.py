@@ -193,6 +193,28 @@ def describe_port(host: str, port: int) -> Tuple[str, Optional[Dict]]:
 
 # ── status ──────────────────────────────────────────────────────────────────
 
+def recorded_port() -> Optional[int]:
+    """Port of the managed server as recorded in the pidfile.
+
+    Returns ``None`` when there is no pidfile, no port in it, or the
+    recorded process is gone — callers should then fall back to their
+    own default rather than probing a port nobody is listening on.
+    """
+    data = read_pidfile()
+    if not data:
+        return None
+    port = data.get("port")
+    if not port:
+        return None
+    pid = data.get("pid")
+    if pid and not pid_alive(int(pid)):
+        return None
+    try:
+        return int(port)
+    except (TypeError, ValueError):
+        return None
+
+
 def status(port: Optional[int] = None,
            host: Optional[str] = None) -> Dict[str, Any]:
     """Everything a caller needs to describe the background service.

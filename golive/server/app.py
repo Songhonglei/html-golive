@@ -27,6 +27,7 @@ from __future__ import annotations
 import html as html_mod
 import http.server
 import json
+import os
 import socket
 import socketserver
 import sys
@@ -502,6 +503,38 @@ def make_server(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     return _ThreadingServer((host, port), handler)
 
 
+def _warn_open_data_layer(host: str) -> None:
+    """Loud warning when the data layer is reachable from the network.
+
+    The in-page data API is deliberately unauthenticated — the browser
+    calls it directly, exactly like a Supabase anon key embedded in the
+    page. That is fine on loopback, but once the server is bound to a
+    routable address anyone who can reach the port can read and write
+    the data tables. Say so plainly instead of letting people find out
+    the hard way.
+    """
+    if host in ("127.0.0.1", "::1", "localhost"):
+        return
+    try:
+        from golive.config import get_config
+        cfg = get_config()
+        if cfg.data.backend in ("", "none"):
+            return          # no data layer at all, nothing to expose
+        has_token = bool(getattr(cfg.auth, "token", "")) or bool(
+            os.environ.get("GOLIVE_TOKEN", ""))
+        has_oidc = GoliveHandler.oidc is not None
+    except Exception:       # never let a warning break startup
+        return
+    if has_token or has_oidc:
+        return
+    print("")
+    print("   ⚠️  数据层对外开放且未设访问控制")
+    print("      /api/data 供页面内 JS 直接调用，本身不鉴权；绑定到非本机")
+    print("      地址后，能访问该端口的人都可读写数据表。")
+    print("      建议：设置 GOLIVE_TOKEN、启用 OIDC，或用反向代理限制来源。")
+    print("      仅本机使用请改回 --host 127.0.0.1。")
+
+
 def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     srv = make_server(host, port)
     ip = _lan_ip()
@@ -516,6 +549,9 @@ def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     if GoliveHandler.oidc is not None:
         print(f"   OAuth:  http://localhost:{port}/auth/login")
     print(f"   管理门户: http://localhost:{port}/admin")
+
+    _warn_open_data_layer(host)
+
     print("   Ctrl+C 停止")
     try:
         srv.serve_forever()

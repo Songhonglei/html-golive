@@ -97,7 +97,10 @@ def _get_access_url(port: int) -> tuple[str, str | None]:
     lan_ip = None
     try:
         # 连一个外部地址(不真正发包),借此获取出口 IP
+        # 必须设超时:某些网络环境下 connect 会长时间阻塞,
+        # 而这只是为了打印一个更友好的地址,不值得卡住启动
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(0.5)
             s.connect(("8.8.8.8", 80))
             lan_ip = s.getsockname()[0]
     except Exception:

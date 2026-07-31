@@ -41,8 +41,17 @@ DEFAULT_PORT = 8787
 
 
 def _lan_ip() -> str:
+    """Best-effort LAN address, for printing a reachable URL.
+
+    This is cosmetic — never let it hold up the server. The UDP socket
+    does not actually send anything, but on some networks (notably
+    macOS CI runners) ``connect`` can block for a long time without an
+    explicit timeout, which would stall startup before we even bind the
+    port and leave the user staring at a silent process.
+    """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(0.5)
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
     except Exception:
@@ -563,10 +572,12 @@ def _warn_open_data_layer(host: str) -> None:
 
 def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     srv = make_server(host, port)
-    ip = _lan_ip()
+    loopback = host in ("127.0.0.1", "::1", "localhost")
     print(f"🚀 golive serve 已启动")
     print(f"   本机:  http://localhost:{port}/")
-    if host not in ("127.0.0.1", "::1", "localhost"):
+    if not loopback:
+        # only worth probing when the URL would actually be shared
+        ip = _lan_ip()
         if ip != "127.0.0.1":
             print(f"   局域网: http://{ip}:{port}/")
     else:

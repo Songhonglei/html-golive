@@ -700,6 +700,15 @@ def start_preview(
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         daemon_threads = True
         allow_reuse_address = True  # 快速重启时端口复用
+
+        def server_bind(self):
+            # 跳过 stdlib 的 getfqdn() 反查:某些系统(尤其 macOS)对
+            # 127.0.0.1 做反向 DNS 会一直阻塞到解析超时,表现为
+            # "进程活着但服务起不来";server_name 只用于日志
+            socketserver.TCPServer.server_bind(self)
+            h, p = self.server_address[:2]
+            self.server_name = str(h)
+            self.server_port = p
     server = ThreadedHTTPServer((host, port), PreviewHandler)
 
     url_base, url_note = _get_access_url(port)

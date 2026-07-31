@@ -58,5 +58,40 @@ class TestOutboundProbesAreBounded(unittest.TestCase):
                         "_lan_ip() must sit behind the loopback guard")
 
 
+class TestServerBindSkipsReverseDNS(unittest.TestCase):
+    """Binding must not depend on a name lookup succeeding.
+
+    ``HTTPServer.server_bind`` calls ``socket.getfqdn()`` to fill in a
+    field we only use for logging. When the resolver is slow the server
+    silently hangs before printing anything — the hardest possible
+    failure to diagnose, and exactly what happened on macOS.
+    """
+
+    def test_app_server_overrides_server_bind(self):
+        from golive.server.app import _ThreadingServer
+        import http.server
+        self.assertIsNot(_ThreadingServer.server_bind,
+                         http.server.HTTPServer.server_bind)
+
+    def test_bind_is_fast_and_sets_server_name(self):
+        import time
+        from golive.server.app import _ThreadingServer, GoliveHandler
+        started = time.time()
+        srv = _ThreadingServer(("127.0.0.1", 0), GoliveHandler)
+        try:
+            elapsed = time.time() - started
+            self.assertLess(elapsed, 2.0, "bind should not wait on a resolver")
+            self.assertEqual(srv.server_name, "127.0.0.1")
+            self.assertTrue(srv.server_port)
+        finally:
+            srv.server_close()
+
+    def test_preview_server_also_skips_the_lookup(self):
+        src = (REPO / "golive" / "core" / "preview_server.py").read_text(
+            encoding="utf-8")
+        self.assertIn("def server_bind", src,
+                      "preview server must override server_bind too")
+
+
 if __name__ == "__main__":
     unittest.main()

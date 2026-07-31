@@ -527,6 +527,21 @@ class _ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+    def server_bind(self):
+        """Bind without the stdlib's reverse-DNS lookup.
+
+        ``HTTPServer.server_bind`` calls ``socket.getfqdn(host)`` purely
+        to fill in ``server_name``, which we only ever use for logging.
+        On some systems — macOS in particular — resolving a name for
+        127.0.0.1 blocks until the resolver gives up, so the server
+        appears to hang: the process is alive, nothing is logged, and
+        the port never answers. Skip the lookup entirely.
+        """
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = port
+
 
 def make_server(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     from golive.backends.factory import get_registry, get_storage

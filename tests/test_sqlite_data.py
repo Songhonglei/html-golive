@@ -51,9 +51,14 @@ class TestSchemaBootstrap(SqliteStoreBase):
         self.assertIn("golive_templates", names)
 
     def test_db_lives_in_golive_home(self):
-        self.assertTrue(
-            self.store.db_path.startswith(os.environ["GOLIVE_HOME"]),
-            f"{self.store.db_path} should sit inside GOLIVE_HOME")
+        # Compare resolved paths, not strings: on macOS the temp dir is
+        # handed out as /var/... but resolves to /private/var/..., so a
+        # prefix check on the raw strings fails for the wrong reason.
+        from pathlib import Path
+        db = Path(self.store.db_path).resolve()
+        home = Path(os.environ["GOLIVE_HOME"]).resolve()
+        self.assertIn(home, db.parents,
+                      f"{db} should sit inside {home}")
         self.assertTrue(self.store.db_path.endswith("data.db"))
 
     def test_reopen_is_idempotent(self):

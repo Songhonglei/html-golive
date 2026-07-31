@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2] - 2026-07-31
+
+A macOS fix. If you are on macOS and `golive serve start` appeared to do
+nothing — process alive, log empty, port never answering — this is why.
+
+### Fixed
+- **The server could hang on startup on macOS.** Python's
+  `HTTPServer.server_bind` performs a reverse DNS lookup purely to fill
+  in a field we use for logging; on macOS, resolving a name for
+  127.0.0.1 can block until the resolver gives up. The process stayed
+  alive, printed nothing at all, and never answered on its port — the
+  hardest possible failure to read. Binding no longer waits on a
+  resolver. The same fix is applied to the preview server.
+- Outbound "what is my LAN address" probes are now bounded by a timeout.
+  They exist only to print a friendlier URL and must never delay
+  startup.
+- `golive serve start` quotes the tail of the server log when startup
+  times out, instead of only pointing at a file.
+- A path assertion in the test suite compared strings rather than
+  resolved paths, so it failed on macOS where `/var` resolves to
+  `/private/var`.
+
+### Tests
+- 565 → 572. CI passes on macOS.
+
 ## [0.7.1] - 2026-07-30
 
 Getting started should take two minutes, not an afternoon. Everything in

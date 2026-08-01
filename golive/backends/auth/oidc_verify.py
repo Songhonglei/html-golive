@@ -65,7 +65,11 @@ def require_cryptography():
 # ── constants ───────────────────────────────────────────────────────────────
 
 JWKS_TTL = 3600  # 1 hour
-CLOCK_SKEW = 300  # 5 minutes
+# Tolerance for clock drift between us and the IdP. Keep this small:
+# id_tokens are typically valid for only a few minutes, so a generous
+# skew silently extends the life of every expired token. 60s covers
+# realistic NTP drift without meaningfully widening the window.
+CLOCK_SKEW = 60
 
 # Algorithms we accept (key type from JWKS → algorithm mapping)
 _ACCEPTED_ALGS = {"RS256"}
@@ -262,17 +266,21 @@ def verify_id_token(
             f"client_id {client_id!r}"
         )
 
-    # exp
+    # exp — REQUIRED by OpenID Connect Core 2.0 §2. A token without it
+    # would never expire, so a leaked one would be valid forever.
     exp = payload.get("exp")
-    if exp is not None:
-        try:
-            exp = int(exp)
-        except (TypeError, ValueError):
-            raise TokenValidationError("malformed exp claim")
-        if now > exp + clock_skew:
-            raise TokenValidationError(
-                f"id_token expired (exp={exp}, now={now})"
-            )
+    if exp is None:
+        raise TokenValidationError(
+            "id_token has no exp claim — refusing a token that never expires"
+        )
+    try:
+        exp = int(exp)
+    except (TypeError, ValueError):
+        raise TokenValidationError("malformed exp claim")
+    if now > exp + clock_skew:
+        raise TokenValidationError(
+            f"id_token expired (exp={exp}, now={now})"
+        )
 
     # nbf
     nbf = payload.get("nbf")

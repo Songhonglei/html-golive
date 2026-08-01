@@ -386,6 +386,70 @@ The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are
 available as a JSON API under `/api/admin/*` for scripting.
 
+### v0.8.0 admin pages: identity, data backend, security, settings
+
+Four new superadmin-only pages were added in v0.8.0, completing the
+management surface so operators never need to hand-edit `golive.yaml`
+for day-to-day configuration.
+
+**Identity & Auth** (`/admin → 身份认证`). Shows the current auth
+method (none / token / oidc / proxy). The OIDC configuration form
+includes an IdP preset dropdown (Google, Auth0, Okta, Azure AD,
+Keycloak, Authentik, Custom) that auto-fills the issuer template —
+only `client_id` and `client_secret` remain to fill in. The **Test
+connection** button performs a real discovery fetch and reports the
+endpoints and signing algorithms found, or gives an actionable error
+message. The callback URL is prominently displayed with a copy button.
+A "📋 Copy for your AI assistant" button generates a complete task
+description with the real callback URL, IdP setup steps, and
+verification instructions. Secret fields show a mask; leaving them
+blank preserves the existing value.
+
+**Data Backend** (`/admin → 数据后端`). Displays the current backend
+type, location, table count and row count. A switch form lets you
+pick a new backend (sqlite / supabase / none) and test the connection
+before switching. A prominent warning makes clear that **data is not
+migrated** when switching backends — export first if you need it.
+Backend changes require a server restart.
+
+**Security Scan** (`/admin → 安全扫描`). Shows the three scan layers
+(keyword / regex / AI review) with their on/off status. The rule list
+distinguishes built-in rules (locked, but can be disabled) from user
+rules (full CRUD). The **Rule test run** lets you paste a text sample
+and see which rules it triggers, with strength (block / warn), before
+publishing. The AI review section configures the LLM endpoint, model,
+API key, and strict mode, with a connection test button. Recent block
+records are shown in a table.
+
+**Global Settings** (`/admin → 全局参数`). Shows all configuration
+settings grouped by section (server, auth, storage, data, security,
+admin). Each item is annotated with its source — **file** (from
+`golive.yaml`, read-only with an explanation), **database** (managed
+override, can be deleted to fall back), or **default**. Settings with
+`restart` scope are clearly marked as requiring a restart. Database
+overrides can be removed individually, reverting to the file or
+default value.
+
+All four pages degrade gracefully when the v0.8.0 API endpoints are
+not available (older server): they show a "requires 0.8.0+" notice
+instead of a blank page or broken UI.
+
+New API endpoints (superadmin-only, all audited):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/admin/settings` | list all settings with source/scope |
+| `PUT /api/admin/settings` | update one or more settings |
+| `DELETE /api/admin/settings/<key>` | remove a database override |
+| `GET /api/admin/security/rules` | list all security rules |
+| `POST /api/admin/security/rules` | add a user rule |
+| `PATCH /api/admin/security/rules/<id>` | update a rule (enable/disable, etc.) |
+| `DELETE /api/admin/security/rules/<id>` | delete a user rule |
+| `POST /api/admin/security/test` | test text against all rules |
+| `POST /api/admin/test/oidc` | real OIDC discovery fetch |
+| `POST /api/admin/test/data-backend` | test a data backend connection |
+| `POST /api/admin/test/llm` | test the LLM endpoint |
+
 ## 19. AI agent skill
 
 golive ships an AgentSkill so AI coding assistants drive it correctly

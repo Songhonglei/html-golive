@@ -110,6 +110,8 @@ _PAGE_TEMPLATE = r"""<!DOCTYPE html>
   --mask:rgba(0,0,0,.55);
   --shadow:0 10px 40px rgba(0,0,0,.45);
   --code-bg:#1d2630;
+  --ok-soft:rgba(63,185,111,.10);
+  --warn-soft:rgba(224,166,60,.10);
 }
 :root[data-theme="light"]{
   --bg:#f4f6f9;--panel:#ffffff;--panel2:#eaeff5;--line:#d3dce6;
@@ -123,6 +125,8 @@ _PAGE_TEMPLATE = r"""<!DOCTYPE html>
   --mask:rgba(22,33,46,.42);
   --shadow:0 10px 34px rgba(22,33,46,.16);
   --code-bg:#f0f4f9;
+  --ok-soft:rgba(18,120,74,.08);
+  --warn-soft:rgba(138,90,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);
@@ -287,6 +291,77 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
 .mine dt{color:var(--muted);font-size:12px;text-transform:uppercase;
   letter-spacing:.04em;margin-top:10px}
 .mine dd{margin:3px 0 0;word-break:break-all}
+/* ── identity / security / settings pages (v0.8.0) ─────────── */
+.form-block{background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:18px 20px;margin-bottom:18px}
+.form-block h3{font-size:14px;margin-bottom:4px}
+.form-block .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
+.form-row{display:flex;gap:10px;margin-bottom:10px;align-items:center}
+.form-row label{width:120px;flex:0 0 120px;color:var(--muted);font-size:13px}
+.form-row input,.form-row select{flex:1}
+.form-row input[type=checkbox]{flex:0 0 auto;margin:0}
+.form-row .hint{font-size:11.5px;color:var(--muted);margin-left:4px}
+.form-actions{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+.callback-box{background:var(--code-bg);border:1px solid var(--line);
+  border-radius:8px;padding:12px 14px;margin:10px 0;display:flex;
+  align-items:center;gap:10px;font:13px/1.5 ui-monospace,monospace;
+  word-break:break-all}
+.callback-box .cb-btn{flex:0 0 auto}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;
+  border-radius:999px;font-size:12px;font-weight:600}
+.status-pill.none{background:var(--danger-soft);color:var(--danger);
+  border:1px solid var(--danger)}
+.status-pill.token{background:var(--accent-soft);color:var(--accent);
+  border:1px solid var(--accent)}
+.status-pill.oidc{background:var(--ok-soft);color:var(--ok);
+  border:1px solid var(--ok)}
+.status-pill.proxy{background:var(--accent-soft);color:var(--accent);
+  border:1px solid var(--accent)}
+.test-result{margin-top:12px;padding:14px;border-radius:8px;
+  border:1px solid var(--line);font-size:13px;display:none}
+.test-result.ok{border-color:var(--ok);background:var(--ok-soft);
+  color:var(--ok)}
+.test-result.fail{border-color:var(--danger);background:var(--danger-soft);
+  color:var(--danger)}
+.test-result .endpoint{font-family:ui-monospace,monospace;font-size:12px;
+  color:var(--muted);margin-top:4px}
+.rule-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--line)}
+.rule-row:last-child{border-bottom:none}
+.rule-row .rule-name{flex:1;font-size:13px}
+.rule-row .rule-name b{display:block;margin-bottom:2px}
+.rule-row .rule-name .meta{color:var(--muted);font-size:11.5px}
+.rule-row .rule-actions{flex:0 0 auto;display:flex;gap:6px}
+.rule-row .lock{flex:0 0 auto;margin-top:3px}
+.settings-group{margin-bottom:18px}
+.settings-group h3{font-size:14px;margin-bottom:8px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em}
+.setting-row{display:flex;align-items:center;gap:10px;padding:8px 0;
+  border-bottom:1px dashed var(--line);font-size:13px}
+.setting-row:last-child{border-bottom:none}
+.setting-row .s-label{flex:1}
+.setting-row .s-value{flex:0 0 auto;font-family:ui-monospace,monospace;
+  font-size:12px;color:var(--muted)}
+.setting-row .s-source{flex:0 0 auto}
+.src-badge{font-size:10.5px;padding:1px 7px;border-radius:999px;
+  border:1px solid var(--line);color:var(--muted);text-transform:uppercase;
+  letter-spacing:.03em}
+.src-badge.file{border-color:var(--accent);color:var(--accent)}
+.src-badge.db{border-color:var(--warn);color:var(--warn)}
+.src-badge.default{border-color:var(--muted);color:var(--muted)}
+.scope-badge{font-size:10.5px;padding:1px 7px;border-radius:999px;
+  border:1px solid var(--line);color:var(--muted)}
+.scope-badge.restart{border-color:var(--warn);color:var(--warn)}
+.scope-badge.hot{border-color:var(--ok);color:var(--ok)}
+.warn-box{background:var(--danger-soft);border:1px solid var(--danger);
+  border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;
+  color:var(--danger)}
+.warn-box b{display:block;margin-bottom:4px}
+.degraded-notice{background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--warn);border-radius:8px;padding:14px 16px;
+  margin-bottom:16px;color:var(--text);font-size:13px}
+.degraded-notice b{color:var(--warn)}
+
 @media(max-width:760px){
   #layout{flex-direction:column}
   #sidebar{width:100%;flex-direction:row;align-items:center;
@@ -295,6 +370,8 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   .nav-item{border-left:none;white-space:nowrap}
   #whoami{display:none}
   #main{padding:16px}
+  .form-row{flex-direction:column;align-items:flex-start}
+  .form-row label{width:auto}
 }
 </style>
 </head>
@@ -322,6 +399,14 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
          data-i18n="nav.stats"></div>
     <div class="nav-item hidden" data-view="audit" id="nav-audit"
          data-i18n="nav.audit"></div>
+    <div class="nav-item hidden" data-view="identity" id="nav-identity"
+         data-i18n="nav.identity"></div>
+    <div class="nav-item hidden" data-view="databackend" id="nav-databackend"
+         data-i18n="nav.databackend"></div>
+    <div class="nav-item hidden" data-view="security" id="nav-security"
+         data-i18n="nav.security"></div>
+    <div class="nav-item hidden" data-view="settings" id="nav-settings"
+         data-i18n="nav.settings"></div>
     <div id="whoami"></div>
   </div>
 
@@ -495,6 +580,290 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
         <button id="audit-prev" data-i18n="btn.prev"></button>
         <span id="audit-page"></span>
         <button id="audit-next" data-i18n="btn.next"></button>
+      </div>
+    </div>
+
+    <!-- identity / auth (v0.8.0) -->
+    <div class="view" id="view-identity">
+      <h2 data-i18n="identity.title"></h2>
+      <div id="identity-degraded" class="degraded-notice" style="display:none">
+        <b>⚠</b> <span data-i18n="identity.degraded"></span>
+      </div>
+      <div id="identity-main">
+        <div class="form-block">
+          <h3 data-i18n="identity.current"></h3>
+          <div class="desc" data-i18n="identity.current.desc"></div>
+          <div class="form-row">
+            <label data-i18n="identity.method"></label>
+            <span id="id-method" class="status-pill none">none</span>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="identity.oidc.title"></h3>
+          <div class="desc" data-i18n="identity.oidc.desc"></div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.preset"></label>
+            <select id="idp-preset">
+              <option value="">—</option>
+              <option value="google">Google</option>
+              <option value="auth0">Auth0</option>
+              <option value="okta">Okta</option>
+              <option value="azure">Azure AD</option>
+              <option value="keycloak">Keycloak</option>
+              <option value="authentik">Authentik</option>
+              <option value="custom" data-i18n="identity.oidc.custom"></option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.issuer"></label>
+            <input type="text" id="oidc-issuer" placeholder="https://idp.example.com">
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.clientid"></label>
+            <input type="text" id="oidc-client-id" placeholder="client_id">
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.clientsecret"></label>
+            <input type="password" id="oidc-client-secret"
+                   data-i18n-ph="identity.oidc.secret.ph">
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.domain"></label>
+            <input type="text" id="oidc-domain"
+                   placeholder="your-tenant.auth0.com">
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.oidc.scopes"></label>
+            <input type="text" id="oidc-scopes" value="openid email profile">
+          </div>
+          <div class="form-actions">
+            <button class="primary" id="oidc-test"
+                    data-i18n="identity.oidc.test"></button>
+            <button id="oidc-save" data-i18n="btn.save"></button>
+          </div>
+          <div class="test-result" id="oidc-test-result"></div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="identity.callback.title"></h3>
+          <div class="desc" data-i18n="identity.callback.desc"></div>
+          <div class="callback-box">
+            <span id="oidc-callback-url">https://&lt;your-domain&gt;/auth/callback</span>
+            <button class="cb-btn" id="oidc-callback-copy"
+                    data-i18n="btn.copy"></button>
+          </div>
+          <div class="form-actions">
+            <button id="oidc-agent-copy"
+                    data-i18n="identity.oidc.copyagent"></button>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="identity.proxy.title"></h3>
+          <div class="desc" data-i18n="identity.proxy.desc"></div>
+          <div class="form-row">
+            <label data-i18n="identity.proxy.header"></label>
+            <input type="text" id="proxy-header" placeholder="X-Forwarded-Email">
+          </div>
+          <div class="form-row">
+            <label data-i18n="identity.proxy.ips"></label>
+            <input type="text" id="proxy-ips"
+                   placeholder="10.0.0.0/8, 192.168.1.0/24">
+          </div>
+          <div class="form-actions">
+            <button id="proxy-save" data-i18n="btn.save"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- data backend (v0.8.0) -->
+    <div class="view" id="view-databackend">
+      <h2 data-i18n="databackend.title"></h2>
+      <div id="databackend-degraded" class="degraded-notice" style="display:none">
+        <b>⚠</b> <span data-i18n="databackend.degraded"></span>
+      </div>
+      <div id="databackend-main">
+        <div class="form-block">
+          <h3 data-i18n="databackend.current"></h3>
+          <div class="form-row">
+            <label data-i18n="databackend.type"></label>
+            <span id="db-type" class="status-pill none">none</span>
+          </div>
+          <div class="form-row" id="db-path-row">
+            <label data-i18n="databackend.location"></label>
+            <span id="db-location" class="s-value">—</span>
+          </div>
+          <div class="form-row" id="db-tables-row">
+            <label data-i18n="databackend.tables"></label>
+            <span id="db-tables" class="s-value">—</span>
+          </div>
+          <div class="form-row" id="db-rows-row">
+            <label data-i18n="databackend.rows"></label>
+            <span id="db-rows" class="s-value">—</span>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="databackend.switch.title"></h3>
+          <div class="warn-box" id="db-migrate-warn">
+            <b data-i18n="databackend.migrate.warn.title"></b>
+            <span data-i18n="databackend.migrate.warn.body"></span>
+          </div>
+          <div class="form-row">
+            <label data-i18n="databackend.newtype"></label>
+            <select id="db-new-type">
+              <option value="sqlite">sqlite</option>
+              <option value="supabase">supabase</option>
+              <option value="none">none</option>
+            </select>
+          </div>
+          <div id="db-supabase-opts" style="display:none">
+            <div class="form-row">
+              <label data-i18n="databackend.sb.url"></label>
+              <input type="text" id="db-sb-url"
+                     placeholder="https://YOUR-PROJECT.supabase.co">
+            </div>
+            <div class="form-row">
+              <label data-i18n="databackend.sb.key"></label>
+              <input type="password" id="db-sb-key"
+                     data-i18n-ph="databackend.sb.key.ph">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="primary" id="db-test"
+                    data-i18n="databackend.test"></button>
+            <button id="db-switch" data-i18n="databackend.switch"></button>
+          </div>
+          <div class="test-result" id="db-test-result"></div>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted)"
+               data-i18n="databackend.restart.hint"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- security (v0.8.0) -->
+    <div class="view" id="view-security">
+      <h2 data-i18n="security.title"></h2>
+      <div id="security-degraded" class="degraded-notice" style="display:none">
+        <b>⚠</b> <span data-i18n="security.degraded"></span>
+      </div>
+      <div id="security-main">
+        <div class="form-block">
+          <h3 data-i18n="security.layers"></h3>
+          <div class="form-row">
+            <label data-i18n="security.layer.keyword"></label>
+            <span id="sec-keyword-status" class="status-pill on">ON</span>
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.layer.regex"></label>
+            <span id="sec-regex-status" class="status-pill on">ON</span>
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.layer.ai"></label>
+            <span id="sec-ai-status" class="status-pill none">OFF</span>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="security.rules.title"></h3>
+          <div class="desc" data-i18n="security.rules.desc"></div>
+          <div id="sec-rules-list"></div>
+          <div class="form-row" style="margin-top:12px">
+            <label data-i18n="security.rules.add.type"></label>
+            <select id="sec-new-type">
+              <option value="keyword">keyword</option>
+              <option value="regex">regex</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.rules.add.name"></label>
+            <input type="text" id="sec-new-name" placeholder="rule name">
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.rules.add.pattern"></label>
+            <input type="text" id="sec-new-pattern" placeholder="keyword or regex">
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.rules.add.strength"></label>
+            <select id="sec-new-strength">
+              <option value="weak" data-i18n="security.strength.weak"></option>
+              <option value="strong" data-i18n="security.strength.strong"></option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button class="primary" id="sec-rule-add"
+                    data-i18n="btn.add"></button>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="security.test.title"></h3>
+          <div class="desc" data-i18n="security.test.desc"></div>
+          <textarea id="sec-test-input" rows="4"
+            style="width:100%;font:13px/1.5 monospace;background:var(--bg);
+            color:var(--text);border:1px solid var(--line);border-radius:6px;
+            padding:10px;resize:vertical"
+            data-i18n-ph="security.test.ph"></textarea>
+          <div class="form-actions">
+            <button class="primary" id="sec-test-run"
+                    data-i18n="security.test.run"></button>
+          </div>
+          <div class="test-result" id="sec-test-result"></div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="security.ai.title"></h3>
+          <div class="desc" data-i18n="security.ai.desc"></div>
+          <div class="form-row">
+            <label data-i18n="security.ai.baseurl"></label>
+            <input type="text" id="ai-base-url"
+                   placeholder="https://api.openai.com/v1">
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.ai.model"></label>
+            <input type="text" id="ai-model" placeholder="gpt-4o-mini">
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.ai.apikey"></label>
+            <input type="password" id="ai-api-key"
+                   data-i18n-ph="security.ai.key.ph">
+          </div>
+          <div class="form-row">
+            <label data-i18n="security.ai.strict"></label>
+            <input type="checkbox" id="ai-strict-mode">
+          </div>
+          <div class="form-actions">
+            <button class="primary" id="ai-test"
+                    data-i18n="security.ai.test"></button>
+            <button id="ai-save" data-i18n="btn.save"></button>
+          </div>
+          <div class="test-result" id="ai-test-result"></div>
+        </div>
+
+        <div class="form-block">
+          <h3 data-i18n="security.blocks"></h3>
+          <table>
+            <thead><tr>
+              <th data-i18n="th.time"></th>
+              <th data-i18n="th.who"></th>
+              <th data-i18n="security.rules.rule"></th>
+            </tr></thead>
+            <tbody id="sec-blocks-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- global settings (v0.8.0) -->
+    <div class="view" id="view-settings">
+      <h2 data-i18n="settings.title"></h2>
+      <div id="settings-degraded" class="degraded-notice" style="display:none">
+        <b>⚠</b> <span data-i18n="settings.degraded"></span>
+      </div>
+      <div id="settings-main">
+        <div id="settings-groups"></div>
       </div>
     </div>
   </div>
@@ -738,7 +1107,116 @@ en: {
   "perms.bulk.needemail": "Enter an email first",
   "perms.bulk.needsites": "Select at least one site",
   "perms.bulk.done": "Updated {n} site(s)",
-  "perms.bulk.failed": "{n} site(s) could not be updated"
+  "perms.bulk.failed": "{n} site(s) could not be updated",
+  "nav.identity": "Identity",
+  "nav.databackend": "Data backend",
+  "nav.security": "Security",
+  "nav.settings": "Settings",
+  "identity.title": "Identity & Auth",
+  "identity.degraded": "The identity management API requires golive 0.8.0 or newer. Update and restart to use this page.",
+  "identity.current": "Current authentication",
+  "identity.current.desc": "The auth method currently in effect for this server.",
+  "identity.method": "Method",
+  "identity.oidc.title": "OIDC configuration",
+  "identity.oidc.desc": "Configure an OpenID Connect provider so users log in with their corporate account.",
+  "identity.oidc.preset": "IdP preset",
+  "identity.oidc.custom": "Custom",
+  "identity.oidc.issuer": "Issuer URL",
+  "identity.oidc.clientid": "Client ID",
+  "identity.oidc.clientsecret": "Client secret",
+  "identity.oidc.secret.ph": "leave empty to keep existing",
+  "identity.oidc.domain": "Domain / tenant",
+  "identity.oidc.scopes": "Scopes",
+  "identity.oidc.test": "Test connection",
+  "identity.oidc.copyagent": "📋 Copy for your AI assistant",
+  "identity.callback.title": "Callback URL",
+  "identity.callback.desc": "Register this URL in your IdP as the allowed redirect URI. It must be reachable from the user's browser.",
+  "identity.proxy.title": "Trusted reverse proxy",
+  "identity.proxy.desc": "When golive runs behind a reverse proxy that injects the user email as a header, configure it here.",
+  "identity.proxy.header": "Header name",
+  "identity.proxy.ips": "Trusted IPs",
+  "identity.test.ok": "Connection successful. Discovery document retrieved.",
+  "identity.test.ok.endpoints": "Endpoints discovered:",
+  "identity.test.ok.algos": "Signing algorithms:",
+  "identity.test.fail": "Connection failed.",
+  "identity.test.fail.hint": "Check that the issuer URL is correct and reachable from the server. If using a self-signed certificate, make sure the CA is trusted.",
+  "identity.test.fail.issuer": "The issuer URL is empty. Set it first or pick a preset.",
+  "identity.copyagent.prompt": "OIDC setup task description copied.",
+  "databackend.title": "Data backend",
+  "databackend.degraded": "The data backend management API requires golive 0.8.0 or newer. Update and restart to use this page.",
+  "databackend.current": "Current backend",
+  "databackend.type": "Type",
+  "databackend.location": "Location",
+  "databackend.tables": "Tables",
+  "databackend.rows": "Total rows",
+  "databackend.switch.title": "Switch backend",
+  "databackend.newtype": "New type",
+  "databackend.sb.url": "Supabase URL",
+  "databackend.sb.key": "Service key",
+  "databackend.sb.key.ph": "paste key (stored as env var)",
+  "databackend.test": "Test connection",
+  "databackend.switch": "Switch & restart",
+  "databackend.migrate.warn.title": "Data will not be migrated.",
+  "databackend.migrate.warn.body": "Switching backends does not copy existing data. Export your data first if you need it on the new backend.",
+  "databackend.restart.hint": "Backend changes require a server restart to take effect.",
+  "databackend.test.ok": "Connection successful. Backend is reachable.",
+  "databackend.test.ok.tables": "Tables found: {n}",
+  "databackend.test.fail": "Connection failed.",
+  "security.title": "Security scan",
+  "security.degraded": "The security management API requires golive 0.8.0 or newer. Update and restart to use this page.",
+  "security.layers": "Scan layers",
+  "security.layer.keyword": "Keyword scanner",
+  "security.layer.regex": "Regex scanner",
+  "security.layer.ai": "AI review",
+  "security.rules.title": "Rules",
+  "security.rules.desc": "Built-in rules are locked but can be disabled. User rules can be added, edited and deleted.",
+  "security.rules.rule": "Rule",
+  "security.rules.add.type": "Type",
+  "security.rules.add.name": "Name",
+  "security.rules.add.pattern": "Keyword / pattern",
+  "security.rules.add.strength": "Strength",
+  "security.strength.weak": "Weak (warn)",
+  "security.strength.strong": "Strong (block)",
+  "security.test.title": "Rule test run",
+  "security.test.desc": "Paste a text sample to see which rules it triggers.",
+  "security.test.ph": "Paste text to scan…",
+  "security.test.run": "Test",
+  "security.test.result.block": "BLOCK",
+  "security.test.result.warn": "WARN",
+  "security.test.result.clean": "No hits — the text is clean.",
+  "security.test.result.hits": "Hits:",
+  "security.ai.title": "AI review",
+  "security.ai.desc": "Optional LLM second-pass review for weak hits. Uses any OpenAI-compatible endpoint.",
+  "security.ai.baseurl": "Base URL",
+  "security.ai.model": "Model",
+  "security.ai.apikey": "API key",
+  "security.ai.key.ph": "leave empty to keep existing",
+  "security.ai.strict": "Strict mode",
+  "security.ai.test": "Test connection",
+  "security.ai.test.ok": "LLM connection successful.",
+  "security.ai.test.fail": "LLM connection failed.",
+  "security.blocks": "Recent blocks",
+  "security.blocks.none": "No recent blocks",
+  "settings.title": "Global settings",
+  "settings.degraded": "The settings API requires golive 0.8.0 or newer. Update and restart to use this page.",
+  "settings.group.server": "Server",
+  "settings.group.auth": "Authentication",
+  "settings.group.storage": "Storage",
+  "settings.group.data": "Data layer",
+  "settings.group.security": "Security",
+  "settings.group.admin": "Admin",
+  "settings.source.file": "file",
+  "settings.source.yaml": "file",
+  "settings.source.db": "database",
+  "settings.source.database": "database",
+  "settings.source.default": "default",
+  "settings.scope.hot": "hot",
+  "settings.scope.restart": "restart",
+  "settings.scope.yaml": "yaml",
+  "settings.readonly": "Defined in golive.yaml — edit the file to change.",
+  "settings.restart.needed": "Restart required — changes take effect after restart.",
+  "settings.delete.confirm": "Remove this database override and fall back to the file/default value?",
+  "settings.restart": "Restart server"
 },
 zh: {
   "gate.hint": "该服务启用了 Token 认证，请输入访问令牌（GOLIVE_TOKEN）。令牌仅保存在本浏览器的 sessionStorage。",
@@ -880,7 +1358,116 @@ zh: {
   "perms.bulk.needemail": "请先填写邮箱",
   "perms.bulk.needsites": "请至少选择一个站点",
   "perms.bulk.done": "已更新 {n} 个站点",
-  "perms.bulk.failed": "{n} 个站点更新失败"
+  "perms.bulk.failed": "{n} 个站点更新失败",
+  "nav.identity": "身份认证",
+  "nav.databackend": "数据后端",
+  "nav.security": "安全扫描",
+  "nav.settings": "全局参数",
+  "identity.title": "身份与认证",
+  "identity.degraded": "身份管理接口需要 golive 0.8.0 及以上版本。升级并重启后可用。",
+  "identity.current": "当前认证方式",
+  "identity.current.desc": "当前服务端生效的认证方式。",
+  "identity.method": "方式",
+  "identity.oidc.title": "OIDC 配置",
+  "identity.oidc.desc": "配置 OpenID Connect 提供商，让用户用企业账号登录。",
+  "identity.oidc.preset": "IdP 预设",
+  "identity.oidc.custom": "自定义",
+  "identity.oidc.issuer": "Issuer URL",
+  "identity.oidc.clientid": "Client ID",
+  "identity.oidc.clientsecret": "Client Secret",
+  "identity.oidc.secret.ph": "留空表示不修改",
+  "identity.oidc.domain": "域名 / 租户",
+  "identity.oidc.scopes": "Scopes",
+  "identity.oidc.test": "测试连接",
+  "identity.oidc.copyagent": "📋 复制给 AI 助手",
+  "identity.callback.title": "回调地址",
+  "identity.callback.desc": "将此 URL 在 IdP 后台注册为允许的回调地址。必须能从用户浏览器访问到。",
+  "identity.proxy.title": "受信任反向代理",
+  "identity.proxy.desc": "当 golive 运行在反向代理后面、由代理注入用户邮箱 header 时，在此配置。",
+  "identity.proxy.header": "Header 名",
+  "identity.proxy.ips": "可信 IP",
+  "identity.test.ok": "连接成功。已获取 Discovery 文档。",
+  "identity.test.ok.endpoints": "发现的端点：",
+  "identity.test.ok.algos": "签名算法：",
+  "identity.test.fail": "连接失败。",
+  "identity.test.fail.hint": "请检查 Issuer URL 是否正确、服务端能否访问。如使用自签证书，请确保 CA 已被信任。",
+  "identity.test.fail.issuer": "Issuer URL 为空。请先填写或选择一个预设。",
+  "identity.copyagent.prompt": "OIDC 接入任务描述已复制。",
+  "databackend.title": "数据后端",
+  "databackend.degraded": "数据后端管理接口需要 golive 0.8.0 及以上版本。升级并重启后可用。",
+  "databackend.current": "当前后端",
+  "databackend.type": "类型",
+  "databackend.location": "位置",
+  "databackend.tables": "表数",
+  "databackend.rows": "总行数",
+  "databackend.switch.title": "切换后端",
+  "databackend.newtype": "新类型",
+  "databackend.sb.url": "Supabase URL",
+  "databackend.sb.key": "Service Key",
+  "databackend.sb.key.ph": "粘贴密钥（将存为环境变量）",
+  "databackend.test": "测试连接",
+  "databackend.switch": "切换并重启",
+  "databackend.migrate.warn.title": "数据不会自动迁移。",
+  "databackend.migrate.warn.body": "切换后端不会复制已有数据。如需在新后端保留数据，请先导出。",
+  "databackend.restart.hint": "后端变更需要重启服务才能生效。",
+  "databackend.test.ok": "连接成功。后端可达。",
+  "databackend.test.ok.tables": "发现表：{n} 个",
+  "databackend.test.fail": "连接失败。",
+  "security.title": "安全扫描",
+  "security.degraded": "安全管理接口需要 golive 0.8.0 及以上版本。升级并重启后可用。",
+  "security.layers": "扫描层级",
+  "security.layer.keyword": "关键词扫描",
+  "security.layer.regex": "正则扫描",
+  "security.layer.ai": "AI 复核",
+  "security.rules.title": "规则列表",
+  "security.rules.desc": "内置规则带锁标识不可删除（可停用），用户规则可增删改。",
+  "security.rules.rule": "规则",
+  "security.rules.add.type": "类型",
+  "security.rules.add.name": "名称",
+  "security.rules.add.pattern": "关键词 / 正则",
+  "security.rules.add.strength": "强度",
+  "security.strength.weak": "弱（警告）",
+  "security.strength.strong": "强（阻断）",
+  "security.test.title": "规则试跑",
+  "security.test.desc": "粘贴一段文本，查看命中了哪些规则。",
+  "security.test.ph": "粘贴要扫描的文本…",
+  "security.test.run": "试跑",
+  "security.test.result.block": "阻断",
+  "security.test.result.warn": "警告",
+  "security.test.result.clean": "未命中任何规则——文本是干净的。",
+  "security.test.result.hits": "命中：",
+  "security.ai.title": "AI 复核",
+  "security.ai.desc": "可选的 LLM 二次复核，用于弱命中。支持任何 OpenAI 兼容端点。",
+  "security.ai.baseurl": "Base URL",
+  "security.ai.model": "模型",
+  "security.ai.apikey": "API Key",
+  "security.ai.key.ph": "留空表示不修改",
+  "security.ai.strict": "严格模式",
+  "security.ai.test": "测试连接",
+  "security.ai.test.ok": "LLM 连接成功。",
+  "security.ai.test.fail": "LLM 连接失败。",
+  "security.blocks": "最近拦截",
+  "security.blocks.none": "暂无拦截记录",
+  "settings.title": "全局参数",
+  "settings.degraded": "参数管理接口需要 golive 0.8.0 及以上版本。升级并重启后可用。",
+  "settings.group.server": "服务",
+  "settings.group.auth": "认证",
+  "settings.group.storage": "存储",
+  "settings.group.data": "数据层",
+  "settings.group.security": "安全",
+  "settings.group.admin": "管理",
+  "settings.source.file": "文件",
+  "settings.source.yaml": "文件",
+  "settings.source.db": "数据库",
+  "settings.source.database": "数据库",
+  "settings.source.default": "默认",
+  "settings.scope.hot": "热更新",
+  "settings.scope.restart": "需重启",
+  "settings.scope.yaml": "yaml",
+  "settings.readonly": "由 golive.yaml 定义——请编辑该文件来修改。",
+  "settings.restart.needed": "需要重启——修改在重启后生效。",
+  "settings.delete.confirm": "删除此数据库覆盖值并回落到文件/默认值？",
+  "settings.restart": "重启服务"
 }
 };
 
@@ -986,6 +1573,10 @@ function rerender(){
   else if (view === "perms") loadPerms();
   else if (view === "stats") loadStats();
   else if (view === "audit") loadAudit();
+  else if (view === "identity") loadIdentity();
+  else if (view === "databackend") loadDataBackend();
+  else if (view === "security") loadSecurity();
+  else if (view === "settings") loadSettings();
 }
 
 // ── clipboard ──────────────────────────────────────────────────
@@ -1082,6 +1673,10 @@ function start(){
       $("nav-perms").classList.remove("hidden");
       $("nav-stats").classList.remove("hidden");
       $("nav-audit").classList.remove("hidden");
+      $("nav-identity").classList.remove("hidden");
+      $("nav-databackend").classList.remove("hidden");
+      $("nav-security").classList.remove("hidden");
+      $("nav-settings").classList.remove("hidden");
     }
     loadSites();
   }).catch(function(e){
@@ -1121,6 +1716,10 @@ Array.prototype.forEach.call(
     if (el.dataset.view === "perms") loadPerms();
     if (el.dataset.view === "stats") loadStats();
     if (el.dataset.view === "audit") loadAudit();
+    if (el.dataset.view === "identity") loadIdentity();
+    if (el.dataset.view === "databackend") loadDataBackend();
+    if (el.dataset.view === "security") loadSecurity();
+    if (el.dataset.view === "settings") loadSettings();
   });
 });
 
@@ -1946,6 +2545,766 @@ $("perm-bulk-grant").addEventListener("click", function(){
 $("perm-bulk-revoke").addEventListener("click", function(){
   bulkApply("revoke");
 });
+
+// ── identity / auth page (v0.8.0) ─────────────────────────────
+var IDP_PRESETS = {
+  google: {issuer: "https://accounts.google.com", scopes: "openid email profile"},
+  auth0: {issuer: "https://{domain}", scopes: "openid email profile"},
+  okta: {issuer: "https://{domain}", scopes: "openid email profile"},
+  azure: {issuer: "https://login.microsoftonline.com/{tenant}/v2.0", scopes: "openid email profile"},
+  keycloak: {scopes: "openid email profile"},
+  authentik: {scopes: "openid email profile"}
+};
+
+function showDegraded(pageName) {
+  $(pageName + "-degraded").style.display = "block";
+  $(pageName + "-main").style.display = "none";
+}
+
+function loadIdentity() {
+  // Try the v0.8.0 settings API; if it doesn't exist, show degraded notice
+  api("GET", "/api/admin/settings").then(function(d) {
+    $("identity-degraded").style.display = "none";
+    $("identity-main").style.display = "";
+    // A group's API returns {settings: {group: [{key,value,...}]}, total: N}
+    var settings = d.settings || {};
+    var flatSettings = [];
+    if (Array.isArray(settings)) {
+      flatSettings = settings;
+    } else if (typeof settings === "object") {
+      Object.keys(settings).forEach(function(g) {
+        flatSettings = flatSettings.concat(settings[g] || []);
+      });
+    }
+    // Find auth method from settings
+    var authMethod = "none";
+    for (var i = 0; i < flatSettings.length; i++) {
+      var s = flatSettings[i];
+      if (s.key === "auth.provider" || s.key === "auth") {
+        authMethod = s.value || "none";
+        break;
+      }
+    }
+    var pill = $("id-method");
+    pill.className = "status-pill " + (authMethod === "none" ? "none" : authMethod);
+    pill.textContent = authMethod;
+    // Fill form from settings if available
+    flatSettings.forEach(function(s) {
+      if (s.key === "auth.oidc.issuer") $("oidc-issuer").value = s.value || "";
+      if (s.key === "auth.oidc.client_id") $("oidc-client-id").value = s.value || "";
+      if (s.key === "auth.oidc.scopes") $("oidc-scopes").value = s.value || "";
+      if (s.key === "auth.oidc.redirect_uri") $("oidc-callback-url").textContent = s.value || "";
+      if (s.key === "auth.proxy.header") $("proxy-header").value = s.value || "";
+      if (s.key === "auth.proxy.trusted_ips") $("proxy-ips").value = s.value || "";
+    });
+    // Always show callback URL (computed or config)
+    var base = window.location.origin;
+    if (!$("oidc-callback-url").textContent || $("oidc-callback-url").textContent === "https://<your-domain>/auth/callback") {
+      $("oidc-callback-url").textContent = base + "/auth/callback";
+    }
+  }).catch(function(e) {
+    if (e.status === 404 || e.status === 501) {
+      // Fallback: read what we can from /api/admin/me
+      $("identity-degraded").style.display = "none";
+      $("identity-main").style.display = "";
+      var me = state.me || {};
+      var who = me.identity || {};
+      var method = who.via_token ? "token" : (who.email ? "oidc" : "none");
+      var pill = $("id-method");
+      pill.className = "status-pill " + method;
+      pill.textContent = method;
+      $("oidc-callback-url").textContent = window.location.origin + "/auth/callback";
+    } else {
+      showDegraded("identity");
+    }
+  });
+}
+
+// IdP preset change -> auto-fill issuer + scopes
+$("idp-preset").addEventListener("change", function() {
+  var preset = this.value;
+  if (!preset) return;
+  var spec = IDP_PRESETS[preset];
+  if (!spec) return;
+  if (preset === "custom") return;
+  if (spec.issuer) $("oidc-issuer").value = spec.issuer;
+  if (spec.scopes) $("oidc-scopes").value = spec.scopes;
+  // Show/hide domain field hint
+  if (preset === "auth0" || preset === "okta") {
+    $("oidc-domain").placeholder = "your-tenant." + preset + ".com";
+  } else if (preset === "azure") {
+    $("oidc-domain").placeholder = "tenant-id or organizations";
+  }
+});
+
+$("oidc-test").addEventListener("click", function() {
+  var issuer = $("oidc-issuer").value.trim();
+  if (!issuer) {
+    var res = $("oidc-test-result");
+    res.style.display = "block";
+    res.className = "test-result fail";
+    res.innerHTML = "<b>" + esc(t("identity.test.fail")) + "</b><br>" +
+      esc(t("identity.test.fail.issuer"));
+    return;
+  }
+  var btn = $("oidc-test");
+  btn.disabled = true;
+  btn.textContent = "...";
+  var body = {
+    issuer: issuer,
+    client_id: $("oidc-client-id").value.trim(),
+    redirect_uri: $("oidc-callback-url").textContent
+  };
+  // Don't send secret unless user typed one
+  var secret = $("oidc-client-secret").value;
+  if (secret) body.client_secret = secret;
+  api("POST", "/api/admin/test/oidc", body).then(function(d) {
+    btn.disabled = false;
+    btn.textContent = t("identity.oidc.test");
+    var res = $("oidc-test-result");
+    res.style.display = "block";
+    // A group's API returns {ok: true/false, step, error, hint, findings}
+    if (d.ok === false) {
+      res.className = "test-result fail";
+      var html = "<b>" + esc(t("identity.test.fail")) + "</b><br>" +
+        esc(d.error || d.step || "unknown error");
+      if (d.hint) html += "<br><br>" + esc(d.hint);
+      res.innerHTML = html;
+      return;
+    }
+    res.className = "test-result ok";
+    var html = "<b>" + esc(t("identity.test.ok")) + "</b>";
+    // Handle findings.discovery shape from A group's API
+    var disc = d.findings && d.findings.discovery;
+    if (disc) {
+      if (disc.issuer) html += '<div class="endpoint">issuer: ' + esc(disc.issuer) + "</div>";
+      html += "<br>" + esc(t("identity.test.ok.endpoints")) + "<br>";
+      ["authorization_endpoint", "token_endpoint", "userinfo_endpoint",
+       "jwks_uri"].forEach(function(k) {
+        if (disc[k]) html += '<div class="endpoint">' + esc(k) + ": " +
+          esc(disc[k]) + "</div>";
+      });
+    }
+    // Also handle flat shape (d.endpoints, d.algorithms) for compat
+    if (d.endpoints) {
+      html += "<br>" + esc(t("identity.test.ok.endpoints")) + "<br>";
+      Object.keys(d.endpoints).forEach(function(k) {
+        html += '<div class="endpoint">' + esc(k) + ": " + esc(d.endpoints[k]) + "</div>";
+      });
+    }
+    if (d.algorithms && d.algorithms.length) {
+      html += "<br>" + esc(t("identity.test.ok.algos")) + " " +
+        d.algorithms.map(esc).join(", ");
+    }
+    res.innerHTML = html;
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = t("identity.oidc.test");
+    var res = $("oidc-test-result");
+    res.style.display = "block";
+    res.className = "test-result fail";
+    res.innerHTML = "<b>" + esc(t("identity.test.fail")) + "</b><br>" +
+      esc(e.message) + "<br><br>" + esc(t("identity.test.fail.hint"));
+  });
+});
+
+$("oidc-callback-copy").addEventListener("click", function() {
+  copyText($("oidc-callback-url").textContent, this);
+});
+
+$("oidc-agent-copy").addEventListener("click", function() {
+  var callback = $("oidc-callback-url").textContent;
+  var issuer = $("oidc-issuer").value.trim();
+  var clientId = $("oidc-client-id").value.trim();
+  var ver = BOOT.version || "unknown";
+  var prompt;
+  if (state.lang === "zh") {
+    prompt = [
+      "我在用 html-golive（版本 v" + ver + "，CLI: golive）。",
+      "请帮我配置 OIDC 单点登录。",
+      "",
+      "回调地址（需在 IdP 后台注册）：",
+      callback,
+      "",
+      "Issuer URL：" + (issuer || "<请填写你的 IdP Issuer URL>"),
+      "Client ID：" + (clientId || "<拿到后填入 admin 界面>"),
+      "Client Secret：<拿到后填入 admin 界面，不要告诉我>",
+      "",
+      "步骤：",
+      "1. 在 IdP 后台创建一个 OIDC 应用，回调地址填上面的 URL。",
+      "2. 拿到 client_id 和 client_secret。",
+      "3. 在 golive admin 界面（/admin -> 身份认证）填入 issuer、client_id、secret。",
+      "4. 点「测试连接」验证。",
+      "5. 重启 golive serve 生效。",
+      "",
+      "如果失败请把报错原文贴给我。"
+    ].join("\n");
+  } else {
+    prompt = [
+      "I'm using html-golive (version v" + ver + ", CLI: golive).",
+      "Please help me configure OIDC single sign-on.",
+      "",
+      "Callback URL (register this in your IdP):",
+      callback,
+      "",
+      "Issuer URL: " + (issuer || "<fill in your IdP Issuer URL>"),
+      "Client ID: " + (clientId || "<get it from IdP, then fill in admin UI>"),
+      "Client Secret: <get it from IdP, then fill in admin UI — don't share it with me>",
+      "",
+      "Steps:",
+      "1. Create an OIDC application in your IdP, set the callback URL to the one above.",
+      "2. Obtain the client_id and client_secret.",
+      "3. In the golive admin UI (/admin -> Identity), fill in issuer, client_id, secret.",
+      "4. Click 'Test connection' to verify.",
+      "5. Restart golive serve for changes to take effect.",
+      "",
+      "If any step fails, paste the exact error back to me."
+    ].join("\n");
+  }
+  copyText(prompt, this);
+  toast(t("identity.copyagent.prompt"));
+});
+
+$("oidc-save").addEventListener("click", function() {
+  var body = {
+    "auth.oidc.issuer": $("oidc-issuer").value.trim(),
+    "auth.oidc.client_id": $("oidc-client-id").value.trim(),
+    "auth.oidc.scopes": $("oidc-scopes").value.trim(),
+    "auth.oidc.redirect_uri": $("oidc-callback-url").textContent
+  };
+  var secret = $("oidc-client-secret").value;
+  if (secret) body["auth.oidc.client_secret"] = secret;
+  api("PUT", "/api/admin/settings", body).then(function() {
+    toast(t("msg.saved"));
+    $("oidc-client-secret").value = "";
+  }).catch(function(e) {
+    toast(e.message, true);
+  });
+});
+
+$("proxy-save").addEventListener("click", function() {
+  var body = {
+    "auth.proxy.header": $("proxy-header").value.trim(),
+    "auth.proxy.trusted_ips": $("proxy-ips").value.trim()
+  };
+  api("PUT", "/api/admin/settings", body).then(function() {
+    toast(t("msg.saved"));
+  }).catch(function(e) {
+    toast(e.message, true);
+  });
+});
+
+// ── data backend page (v0.8.0) ────────────────────────────────
+function loadDataBackend() {
+  // Try the v0.8.0 settings API first; fallback to M6 data endpoint
+  api("GET", "/api/admin/settings").then(function(d) {
+    $("databackend-degraded").style.display = "none";
+    $("databackend-main").style.display = "";
+    // Extract data backend info from settings
+    var settings = d.settings || {};
+    var flatSettings = [];
+    if (Array.isArray(settings)) {
+      flatSettings = settings;
+    } else if (typeof settings === "object") {
+      Object.keys(settings).forEach(function(g) {
+        flatSettings = flatSettings.concat(settings[g] || []);
+      });
+    }
+    var dbType = "none";
+    var dbLocation = "—";
+    flatSettings.forEach(function(s) {
+      if (s.key === "data.backend") dbType = s.value || "none";
+      if (s.key === "data.sqlite_path") dbLocation = s.value || "—";
+      if (s.key === "supabase.url") dbLocation = s.value || "—";
+    });
+    var pill = $("db-type");
+    pill.className = "status-pill " + (dbType === "none" ? "none" : "token");
+    pill.textContent = dbType;
+    $("db-location").textContent = dbLocation;
+    // Try to get table/row counts from M6 data API
+    api("GET", "/api/admin/data/models").then(function(d2) {
+      var models = d2.models || [];
+      $("db-tables").textContent = models.length;
+      var totalRows = 0;
+      models.forEach(function(m) { totalRows += (m.count || 0); });
+      $("db-rows").textContent = totalRows;
+    }).catch(function() {
+      $("db-tables").textContent = "—";
+      $("db-rows").textContent = "—";
+    });
+  }).catch(function(e) {
+    if (e.status === 404 || e.status === 501) {
+      // Fallback: use M6 data API to detect backend
+      api("GET", "/api/admin/data/models").then(function(d) {
+        $("databackend-degraded").style.display = "none";
+        $("databackend-main").style.display = "";
+        $("db-type").className = "status-pill token";
+        $("db-type").textContent = "sqlite";
+        var models = d.models || [];
+        $("db-tables").textContent = models.length;
+        var totalRows = 0;
+        models.forEach(function(m) { totalRows += (m.count || 0); });
+        $("db-rows").textContent = totalRows;
+      }).catch(function(e2) {
+        if (e2.status === 400) {
+          // No data backend configured
+          $("databackend-degraded").style.display = "none";
+          $("databackend-main").style.display = "";
+          $("db-type").className = "status-pill none";
+          $("db-type").textContent = "none";
+          $("db-tables").textContent = "—";
+          $("db-rows").textContent = "—";
+        } else {
+          showDegraded("databackend");
+        }
+      });
+    } else {
+      showDegraded("databackend");
+    }
+  });
+}
+
+$("db-new-type").addEventListener("change", function() {
+  var showSb = this.value === "supabase";
+  $("db-supabase-opts").style.display = showSb ? "" : "none";
+});
+
+$("db-test").addEventListener("click", function() {
+  var newType = $("db-new-type").value;
+  var body = {backend: newType};
+  if (newType === "supabase") {
+    body.url = $("db-sb-url").value.trim();
+    var key = $("db-sb-key").value;
+    if (key) body.service_key = key;
+  }
+  var btn = $("db-test");
+  btn.disabled = true;
+  btn.textContent = "...";
+  api("POST", "/api/admin/test/data-backend", body).then(function(d) {
+    btn.disabled = false;
+    btn.textContent = t("databackend.test");
+    var res = $("db-test-result");
+    res.style.display = "block";
+    if (d.ok === false) {
+      res.className = "test-result fail";
+      res.innerHTML = "<b>" + esc(t("databackend.test.fail")) + "</b><br>" +
+        esc(d.error || "unknown error") +
+        (d.hint ? "<br><br>" + esc(d.hint) : "");
+      return;
+    }
+    res.className = "test-result ok";
+    var html = "<b>" + esc(t("databackend.test.ok")) + "</b>";
+    if (d.tables != null) {
+      html += "<br>" + esc(t("databackend.test.ok.tables", {n: d.tables}));
+    }
+    if (d.latency_ms) {
+      html += '<div class="endpoint">latency: ' + d.latency_ms + "ms</div>";
+    }
+    res.innerHTML = html;
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = t("databackend.test");
+    var res = $("db-test-result");
+    res.style.display = "block";
+    res.className = "test-result fail";
+    res.innerHTML = "<b>" + esc(t("databackend.test.fail")) + "</b><br>" +
+      esc(e.message);
+  });
+});
+
+$("db-switch").addEventListener("click", function() {
+  var newType = $("db-new-type").value;
+  var body = {"data.backend": newType};
+  if (newType === "supabase") {
+    body["supabase.url"] = $("db-sb-url").value.trim();
+    var key = $("db-sb-key").value;
+    if (key) body["supabase.service_key"] = key;
+  }
+  api("PUT", "/api/admin/settings", body).then(function() {
+    toast(t("msg.saved"));
+    toast(t("databackend.restart.hint"));
+  }).catch(function(e) {
+    toast(e.message, true);
+  });
+});
+
+// ── security page (v0.8.0) ────────────────────────────────────
+function loadSecurity() {
+  // Try the v0.8.0 security API; fallback to showing degraded
+  api("GET", "/api/admin/security/rules").then(function(d) {
+    $("security-degraded").style.display = "none";
+    $("security-main").style.display = "";
+    renderSecurityRules(d.rules || []);
+    // AI status
+    var aiOn = d.ai_enabled || false;
+    var aiPill = $("sec-ai-status");
+    aiPill.className = "status-pill " + (aiOn ? "oidc" : "none");
+    aiPill.textContent = aiOn ? "ON" : "OFF";
+    // Fill AI config
+    if (d.ai_config) {
+      $("ai-base-url").value = d.ai_config.base_url || "";
+      $("ai-model").value = d.ai_config.model || "";
+      $("ai-strict-mode").checked = !!d.ai_config.strict_mode;
+    }
+    // Recent blocks
+    renderSecurityBlocks(d.recent_blocks || []);
+  }).catch(function(e) {
+    if (e.status === 404 || e.status === 501) {
+      // Fallback: try settings API for AI config
+      api("GET", "/api/admin/settings").then(function(d2) {
+        $("security-degraded").style.display = "none";
+        $("security-main").style.display = "";
+        // Render built-in rules from the page's knowledge
+        renderSecurityRulesFromConfig(d2);
+        renderSecurityBlocks([]);
+      }).catch(function() {
+        showDegraded("security");
+      });
+    } else {
+      showDegraded("security");
+    }
+  });
+}
+
+function renderSecurityRules(rules) {
+  var box = $("sec-rules-list");
+  box.innerHTML = "";
+  if (!rules.length) {
+    box.innerHTML = '<span style="color:var(--muted);font-size:12px">' +
+      esc(t("security.blocks.none")) + "</span>";
+    return;
+  }
+  rules.forEach(function(r) {
+    var row = document.createElement("div");
+    row.className = "rule-row";
+    var isBuiltin = r.builtin || r.source === "builtin";
+    var strengthClass = r.strength === "strong" ? "danger" : "warn";
+    row.innerHTML =
+      (isBuiltin ? '<span class="lock" title="' + esc(t("perms.admins.locktip")) +
+        '"></span>' : '<span style="width:11px;flex:0 0 11px"></span>') +
+      '<div class="rule-name"><b>' + esc(r.name || r.type || "unnamed") + "</b>" +
+        '<div class="meta">' + esc(r.type || "keyword") + " · " +
+        esc(r.strength || "weak") +
+        (r.keywords ? " · " + r.keywords.map(esc).join(", ").slice(0, 60) : "") +
+        "</div></div>" +
+      '<div class="rule-actions">' +
+        (isBuiltin ? "" : '<button class="danger" data-act="del">' +
+          esc(t("btn.delete")) + "</button>") +
+      "</div>";
+    if (!isBuiltin) {
+      row.querySelector('[data-act="del"]').addEventListener("click", function() {
+        api("DELETE", "/api/admin/security/rules", {name: r.name})
+          .then(function() { toast(t("msg.deleted")); loadSecurity(); })
+          .catch(function(e) { toast(e.message, true); });
+      });
+    }
+    box.appendChild(row);
+  });
+}
+
+function renderSecurityRulesFromConfig(settingsData) {
+  // When the security/rules endpoint is not available, show a static
+  // message that rules come from rules.yaml
+  var box = $("sec-rules-list");
+  box.innerHTML = '<div style="color:var(--muted);font-size:12px">' +
+    esc(t("security.degraded")) + "</div>";
+}
+
+function renderSecurityBlocks(blocks) {
+  var tb = $("sec-blocks-list");
+  tb.innerHTML = blocks.length ? blocks.map(function(b) {
+    return "<tr><td>" + esc((b.ts || "").replace("T", " ")) + "</td>" +
+      "<td>" + esc(b.who || "—") + "</td>" +
+      "<td>" + esc(b.rule || b.name || "—") + "</td></tr>";
+  }).join("") : '<tr><td colspan="3" class="empty">' +
+    esc(t("security.blocks.none")) + "</td></tr>";
+}
+
+$("sec-rule-add").addEventListener("click", function() {
+  var body = {
+    type: $("sec-new-type").value,
+    name: $("sec-new-name").value.trim(),
+    strength: $("sec-new-strength").value
+  };
+  var pattern = $("sec-new-pattern").value.trim();
+  if (!body.name || !pattern) {
+    toast(t("security.rules.add.name"), true);
+    return;
+  }
+  if (body.type === "keyword") {
+    body.keywords = [pattern];
+  } else {
+    body.pattern = pattern;
+  }
+  api("POST", "/api/admin/security/rules", body).then(function() {
+    toast(t("msg.added"));
+    $("sec-new-name").value = "";
+    $("sec-new-pattern").value = "";
+    loadSecurity();
+  }).catch(function(e) {
+    toast(e.message, true);
+  });
+});
+
+$("sec-test-run").addEventListener("click", function() {
+  var text = $("sec-test-input").value.trim();
+  if (!text) return;
+  var btn = $("sec-test-run");
+  btn.disabled = true;
+  btn.textContent = "...";
+  api("POST", "/api/admin/security/test", {text: text}).then(function(d) {
+    btn.disabled = false;
+    btn.textContent = t("security.test.run");
+    var res = $("sec-test-result");
+    res.style.display = "block";
+    // A group's API returns {verdict: "block"/"warn"/"pass", hits: [...]}
+    var hits = d.hits || d.matched_details || [];
+    var verdict = d.verdict || (hits.length ? (hits.some(function(h) {
+      return h.strength === "strong";
+    }) ? "block" : "warn") : "pass");
+    if (!hits.length || verdict === "pass") {
+      res.className = "test-result ok";
+      res.innerHTML = "<b>" + esc(t("security.test.result.clean")) + "</b>";
+    } else {
+      var blocked = verdict === "block";
+      res.className = "test-result " + (blocked ? "fail" : "");
+      res.style.borderColor = blocked ? "var(--danger)" : "var(--warn)";
+      var html = "<b>" + esc(blocked ? t("security.test.result.block") :
+        t("security.test.result.warn")) + "</b><br>" +
+        esc(t("security.test.result.hits")) + "<br>";
+      hits.forEach(function(h) {
+        html += '<div class="endpoint">· [' + esc(h.rule_name || h.name || h.type || "?") +
+          "] " + esc(h.keyword || h.pattern || "") + " (" +
+          esc(h.strength || "?") + ")</div>";
+      });
+      if (d.total_rules_checked) {
+        html += '<div class="endpoint">checked ' + d.total_rules_checked +
+          " rules, " + (d.total_hits || hits.length) + " hits</div>";
+      }
+      res.innerHTML = html;
+    }
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = t("security.test.run");
+    var res = $("sec-test-result");
+    res.style.display = "block";
+    res.className = "test-result fail";
+    res.innerHTML = "<b>" + esc(t("security.degraded")) + "</b>";
+  });
+});
+
+$("ai-test").addEventListener("click", function() {
+  var body = {
+    base_url: $("ai-base-url").value.trim(),
+    model: $("ai-model").value.trim()
+  };
+  var key = $("ai-api-key").value;
+  if (key) body.api_key = key;
+  var btn = $("ai-test");
+  btn.disabled = true;
+  btn.textContent = "...";
+  api("POST", "/api/admin/test/llm", body).then(function(d) {
+    btn.disabled = false;
+    btn.textContent = t("security.ai.test");
+    var res = $("ai-test-result");
+    res.style.display = "block";
+    if (d.ok === false) {
+      res.className = "test-result fail";
+      res.innerHTML = "<b>" + esc(t("security.ai.test.fail")) + "</b><br>" +
+        esc(d.error || "unknown error") +
+        (d.hint ? "<br><br>" + esc(d.hint) : "");
+      return;
+    }
+    res.className = "test-result ok";
+    var html = "<b>" + esc(t("security.ai.test.ok")) + "</b>";
+    if (d.model) {
+      html += '<div class="endpoint">model: ' + esc(d.model) + "</div>";
+    }
+    if (d.latency_ms) {
+      html += '<div class="endpoint">latency: ' + d.latency_ms + "ms</div>";
+    }
+    res.innerHTML = html;
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = t("security.ai.test");
+    var res = $("ai-test-result");
+    res.style.display = "block";
+    res.className = "test-result fail";
+    res.innerHTML = "<b>" + esc(t("security.ai.test.fail")) + "</b><br>" +
+      esc(e.message);
+  });
+});
+
+$("ai-save").addEventListener("click", function() {
+  var body = {
+    "security.llm.base_url": $("ai-base-url").value.trim(),
+    "security.llm.model": $("ai-model").value.trim(),
+    "security.llm.strict_mode": $("ai-strict-mode").checked
+  };
+  var key = $("ai-api-key").value;
+  if (key) body["security.llm.api_key"] = key;
+  api("PUT", "/api/admin/settings", body).then(function() {
+    toast(t("msg.saved"));
+    $("ai-api-key").value = "";
+  }).catch(function(e) {
+    toast(e.message, true);
+  });
+});
+
+// ── global settings page (v0.8.0) ─────────────────────────────
+function loadSettings() {
+  api("GET", "/api/admin/settings").then(function(d) {
+    $("settings-degraded").style.display = "none";
+    $("settings-main").style.display = "";
+    renderSettings(d);
+  }).catch(function(e) {
+    if (e.status === 404 || e.status === 501) {
+      showDegraded("settings");
+    } else {
+      toast(e.message, true);
+    }
+  });
+}
+
+function renderSettings(data) {
+  // A group's API returns {settings: {group: [{key,value,source,scope,...}]}, total: N}
+  // The settings field is a dict of group→list, not a flat array
+  var grouped = {};
+  var settings = data.settings || {};
+  
+  if (Array.isArray(settings)) {
+    // Flat array (fallback/old format)
+    settings.forEach(function(s) {
+      var g = s.group || s.section || s.category || "general";
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(s);
+    });
+  } else if (typeof settings === "object") {
+    // Grouped dict (A group's format): {server: [...], auth: [...], ...}
+    grouped = settings;
+  }
+  // Also merge data.groups if present
+  if (data.groups && typeof data.groups === "object" && !Array.isArray(data.groups)) {
+    Object.keys(data.groups).forEach(function(g) {
+      if (!grouped[g]) grouped[g] = data.groups[g];
+    });
+  }
+
+  var box = $("settings-groups");
+  box.innerHTML = "";
+  var groupOrder = ["server", "auth", "storage", "registry", "data",
+    "security", "admin", "general"];
+  var seen = {};
+
+  groupOrder.forEach(function(g) {
+    if (!grouped[g] || seen[g]) return;
+    seen[g] = true;
+    var gkey = "settings.group." + g;
+    var label = I18N[state.lang][gkey] || I18N.en[gkey] || g;
+    var hb = document.createElement("div");
+    hb.className = "settings-group";
+    hb.innerHTML = "<h3>" + esc(label) + "</h3>";
+    var container = document.createElement("div");
+    grouped[g].forEach(function(s) {
+      var row = document.createElement("div");
+      row.className = "setting-row";
+      var srcRaw = s.source || "default";
+      var srcKey = "settings.source." + srcRaw;
+      var srcLabel = I18N[state.lang][srcKey] || I18N.en[srcKey] || srcRaw;
+      var srcClass = "src-badge " + (srcRaw === "yaml" ? "file" :
+        srcRaw === "database" ? "db" : "default");
+      var scopeRaw = s.scope || "";
+      var scopeKey = scopeRaw ? ("settings.scope." + scopeRaw) : "";
+      var scopeLabel = scopeKey ? (I18N[state.lang][scopeKey] || I18N.en[scopeKey] || scopeRaw) : "";
+      var scopeClass = scopeRaw ? ("scope-badge " + scopeRaw) : "";
+      var readOnly = srcRaw === "yaml" || srcRaw === "file" || s.readonly;
+      var valDisplay = s.value;
+      // Mask secrets
+      if (s.secret && s.value) valDisplay = "••••••••";
+      var srcKey = "settings.source." + (s.source || "default");
+      var srcLabel = I18N[state.lang][srcKey] || I18N.en[srcKey] || (s.source || "default");
+      var scopeKey = s.scope ? ("settings.scope." + s.scope) : "";
+      var scopeLabel = scopeKey ? (I18N[state.lang][scopeKey] || I18N.en[scopeKey] || s.scope) : "";
+      row.innerHTML =
+        '<div class="s-label">' + esc(s.label || s.key || "") +
+          (s.description ? '<div style="font-size:11px;color:var(--muted)">' +
+            esc(s.description) + "</div>" : "") +
+        "</div>" +
+        '<div class="s-value">' + esc(valDisplay != null ? valDisplay : "—") + "</div>" +
+        '<div class="s-source"><span class="' + srcClass + '">' +
+          esc(srcLabel) +
+        "</span>" +
+        (s.scope ? ' <span class="' + scopeClass + '">' +
+          esc(scopeLabel) + "</span>" : "") +
+        "</div>";
+      // Add edit/delete actions for database-sourced settings
+      if ((s.source === "database" || s.source === "db") && !readOnly) {
+        var actions = document.createElement("div");
+        actions.className = "s-source";
+        var delBtn = document.createElement("button");
+        delBtn.className = "danger";
+        delBtn.textContent = "×";
+        delBtn.title = t("settings.delete.confirm");
+        delBtn.addEventListener("click", function() {
+          if (!window.confirm(t("settings.delete.confirm"))) return;
+          api("DELETE", "/api/admin/settings", {key: s.key}).then(function() {
+            toast(t("msg.removed"));
+            loadSettings();
+          }).catch(function(e) { toast(e.message, true); });
+        });
+        actions.appendChild(delBtn);
+        row.appendChild(actions);
+      }
+      if (readOnly) {
+        var note = document.createElement("div");
+        note.style.cssText = "flex:0 0 auto;font-size:11px;color:var(--muted)";
+        note.textContent = t("settings.readonly");
+        row.appendChild(note);
+      }
+      if (s.scope === "restart") {
+        var rn = document.createElement("div");
+        rn.style.cssText = "flex:0 0 auto;font-size:11px;color:var(--warn)";
+        rn.textContent = t("settings.restart.needed");
+        row.appendChild(rn);
+      }
+      container.appendChild(row);
+    });
+    hb.appendChild(container);
+    box.appendChild(hb);
+  });
+
+  // Add any remaining groups not in groupOrder
+  Object.keys(grouped).forEach(function(g) {
+    if (seen[g]) return;
+    seen[g] = true;
+    var hb = document.createElement("div");
+    hb.className = "settings-group";
+    hb.innerHTML = "<h3>" + esc(g) + "</h3>";
+    var container = document.createElement("div");
+    grouped[g].forEach(function(s) {
+      var row = document.createElement("div");
+      row.className = "setting-row";
+      var srcClass = "src-badge " + (s.source || "default");
+      var valDisplay = s.value;
+      if (s.secret && s.value) valDisplay = "••••••••";
+      var srcRaw = s.source || "default";
+      var srcKey2 = "settings.source." + srcRaw;
+      var srcLabel2 = I18N[state.lang][srcKey2] || I18N.en[srcKey2] || srcRaw;
+      // Map source to CSS class (yaml->file, database->db)
+      var srcClass2 = "src-badge " + (srcRaw === "yaml" ? "file" :
+        srcRaw === "database" ? "db" : "default");
+      row.innerHTML =
+        '<div class="s-label">' + esc(s.label || s.key || "") + "</div>" +
+        '<div class="s-value">' + esc(valDisplay != null ? valDisplay : "—") + "</div>" +
+        '<div class="s-source"><span class="' + srcClass2 + '">' +
+          esc(srcLabel2) +
+        "</span></div>";
+      container.appendChild(row);
+    });
+    hb.appendChild(container);
+    box.appendChild(hb);
+  });
+}
 
 initPrefs();
 start();

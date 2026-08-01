@@ -109,10 +109,12 @@ class DataConfig:
 
 @dataclass
 class AuthConfig:
-    provider: str = "none"           # none | token | oidc
+    provider: str = "none"           # none | token | oidc | proxy
     token: str = ""
-    # OIDC (M3) — generic OpenID Connect (Google / GitHub via OIDC bridge /
-    # Keycloak / Authentik / any self-hosted IdP with a discovery document).
+    # OIDC (M3 → v0.8.0) — generic OpenID Connect (Google / GitHub via OIDC
+    # bridge / Keycloak / Authentik / any self-hosted IdP with a discovery
+    # document). v0.8.0 adds id_token signature verification (RS256 via
+    # JWKS), nonce, and full claims validation.
     oidc_issuer: str = ""            # https://idp.example.com (discovery base)
     oidc_client_id: str = ""
     oidc_client_secret_env: str = "GOLIVE_OIDC_CLIENT_SECRET"
@@ -121,6 +123,12 @@ class AuthConfig:
     oidc_session_ttl: int = 8 * 3600   # seconds
     oidc_cookie_secret_env: str = "GOLIVE_COOKIE_SECRET"
     oidc_force_secure_cookie: bool = False
+    oidc_verify_signature: bool = True  # v0.8.0 — default: verify id_token sig
+    # Trusted reverse-proxy auth (v0.8.0)
+    proxy_header: str = "X-Forwarded-User"
+    proxy_email_header: str = ""     # optional; falls back to header value
+    proxy_groups_header: str = ""    # optional
+    proxy_trusted_ips: list = field(default_factory=list)
 
     @property
     def oidc_client_secret(self) -> str:
@@ -373,6 +381,19 @@ def _build(raw: dict, source_path: str) -> Config:
                                          default=au.oidc_cookie_secret_env))
     au.oidc_force_secure_cookie = bool(_get(raw, "auth", "oidc",
                                             "force_secure_cookie", default=False))
+    # v0.8.0: id_token signature verification (default: True)
+    _verify_sig = _get(raw, "auth", "oidc", "verify_signature", default=True)
+    # Handle explicit None/null → True (safe default)
+    au.oidc_verify_signature = True if _verify_sig is None else bool(_verify_sig)
+
+    # Trusted reverse-proxy auth (v0.8.0)
+    _proxy = _get(raw, "auth", "proxy", default={}) or {}
+    au.proxy_header = str(_proxy.get("header", au.proxy_header) or au.proxy_header)
+    au.proxy_email_header = str(_proxy.get("email_header", "") or "")
+    au.proxy_groups_header = str(_proxy.get("groups_header", "") or "")
+    _trusted = _proxy.get("trusted_ips", [])
+    au.proxy_trusted_ips = [str(ip).strip() for ip in _trusted
+                            if str(ip).strip()] if isinstance(_trusted, (list, tuple)) else []
 
     # editor (M3)
     cfg.editor.token = str(_get(raw, "editor", "token", default="") or "")

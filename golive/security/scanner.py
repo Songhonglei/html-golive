@@ -33,7 +33,13 @@ _rules_cache = None
 # ── rule loading ─────────────────────────────────────────────────────────────
 
 def load_rules(extra_files=None) -> dict:
-    """Load built-in rules.yaml, optionally merged with user files."""
+    """Load built-in rules.yaml, optionally merged with user files.
+
+    v0.8.0: When the rules_store is available (database exists), rules
+    are merged from both sources: built-in yaml (read-only) + database
+    (user-managed). The database source takes precedence for
+    enable/disable state.
+    """
     global _rules_cache
     if _rules_cache is not None and not extra_files:
         return _rules_cache
@@ -42,6 +48,18 @@ def load_rules(extra_files=None) -> dict:
         raise RuntimeError("pyyaml is required for the security scanner "
                            "(pip install pyyaml)")
 
+    # v0.8.0: try the rules store first (dual-source merge)
+    try:
+        from golive.backends.registry.rules_store import get_merged_rules_for_scanner
+        merged = get_merged_rules_for_scanner()
+        if merged["keyword_rules"] or merged["regex_rules"]:
+            if not extra_files:
+                _rules_cache = merged
+            return merged
+    except Exception:  # noqa: BLE001 — fall back to yaml-only
+        pass
+
+    # Fallback: yaml-only (pre-v0.8.0 behavior)
     data = yaml.safe_load(_RULES_FILE.read_text(encoding="utf-8")) or {}
     keyword_rules = list(data.get("keyword_rules") or [])
     regex_rules = list(data.get("regex_rules") or [])

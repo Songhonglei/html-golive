@@ -1,4 +1,4 @@
-"""golive.backends.auth.oauth — generic OIDC AuthProvider (M3).
+"""golive.backends.auth.oauth — generic OIDC AuthProvider (M3 → v0.8.0).
 
 Works with any OpenID Connect IdP that publishes a discovery document
 (``/.well-known/openid-configuration``): Google, Keycloak, Authentik,
@@ -6,15 +6,21 @@ Okta, Auth0, self-hosted Dex … GitHub's OAuth is not OIDC — use an OIDC
 bridge (e.g. Dex) or a provider that issues OIDC tokens.
 
 Flow (implemented in golive.server.app via this provider):
-  GET /auth/login     -> 302 to IdP authorization endpoint (state + PKCE)
-  GET /auth/callback  -> code -> token -> userinfo -> golive session cookie
+  GET /auth/login     -> 302 to IdP authorization endpoint (state + PKCE + nonce)
+  GET /auth/callback  -> code -> token -> verify id_token -> userinfo -> session
   GET /auth/logout    -> clear cookie (+ optional IdP end_session redirect)
   GET /auth/me        -> current session identity JSON
 
-Session model: in-memory dict with TTL (restart invalidates sessions —
-acceptable for M3; a shared store lands in M4). The cookie carries only
-a random session id, HMAC-signed with a server secret so a forged id is
-rejected even before the dict lookup.
+v0.8.0 changes (OIDC production hardening):
+  - id_token signature verification via JWKS (RS256)
+  - nonce generation + validation (replay attack prevention)
+  - alg=none hard-rejected; alg/key-type mismatch rejected
+  - claims validated: iss, aud, exp, nbf, iat (with clock skew tolerance)
+  - JWKS cached 1h, force-refreshed on unknown kid
+  - ``auth.oidc.verify_signature: false`` to opt out (NOT recommended;
+    prints a prominent warning at startup)
+  - ``cryptography`` is an optional dependency ([oidc] extra). Without it,
+    OIDC with default verify_signature=True refuses to start.
 
 Config (golive.yaml):
   auth:
@@ -28,6 +34,7 @@ Config (golive.yaml):
       session_ttl: 28800
       cookie_secret_env: GOLIVE_COOKIE_SECRET
       force_secure_cookie: false
+      verify_signature: true   # default; set false to disable (dangerous)
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ import hmac
 import json
 import os
 import secrets
+import sys
 import time
 import urllib.parse
 from typing import Optional
@@ -45,7 +53,7 @@ from typing import Optional
 from golive.backends.auth.base import AuthProvider
 
 COOKIE_NAME = "golive_session"
-STATE_TTL = 600          # seconds an auth request (state/PKCE) stays valid
+STATE_TTL = 600          # seconds an auth request (state/PKCE/nonce) stays valid
 DEFAULT_TIMEOUT = 15
 
 
@@ -80,7 +88,6 @@ def _load_or_create_cookie_secret() -> str:
             pass
         return val
     except Exception as e:  # noqa: BLE001 — degrade to ephemeral
-        import sys
         print(f"⚠️  could not persist cookie secret ({e}); using an "
               f"ephemeral key — sessions will not survive a restart. "
               f"Set GOLIVE_COOKIE_SECRET to silence this.", file=sys.stderr)
@@ -88,7 +95,7 @@ def _load_or_create_cookie_secret() -> str:
 
 
 class OIDCAuth(AuthProvider):
-    """Generic OIDC provider with PKCE + signed session cookies."""
+    """Generic OIDC provider with PKCE + signed session cookies + id_token verification."""
 
     name = "oidc"
 
@@ -96,7 +103,8 @@ class OIDCAuth(AuthProvider):
                  client_secret: str = "", redirect_uri: str = "",
                  scopes: str = "openid email profile",
                  session_ttl: int = 8 * 3600, cookie_secret: str = "",
-                 force_secure_cookie: bool = False):
+                 force_secure_cookie: bool = False,
+                 verify_signature: bool = True):
         if not issuer:
             from golive.config import get_config
             au = get_config().auth
@@ -108,6 +116,7 @@ class OIDCAuth(AuthProvider):
             session_ttl = au.oidc_session_ttl or session_ttl
             cookie_secret = cookie_secret or au.oidc_cookie_secret
             force_secure_cookie = au.oidc_force_secure_cookie
+            verify_signature = au.oidc_verify_signature
         if not issuer or not client_id:
             raise OIDCError("auth.oidc.issuer and auth.oidc.client_id are required")
         self.issuer = issuer.rstrip("/")
@@ -117,17 +126,39 @@ class OIDCAuth(AuthProvider):
         self.scopes = scopes
         self.session_ttl = int(session_ttl)
         self.force_secure_cookie = bool(force_secure_cookie)
+
+        # Signature verification (v0.8.0)
+        self.verify_signature = verify_signature
+        if not verify_signature:
+            print(
+                "⚠️  ⚠️  ⚠️  OIDC id_token signature verification is DISABLED.\n"
+                "  auth.oidc.verify_signature: false in golive.yaml\n"
+                "  This means FORGED id_tokens will be accepted without\n"
+                "  detection. This is a security risk — only use this in\n"
+                "  development or when your IdP does not support signature\n"
+                "  verification. NEVER enable this in production.\n",
+                file=sys.stderr,
+            )
+        elif self.verify_signature:
+            from golive.backends.auth.oidc_verify import is_available, require_cryptography
+            if not is_available():
+                require_cryptography()  # raises with a clear message
+                raise OIDCError(  # pragma: no cover — require_cryptography raises first
+                    "OIDC signature verification requires the 'cryptography' "
+                    "library. Install with: pip install html-golive[oidc]\n"
+                    "  Or set auth.oidc.verify_signature: false to disable "
+                    "(NOT recommended)."
+                )
+
         # cookie secret precedence: explicit arg > env > persisted file.
-        # The persisted file lives under GOLIVE_HOME so sessions survive a
-        # restart even when the operator never set GOLIVE_COOKIE_SECRET
-        # (falls back to an ephemeral key only if the file is unwritable).
         _sec = cookie_secret or os.environ.get("GOLIVE_COOKIE_SECRET", "")
         if not _sec:
             _sec = _load_or_create_cookie_secret()
         self._cookie_secret = _sec.encode("utf-8")
         self._discovery: Optional[dict] = None
         self._sessions: dict = {}       # sid -> {sub, email, name, exp}
-        self._pending: dict = {}        # state -> {verifier, exp}
+        self._pending: dict = {}        # state -> {verifier, nonce, exp}
+        self._jwks_provider = None      # lazy-init on first complete_login
 
     # ── discovery ───────────────────────────────────────────────────────────
 
@@ -145,6 +176,20 @@ class OIDCAuth(AuthProvider):
             self._discovery = doc
         return self._discovery
 
+    def _get_jwks_provider(self):
+        """Lazy-init the JWKS provider from the discovery document."""
+        if self._jwks_provider is None:
+            from golive.backends.auth.oidc_verify import JWKSProvider
+            doc = self.discovery()
+            jwks_uri = doc.get("jwks_uri", "")
+            if not jwks_uri:
+                raise OIDCError(
+                    "OIDC discovery document does not contain jwks_uri — "
+                    "cannot verify id_token signatures"
+                )
+            self._jwks_provider = JWKSProvider(jwks_uri)
+        return self._jwks_provider
+
     # ── login: build the authorization redirect ─────────────────────────────
 
     def _prune_pending(self) -> None:
@@ -153,14 +198,18 @@ class OIDCAuth(AuthProvider):
             self._pending.pop(k, None)
 
     def begin_login(self) -> str:
-        """Return the IdP authorization URL (registers state + PKCE)."""
+        """Return the IdP authorization URL (registers state + PKCE + nonce)."""
         self._prune_pending()
         doc = self.discovery()
         state = secrets.token_urlsafe(24)
         verifier = _b64url(secrets.token_bytes(48))
         challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
-        self._pending[state] = {"verifier": verifier,
-                                "exp": time.time() + STATE_TTL}
+        nonce = secrets.token_urlsafe(24)
+        self._pending[state] = {
+            "verifier": verifier,
+            "nonce": nonce,
+            "exp": time.time() + STATE_TTL,
+        }
         params = {
             "response_type": "code",
             "client_id": self.client_id,
@@ -169,13 +218,17 @@ class OIDCAuth(AuthProvider):
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
+            "nonce": nonce,
         }
         return doc["authorization_endpoint"] + "?" + urllib.parse.urlencode(params)
 
-    # ── callback: code -> tokens -> userinfo -> session ─────────────────────
+    # ── callback: code -> tokens -> verify -> userinfo -> session ──────────
 
     def complete_login(self, code: str, state: str) -> dict:
-        """Exchange the code; return {sid, cookie_value, user}. Raises OIDCError."""
+        """Exchange the code; verify id_token; return {sid, cookie_value, user}.
+
+        Raises OIDCError on any failure.
+        """
         import requests
 
         pend = self._pending.pop(state or "", None)
@@ -200,7 +253,35 @@ class OIDCAuth(AuthProvider):
                             f"{resp.text[:200]}")
         tokens = resp.json()
 
-        user = self._resolve_user(doc, tokens)
+        # ── verify id_token (v0.8.0) ──
+        id_token = tokens.get("id_token", "")
+        verified_claims = {}
+        if id_token and self.verify_signature:
+            from golive.backends.auth.oidc_verify import (
+                verify_id_token, TokenValidationError,
+            )
+            try:
+                verified_claims = verify_id_token(
+                    id_token,
+                    issuer=self.issuer,
+                    client_id=self.client_id,
+                    jwks_provider=self._get_jwks_provider(),
+                    nonce=pend.get("nonce"),
+                    verify_signature=True,
+                )
+            except TokenValidationError as e:
+                raise OIDCError(f"id_token verification failed: {e}")
+        elif id_token and not self.verify_signature:
+            # Verification explicitly disabled — decode without verifying
+            # (backward compat, but warn at startup already)
+            try:
+                payload = id_token.split(".")[1]
+                payload += "=" * (-len(payload) % 4)
+                verified_claims = json.loads(base64.urlsafe_b64decode(payload))
+            except (ValueError, TypeError):
+                pass
+
+        user = self._resolve_user(doc, tokens, verified_claims)
         if not (user.get("sub") or user.get("email")):
             raise OIDCError("IdP returned no usable identity (sub/email)")
 
@@ -208,8 +289,9 @@ class OIDCAuth(AuthProvider):
         self._sessions[sid] = {**user, "exp": time.time() + self.session_ttl}
         return {"sid": sid, "cookie_value": self._sign_sid(sid), "user": user}
 
-    def _resolve_user(self, doc: dict, tokens: dict) -> dict:
-        """userinfo endpoint preferred; fall back to id_token claims."""
+    def _resolve_user(self, doc: dict, tokens: dict,
+                      verified_claims: dict = None) -> dict:
+        """userinfo endpoint preferred; fall back to verified id_token claims."""
         import requests
 
         access_token = tokens.get("access_token", "")
@@ -228,19 +310,12 @@ class OIDCAuth(AuthProvider):
                                         or ui.get("preferred_username", ""))}
             except requests.RequestException:
                 pass
-        # fallback: unverified id_token payload decode (transport already
-        # authenticated via TLS + client credentials at the token endpoint)
-        id_token = tokens.get("id_token", "")
-        if id_token and id_token.count(".") == 2:
-            try:
-                payload = id_token.split(".")[1]
-                payload += "=" * (-len(payload) % 4)
-                claims = json.loads(base64.urlsafe_b64decode(payload))
-                return {"sub": str(claims.get("sub", "")),
-                        "email": str(claims.get("email", "")).lower(),
-                        "name": str(claims.get("name", ""))}
-            except (ValueError, TypeError):
-                pass
+
+        # fallback: verified id_token claims (already validated above)
+        if verified_claims:
+            return {"sub": str(verified_claims.get("sub", "")),
+                    "email": str(verified_claims.get("email", "")).lower(),
+                    "name": str(verified_claims.get("name", ""))}
         return {}
 
     # ── cookie signing / session lookup ─────────────────────────────────────

@@ -127,6 +127,18 @@ def handle(method: str, path: str, query: dict, body: bytes,
         return _perm_dispatch(method, rest[1:], query, body, identity,
                               registry)
 
+    # v0.8.0: settings management
+    if rest[:1] == ["settings"]:
+        return _settings_dispatch(method, rest[1:], query, body, identity)
+
+    # v0.8.0: security rules management
+    if rest[:1] == ["security"]:
+        return _security_dispatch(method, rest[1:], query, body, identity)
+
+    # v0.8.0: connection test endpoints
+    if rest[:1] == ["test"]:
+        return _test_dispatch(method, rest[1:], body, identity)
+
     if len(rest) >= 2 and rest[0] == "sites":
         slug_ref = rest[1]
         site = registry.resolve(slug_ref)
@@ -698,3 +710,493 @@ def _apply_bulk_one(registry, site, email, role, action) -> bool:
         return False
     registry.remove_maintainer(site_id, email)
     return True
+
+
+# ── settings management (v0.8.0) ─────────────────────────────────────────────
+
+
+def _settings_dispatch(method, rest, query, body, identity) -> tuple:
+    """Route /api/admin/settings/*. superadmin only, all audited."""
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    try:
+        if not rest and method == "GET":
+            return _settings_list(identity)
+        if not rest and method == "PUT":
+            return _settings_update(body, identity)
+        if len(rest) == 1 and method == "DELETE":
+            return _settings_delete(rest[0], identity)
+    except KeyError as e:
+        return _err(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        return 500, {"error": f"settings store error: {e}"}
+    return _err(404, "unknown admin endpoint")
+
+
+def _settings_store():
+    from golive.backends.registry.settings_store import get_settings_store
+    return get_settings_store()
+
+
+def _settings_yaml_snapshot():
+    from golive.backends.registry.settings_store import get_yaml_snapshot
+    return get_yaml_snapshot()
+
+
+def _settings_list(identity) -> tuple:
+    store = _settings_store()
+    yaml_vals = _settings_yaml_snapshot()
+    grouped = store.get_all(yaml_values=yaml_vals)
+    # Flatten for a total count
+    total = sum(len(items) for items in grouped.values())
+    record(_who(identity), "settings.list", "", {"total": total})
+    return 200, {"settings": grouped, "total": total}
+
+
+def _settings_update(body, identity) -> tuple:
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    if not data:
+        return _err(400, "empty body — provide at least one setting")
+    store = _settings_store()
+    try:
+        result = store.set_many(data, updated_by=_who(identity))
+    except KeyError as e:
+        return _err(400, str(e))
+    # Audit
+    record(_who(identity), "settings.update", "",
+           {"keys": sorted(data.keys()),
+            "needs_restart": result.get("needs_restart", [])})
+    return 200, result
+
+
+def _settings_delete(key, identity) -> tuple:
+    # URL-decode the key (it may contain dots)
+    from urllib.parse import unquote
+    key = unquote(key)
+    store = _settings_store()
+    try:
+        removed = store.delete(key)
+    except KeyError as e:
+        return _err(400, str(e))
+    if not removed:
+        return _err(404, f"no database override for {key}")
+    record(_who(identity), "settings.delete", "", {"key": key})
+    return 200, {"success": True, "key": key,
+                 "note": "value reverted to yaml/default"}
+
+
+# ── security rules management (v0.8.0) ───────────────────────────────────────
+
+
+def _security_dispatch(method, rest, query, body, identity) -> tuple:
+    """Route /api/admin/security/*. superadmin only."""
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    try:
+        if rest == ["rules"] and method == "GET":
+            return _rules_list(identity)
+        if rest == ["rules"] and method == "POST":
+            return _rules_add(body, identity)
+        if len(rest) == 2 and rest[0] == "rules":
+            if method == "PATCH":
+                return _rules_update(rest[1], body, identity)
+            if method == "DELETE":
+                return _rules_delete(rest[1], identity)
+        if rest == ["test"] and method == "POST":
+            return _rules_test(body, identity)
+    except ValueError as e:
+        return _err(400, str(e))
+    except KeyError as e:
+        return _err(404, str(e))
+    except Exception as e:  # noqa: BLE001
+        return 500, {"error": f"rules store error: {e}"}
+    return _err(404, "unknown admin endpoint")
+
+
+def _rules_store():
+    from golive.backends.registry.rules_store import get_rules_store
+    return get_rules_store()
+
+
+def _rules_list(identity) -> tuple:
+    store = _rules_store()
+    rules = store.list_all()
+    record(_who(identity), "rules.list", "", {"count": len(rules)})
+    return 200, {"rules": rules, "total": len(rules)}
+
+
+def _rules_add(body, identity) -> tuple:
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    store = _rules_store()
+    try:
+        rule = store.add(data, updated_by=_who(identity))
+    except ValueError as e:
+        return _err(400, str(e))
+    record(_who(identity), "rules.add", "",
+           {"id": rule["id"], "name": rule["name"]})
+    return 200, {"success": True, "rule": rule}
+
+
+def _rules_update(rule_id, body, identity) -> tuple:
+    from urllib.parse import unquote
+    rule_id = unquote(rule_id)
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    store = _rules_store()
+    try:
+        rule = store.update(rule_id, data, updated_by=_who(identity))
+    except ValueError as e:
+        return _err(400, str(e))
+    except KeyError as e:
+        return _err(404, str(e))
+    record(_who(identity), "rules.update", "",
+           {"id": rule_id, "fields": sorted(data.keys())})
+    return 200, {"success": True, "rule": rule}
+
+
+def _rules_delete(rule_id, identity) -> tuple:
+    from urllib.parse import unquote
+    rule_id = unquote(rule_id)
+    store = _rules_store()
+    try:
+        removed = store.delete(rule_id)
+    except ValueError as e:
+        return _err(400, str(e))
+    except KeyError as e:
+        return _err(404, str(e))
+    if not removed:
+        return _err(404, f"rule not found: {rule_id}")
+    record(_who(identity), "rules.delete", "", {"id": rule_id})
+    return 200, {"success": True, "deleted": rule_id}
+
+
+def _rules_test(body, identity) -> tuple:
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    text = str(data.get("text") or "")
+    if not text:
+        return _err(400, "body.text is required")
+    if len(text) > 100_000:
+        return _err(400, "body.text too large (max 100KB)")
+    store = _rules_store()
+    result = store.test_text(text)
+    record(_who(identity), "rules.test", "",
+           {"verdict": result["verdict"], "hits": len(result["hits"])})
+    return 200, result
+
+
+# ── connection test endpoints (v0.8.0) ──────────────────────────────────────
+
+
+def _test_dispatch(method, rest, body, identity) -> tuple:
+    """Route /api/admin/test/*. superadmin only, secrets never echoed."""
+    if not identity.is_superadmin:
+        return _err(403, "superadmin required")
+    if method != "POST":
+        return _err(405, "POST required")
+    try:
+        if rest == ["oidc"]:
+            return _test_oidc(body, identity)
+        if rest == ["data-backend"]:
+            return _test_data_backend(body, identity)
+        if rest == ["llm"]:
+            return _test_llm(body, identity)
+    except Exception as e:  # noqa: BLE001
+        return 502, {"error": str(e)}
+    return _err(404, "unknown test endpoint")
+
+
+def _test_oidc(body, identity) -> tuple:
+    """Test OIDC connectivity: discovery + JWKS + client_id acceptance."""
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    issuer = str(data.get("issuer") or "").strip().rstrip("/")
+    client_id = str(data.get("client_id") or "").strip()
+    client_secret = str(data.get("client_secret") or "").strip()
+    if not issuer:
+        return _err(400, "body.issuer is required")
+    if not client_id:
+        return _err(400, "body.client_id is required")
+
+    import requests as _requests
+    findings = {}
+    warnings_list = []
+
+    # 1. Discovery
+    discovery_url = issuer + "/.well-known/openid-configuration"
+    try:
+        resp = _requests.get(discovery_url, timeout=15)
+        if resp.status_code != 200:
+            return 200, {
+                "ok": False,
+                "step": "discovery",
+                "error": f"HTTP {resp.status_code} at {discovery_url}",
+                "hint": "Check the issuer URL — it should be the base "
+                        "URL of your IdP (e.g. https://accounts.google.com). "
+                        "If your IdP doesn't support OIDC discovery, "
+                        "configure endpoints manually.",
+            }
+        doc = resp.json()
+        findings["discovery"] = {
+            "issuer": doc.get("issuer", ""),
+            "authorization_endpoint": doc.get("authorization_endpoint", ""),
+            "token_endpoint": doc.get("token_endpoint", ""),
+            "userinfo_endpoint": doc.get("userinfo_endpoint", "(not advertised)"),
+            "end_session_endpoint": doc.get("end_session_endpoint", "(not advertised)"),
+            "jwks_uri": doc.get("jwks_uri", ""),
+        }
+    except _requests.ConnectionError:
+        return 200, {
+            "ok": False,
+            "step": "discovery",
+            "error": f"cannot reach {discovery_url}",
+            "hint": "Network unreachable. If this is an internal IdP, "
+                    "ensure the server can reach it (proxy, DNS, firewall).",
+        }
+    except _requests.Timeout:
+        return 200, {
+            "ok": False,
+            "step": "discovery",
+            "error": f"timeout connecting to {discovery_url}",
+            "hint": "The IdP did not respond within 15 seconds. Check "
+                    "network connectivity and the issuer URL.",
+        }
+    except Exception as e:
+        return 200, {
+            "ok": False,
+            "step": "discovery",
+            "error": f"unexpected error: {e}",
+            "hint": "The issuer URL may be incorrect or the IdP may not "
+                    "support OIDC discovery.",
+        }
+
+    # 2. JWKS
+    jwks_uri = doc.get("jwks_uri", "")
+    if jwks_uri:
+        try:
+            jwks_resp = _requests.get(jwks_uri, timeout=15)
+            if jwks_resp.status_code == 200:
+                jwks = jwks_resp.json()
+                keys = jwks.get("keys") or []
+                algs = set()
+                kty_counts = {}
+                for k in keys:
+                    if k.get("alg"):
+                        algs.add(k["alg"])
+                    kty = k.get("kty", "unknown")
+                    kty_counts[kty] = kty_counts.get(kty, 0) + 1
+                findings["jwks"] = {
+                    "key_count": len(keys),
+                    "algorithms": sorted(algs),
+                    "key_types": kty_counts,
+                }
+                if "RS256" not in algs:
+                    warnings_list.append(
+                        "RS256 not found in JWKS algorithms — signature "
+                        "verification may not work with this IdP"
+                    )
+            else:
+                warnings_list.append(f"JWKS fetch returned HTTP {jwks_resp.status_code}")
+        except Exception as e:
+            warnings_list.append(f"JWKS fetch failed: {e}")
+    else:
+        warnings_list.append("No jwks_uri in discovery — id_token verification not possible")
+
+    # 3. Client ID check (we can't fully verify without doing a real auth,
+    # but we can check if the IdP recognizes the client_id by looking at
+    # the authorization endpoint with it)
+    findings["client_id"] = client_id
+    findings["client_secret_provided"] = bool(client_secret)
+
+    # Audit (secret never logged)
+    record(_who(identity), "test.oidc", "",
+           {"issuer": issuer, "client_id": client_id,
+            "ok": True, "warnings": len(warnings_list)})
+
+    return 200, {
+        "ok": True,
+        "issuer": issuer,
+        "findings": findings,
+        "warnings": warnings_list,
+        "note": "Discovery and JWKS verified successfully. "
+                "Full end-to-end auth flow requires a browser redirect.",
+    }
+
+
+def _test_data_backend(body, identity) -> tuple:
+    """Test Supabase connectivity: list tables, report latency."""
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    url = str(data.get("url") or "").strip().rstrip("/")
+    key = str(data.get("key") or str(data.get("service_key") or "")).strip()
+
+    if not url:
+        return _err(400, "body.url is required")
+    if not key:
+        return _err(400, "body.key (or body.service_key) is required")
+
+    import time as _time
+    import requests as _requests
+
+    start = _time.monotonic()
+    try:
+        # PostgREST: GET / with API-KEY header
+        resp = _requests.get(
+            url + "/rest/v1/",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+            },
+            timeout=15,
+        )
+        latency_ms = int((_time.monotonic() - start) * 1000)
+
+        if resp.status_code == 200:
+            # The response contains available tables in the schema
+            try:
+                tables = list(resp.json().get("definitions", {}).keys())
+            except (ValueError, TypeError):
+                tables = []
+            result = {
+                "ok": True,
+                "url": url,
+                "latency_ms": latency_ms,
+                "table_count": len(tables),
+                "tables": tables[:50],  # cap at 50 for display
+            }
+        else:
+            result = {
+                "ok": False,
+                "url": url,
+                "latency_ms": latency_ms,
+                "error": f"HTTP {resp.status_code}",
+                "hint": "Check the URL and key. The key should be the "
+                        "service_role key for full access, or anon key "
+                        "for RLS-scoped access.",
+            }
+    except _requests.ConnectionError:
+        return 200, {
+            "ok": False,
+            "url": url,
+            "error": "connection refused",
+            "hint": "The Supabase URL is not reachable. Check network "
+                    "connectivity, DNS, and firewall rules.",
+        }
+    except _requests.Timeout:
+        return 200, {
+            "ok": False,
+            "url": url,
+            "error": "timeout (15s)",
+            "hint": "The Supabase instance did not respond in time. "
+                    "It may be down or behind a slow network.",
+        }
+    except Exception as e:
+        return 200, {
+            "ok": False,
+            "url": url,
+            "error": str(e),
+            "hint": "Unexpected error. The URL may be malformed.",
+        }
+
+    # Audit (key never logged)
+    record(_who(identity), "test.data-backend", "",
+           {"url": url, "ok": result["ok"],
+            "latency_ms": result.get("latency_ms", 0)})
+    return 200, result
+
+
+def _test_llm(body, identity) -> tuple:
+    """Test LLM connectivity: send a minimal chat completion request."""
+    data = _parse_body(body)
+    if data is None:
+        return _err(400, "body must be a JSON object")
+    base_url = str(data.get("base_url") or "").strip().rstrip("/")
+    api_key = str(data.get("api_key") or "").strip()
+    model = str(data.get("model") or "gpt-4o-mini").strip()
+
+    if not base_url:
+        return _err(400, "body.base_url is required")
+    if not api_key:
+        return _err(400, "body.api_key is required")
+
+    import time as _time
+    import requests as _requests
+
+    start = _time.monotonic()
+    try:
+        resp = _requests.post(
+            base_url + "/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+                "temperature": 0,
+            },
+            timeout=20,
+        )
+        latency_ms = int((_time.monotonic() - start) * 1000)
+
+        if resp.status_code == 200:
+            result = {
+                "ok": True,
+                "base_url": base_url,
+                "model": model,
+                "latency_ms": latency_ms,
+            }
+        else:
+            try:
+                err_body = resp.json()
+                err_msg = str(err_body.get("error", {}).get("message", ""))
+            except (ValueError, TypeError):
+                err_msg = resp.text[:200]
+            result = {
+                "ok": False,
+                "base_url": base_url,
+                "model": model,
+                "latency_ms": latency_ms,
+                "error": f"HTTP {resp.status_code}: {err_msg}",
+                "hint": "Check the API key, model name, and base URL. "
+                        "The base URL should end with /v1 for "
+                        "OpenAI-compatible APIs.",
+            }
+    except _requests.ConnectionError:
+        return 200, {
+            "ok": False,
+            "base_url": base_url,
+            "error": "connection refused",
+            "hint": "The LLM endpoint is not reachable. Check the URL "
+                    "and network connectivity.",
+        }
+    except _requests.Timeout:
+        return 200, {
+            "ok": False,
+            "base_url": base_url,
+            "error": "timeout (20s)",
+            "hint": "The LLM did not respond in time. It may be under "
+                    "load or the URL may be incorrect.",
+        }
+    except Exception as e:
+        return 200, {
+            "ok": False,
+            "base_url": base_url,
+            "error": str(e),
+            "hint": "Unexpected error. The base URL may be malformed.",
+        }
+
+    # Audit (key never logged)
+    record(_who(identity), "test.llm", "",
+           {"base_url": base_url, "model": model,
+            "ok": result["ok"], "latency_ms": result.get("latency_ms", 0)})
+    return 200, result

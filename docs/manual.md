@@ -290,6 +290,46 @@ Set the client secret via `GOLIVE_OIDC_CLIENT_SECRET` and a stable
 `GOLIVE_COOKIE_SECRET` in production (otherwise golive persists one under
 `GOLIVE_HOME`). Presets fill the issuer/scopes; explicit fields override.
 
+**Token verification.** Since v0.8.0 every `id_token` is checked against the
+IdP's published signing keys before a session is created: the signature must
+verify, `iss` / `aud` / `exp` / `nonce` must all match, and `alg: none` is
+refused outright. This needs the optional crypto dependency:
+
+```bash
+pip install 'html-golive[oidc]'
+```
+
+Without it golive refuses to start in OIDC mode rather than quietly skipping
+verification. If your IdP cannot issue RS256 tokens you can set
+`auth.oidc.verify_signature: false`, but the server will warn loudly at every
+startup — an unverified token is one anybody can forge.
+
+**Granting access after login.** Signing in proves who someone is; it does not
+make them an operator. List admins under the `admin` section:
+
+```yaml
+admin:
+  admins: [alice@corp.example]
+```
+
+A common slip is writing `admins:` at the top level, where it has no effect.
+golive prints a warning naming the correct key when it sees this, so check
+startup output if a login succeeds but the portal stays read-only.
+
+**Behind a gateway.** Where policy forbids the app talking to the IdP directly,
+`auth.provider: proxy` trusts an authentication header set by your gateway:
+
+```yaml
+auth:
+  provider: proxy
+  proxy:
+    header: X-Forwarded-User
+    trusted_ips: ["10.0.0.0/8"]
+```
+
+`trusted_ips` is mandatory — without it anyone able to reach the port could
+forge that header. golive refuses to start if the list is empty.
+
 ## 17. Migrating pages
 
 Moving a page built on another golive deployment (or an intranet one)?

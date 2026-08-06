@@ -529,10 +529,56 @@ def _apply_env_overrides(cfg: Config) -> Config:
 _current: Optional[Config] = None
 
 
+KNOWN_SECTIONS = (
+    "admin", "auth", "data", "editor", "localize", "registry", "security",
+    "server", "slug", "storage", "style", "supabase", "uploader", "watermark",
+)
+
+# Settings people reasonably expect at the top level, but which actually
+# live inside a section. Silently ignoring these is how someone ends up
+# staring at "I listed myself as an admin and still have no access".
+MISPLACED_HINTS = {
+    "admins": "admin.admins",
+    "token": "auth.token",
+    "provider": "auth.provider",
+    "oidc": "auth.oidc",
+    "port": "server.port",
+    "host": "server.host",
+    "backend": "data.backend or storage.backend",
+    "watermark_text": "watermark.text",
+}
+
+
+def check_unknown_sections(raw: dict) -> list:
+    """Report top-level keys golive will ignore, with a fix where obvious.
+
+    Returns a list of human-readable warnings; never raises. Unknown keys
+    are not fatal — a config may legitimately carry comments or anchors
+    for other tooling — but they should never be swallowed in silence.
+    """
+    if not isinstance(raw, dict):
+        return []
+    warnings = []
+    for key in raw:
+        name = str(key)
+        if name in KNOWN_SECTIONS or name.startswith("x-") or name.startswith("_"):
+            continue
+        target = MISPLACED_HINTS.get(name)
+        if target:
+            warnings.append(
+                "'{}' at the top level is ignored — move it to '{}'".format(name, target)
+            )
+        else:
+            warnings.append("unknown top-level key '{}' is ignored".format(name))
+    return warnings
+
+
 def load_config(cli_path: Optional[str] = None) -> Config:
     """Load config fresh (no cache). Raises ConfigError on broken files."""
     path = _find_config_file(cli_path)
     raw = _parse_yaml(path) if path else {}
+    for warning in check_unknown_sections(raw):
+        print("⚠️  {}: {}".format(path or "golive.yaml", warning), file=sys.stderr)
     cfg = _build(raw, str(path) if path else "")
     return _apply_env_overrides(cfg)
 

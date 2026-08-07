@@ -99,12 +99,16 @@ def share_urls(
     if not site_path.startswith("/"):
         site_path = "/" + site_path
 
-    # Resolve config fields
+    # Resolve config fields. These live under the `server` section; earlier
+    # code read them off the root object, which silently yielded defaults —
+    # so a configured public_base was ignored and a loopback bind never
+    # raised the "others can't reach this" flag.
     public_base = ""
     host = "0.0.0.0"
     if cfg is not None:
-        public_base = getattr(cfg, "public_base", "") or ""
-        host = getattr(cfg, "host", "0.0.0.0") or "0.0.0.0"
+        server = getattr(cfg, "server", None) or cfg
+        public_base = getattr(server, "public_base", "") or ""
+        host = getattr(server, "host", "0.0.0.0") or "0.0.0.0"
 
     # ── 1. public_base configured → that's the canonical URL ──
     if public_base:

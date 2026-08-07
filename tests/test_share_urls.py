@@ -190,3 +190,43 @@ class TestFormatShareMessage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAgainstTheRealConfigObject(unittest.TestCase):
+    """The stubs above describe the shape we *expect*; these use the real one.
+
+    An earlier version read `cfg.public_base` and `cfg.host` straight off the
+    root object. Every stub-based test still passed, because the stubs were
+    built to that same wrong shape — while in production both lookups missed
+    and quietly fell back to defaults: a configured public_base was ignored,
+    and a loopback bind never warned that nobody else could reach the link.
+    """
+
+    def _config(self, **server_fields):
+        import golive.config as config_mod
+        cfg = config_mod.Config()
+        for key, value in server_fields.items():
+            setattr(cfg.server, key, value)
+        return cfg
+
+    def test_public_base_from_real_config_is_used(self):
+        cfg = self._config(public_base="https://pages.corp.example")
+        result = share_urls("/s/abc", 8787, cfg)
+        self.assertEqual(result["public"], "https://pages.corp.example/s/abc")
+
+    def test_loopback_bind_from_real_config_raises_the_flag(self):
+        """serve defaults to 127.0.0.1, so this is the common case."""
+        cfg = self._config(host="127.0.0.1")
+        self.assertTrue(share_urls("/s/abc", 8787, cfg)["needs_host_flag"])
+
+    def test_wildcard_bind_from_real_config_needs_no_flag(self):
+        cfg = self._config(host="0.0.0.0")
+        self.assertFalse(share_urls("/s/abc", 8787, cfg)["needs_host_flag"])
+
+    def test_config_section_is_where_we_think_it_is(self):
+        """Guard the assumption the lookup depends on."""
+        import golive.config as config_mod
+        cfg = config_mod.Config()
+        self.assertTrue(hasattr(cfg, "server"))
+        self.assertTrue(hasattr(cfg.server, "host"))
+        self.assertTrue(hasattr(cfg.server, "public_base"))

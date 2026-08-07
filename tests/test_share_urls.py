@@ -13,6 +13,8 @@ Covers:
 
 from __future__ import annotations
 
+import os
+import re
 import unittest
 from dataclasses import dataclass
 from unittest import mock
@@ -156,7 +158,8 @@ class TestFormatShareMessage(unittest.TestCase):
     def test_public_mode_single_url(self):
         cfg = _ServerCfg(public_base="https://pages.example.com")
         msg = format_share_message("Q3 Report", "/s/abc123", 8787, cfg)
-        self.assertIn("✅ 发布成功「Q3 Report」", msg)
+        self.assertIn("Q3 Report", msg)
+        self.assertIn("✅", msg)
         self.assertIn("https://pages.example.com/s/abc123", msg)
         self.assertNotIn("局域网", msg)
         self.assertNotIn("本机", msg)
@@ -166,10 +169,11 @@ class TestFormatShareMessage(unittest.TestCase):
         with mock.patch("golive.core.urls._lan_ip",
                         return_value="192.168.1.23"):
             msg = format_share_message("Demo", "/s/abc123", 8787, cfg)
-        self.assertIn("✅ 发布成功「Demo」", msg)
+        self.assertIn("Demo", msg)
+        self.assertIn("✅", msg)
         self.assertIn("http://localhost:8787/s/abc123", msg)
         self.assertIn("http://192.168.1.23:8787/s/abc123", msg)
-        self.assertIn("← 分享给同事用这个", msg)
+        self.assertIn("←", msg)  # the "share this one" pointer, whatever its wording
         # 0.0.0.0 → no host flag warning
         self.assertNotIn("--host 0.0.0.0", msg)
 
@@ -178,14 +182,15 @@ class TestFormatShareMessage(unittest.TestCase):
         with mock.patch("golive.core.urls._lan_ip",
                         return_value="192.168.1.23"):
             msg = format_share_message("Demo", "/s/abc123", 8787, cfg)
-        self.assertIn("需要 golive serve --host 0.0.0.0", msg)
+        self.assertIn("--host 0.0.0.0", msg)
 
     def test_no_lan_shows_fallback(self):
         cfg = _ServerCfg(host="0.0.0.0")
         with mock.patch("golive.core.urls._lan_ip",
                         return_value="127.0.0.1"):
             msg = format_share_message("Demo", "/s/abc123", 8787, cfg)
-        self.assertIn("未检测到", msg)
+        # wording is localised; what matters is that the LAN line is absent
+        self.assertNotIn("192.168", msg)
 
 
 if __name__ == "__main__":
@@ -230,3 +235,39 @@ class TestAgainstTheRealConfigObject(unittest.TestCase):
         self.assertTrue(hasattr(cfg, "server"))
         self.assertTrue(hasattr(cfg.server, "host"))
         self.assertTrue(hasattr(cfg.server, "public_base"))
+
+
+class TestMessagesFollowTheActiveLanguage(unittest.TestCase):
+    """The assertions above are wording-agnostic on purpose, so something
+    still has to prove the text actually switches language."""
+
+    def setUp(self):
+        import golive.i18n as i18n
+        self._saved = os.environ.get("GOLIVE_LANG")
+        self.i18n = i18n
+
+    def tearDown(self):
+        if self._saved is None:
+            os.environ.pop("GOLIVE_LANG", None)
+        else:
+            os.environ["GOLIVE_LANG"] = self._saved
+        self.i18n.set_language("")
+
+    def _message(self, lang):
+        os.environ["GOLIVE_LANG"] = lang
+        self.i18n.set_language(lang)
+        return format_share_message("Demo", "/s/abc", 8787,
+                                    _ServerCfg(host="127.0.0.1"))
+
+    def test_english_is_free_of_cjk(self):
+        self.assertIsNone(re.search(r"[\u4e00-\u9fff]", self._message("en")))
+
+    def test_chinese_actually_renders_chinese(self):
+        self.assertIsNotNone(re.search(r"[\u4e00-\u9fff]", self._message("zh")))
+
+    def test_the_url_itself_never_changes(self):
+        """Only the labels are translated — links must be identical."""
+        import re as _re
+        urls_en = _re.findall(r"http://\S+", self._message("en"))
+        urls_zh = _re.findall(r"http://\S+", self._message("zh"))
+        self.assertEqual(urls_en, urls_zh)

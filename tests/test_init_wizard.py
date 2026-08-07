@@ -297,14 +297,20 @@ class TestFailuresAreReadable(WizardBase):
         self.assertFalse(self.step(steps, "Config file").ok)
         self.assertNotIn("Traceback", out)
 
-    def test_skill_failure_does_not_abort_the_rest(self):
-        """A missing agent is annoying; the demos should still land."""
+    def test_missing_agent_is_skipped_not_failed(self):
+        """Most people have no AI agent installed; that is not a failure.
+
+        The step is reported as skipped, init still succeeds, and the rest
+        of the bootstrap (demos, data layer) goes ahead as normal.
+        """
         shutil.rmtree(self.agent_home / ".codex")
         code, steps, out = self.run_init(home=str(self.home))
-        self.assertFalse(self.step(steps, "agent skill").ok)
+        skill_step = self.step(steps, "agent skill")
+        self.assertTrue(skill_step.ok, "a missing agent must not fail the step")
+        self.assertTrue(getattr(skill_step, "skipped", False),
+                        "the step should be marked as skipped")
         self.assertTrue(self.step(steps, "Demo sites").ok)
         self.assertEqual(code, 0, out)
-        self.assertIn("--skip-skill", self.step(steps, "agent skill").hint)
 
 
 class TestNonInteractive(WizardBase):

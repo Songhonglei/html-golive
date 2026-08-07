@@ -30,6 +30,8 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+
+from golive.i18n import t
 from typing import Optional, Tuple
 
 SKILL_NAME = "html-golive"
@@ -90,8 +92,8 @@ class NoAgentDetected(SkillInstallError):
 
     The message is phrased as guidance, not an error:
 
-        ⊘ agent skill：未检测到 AI agent
-           （需要时运行 golive skill install）
+        ⊘ agent skill: no AI agent detected
+           (run golive skill install when you need it)
     """
 
 
@@ -299,22 +301,21 @@ def choose_target(cwd=None, home=None, interactive=None,
         interactive = _stdin_is_interactive()
 
     if not interactive:
-        print(f"ℹ️  检测到 {len(cands)} 个可安装位置，非交互环境自动选择第一个："
-              f"\n     {cands[0].path}  [{cands[0].agent}]", file=out)
-        print("   其他候选：", file=out)
+        print(t("skill.auto_pick", count=len(cands),
+                path=cands[0].path, agent=cands[0].agent), file=out)
+        print(t("skill.other_candidates"), file=out)
         for c in cands[1:]:
             print(f"     - {c.path}  [{c.agent}]", file=out)
-        print("   指定其他位置：golive skill install --target <DIR>"
-              "（golive skill install --list-targets 查看全部）", file=out)
+        print(t("skill.pick_hint"), file=out)
         return cands[0].path, "auto"
 
-    print(f"检测到 {len(cands)} 个可安装位置：", file=out)
+    print(t("skill.found_targets", count=len(cands)), file=out)
     for i, c in enumerate(cands, 1):
         print(f"  [{i}] {c.describe()}", file=out)
     try:
-        raw = input(f"选择安装位置 [1-{len(cands)}]，回车用 1：").strip()
+        raw = input(t("skill.choose_prompt", max=len(cands))).strip()
     except (EOFError, KeyboardInterrupt):
-        print("\n⚠️  已取消，使用第一个位置。", file=out)
+        print("\n" + t("skill.cancelled"), file=out)
         return cands[0].path, "auto"
     if not raw:
         return cands[0].path, "chosen"
@@ -322,9 +323,10 @@ def choose_target(cwd=None, home=None, interactive=None,
         idx = int(raw)
     except ValueError:
         raise SkillInstallError(
-            f"'{raw}' 不是有效编号（应为 1-{len(cands)}）")
+            t("skill.bad_number", raw=raw, max=len(cands)))
     if not 1 <= idx <= len(cands):
-        raise SkillInstallError(f"编号超出范围：{idx}（应为 1-{len(cands)}）")
+        raise SkillInstallError(
+            t("skill.number_out_of_range", idx=idx, max=len(cands)))
     return cands[idx - 1].path, "chosen"
 
 
@@ -338,9 +340,7 @@ def resolve_target(target: Optional[str] = None, cwd=None, home=None,
 
 def _no_target_message(candidates) -> str:
     """Phrased as guidance, not an error — no agent is a valid state."""
-    lines = ["未检测到 AI agent（需要时运行 golive skill install，"
-             "或用 --target <DIR> 指定目录）",
-             "", "常见安装位置（创建后重新运行即可）："]
+    lines = [t("skill.no_agent"), "", t("skill.common_locations")]
     lines += [f"  {c.path}" for c in candidates[:6]]
     return "\n".join(lines)
 

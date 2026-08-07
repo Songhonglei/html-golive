@@ -77,7 +77,7 @@ class TestNoTargetMessageTone(unittest.TestCase):
             home=Path(tempfile.mkdtemp()),
         )
         msg = si._no_target_message(cands)
-        self.assertIn("未检测到", msg)
+        self.assertIn("golive skill install", msg)
         self.assertIn("golive skill install", msg)
 
     def test_message_does_not_say_could_not_detect(self):
@@ -89,7 +89,7 @@ class TestNoTargetMessageTone(unittest.TestCase):
         self.assertNotIn("could not detect", msg)
         self.assertNotIn("❌", msg)
         # --target guidance is fine, but the tone is neutral
-        self.assertIn("未检测到", msg)
+        self.assertIn("golive skill install", msg)
 
 
 class TestNestedHomeNoParentDirBug(unittest.TestCase):

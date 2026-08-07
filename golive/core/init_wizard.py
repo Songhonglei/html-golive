@@ -200,6 +200,11 @@ def _step_skill(opts: InitOptions, out) -> StepResult:
         return StepResult(t("init.step_skill"), True,
                           t("init.step_skill_installed", path=res['installed_to'],
                             version=res['version'], note=note))
+    except si.NoAgentDetected as e:
+        # Having no AI agent installed is a perfectly normal setup, not a
+        # failure — report it as skipped so init still exits successfully.
+        return StepResult(t("init.step_skill"), True, str(e).splitlines()[0],
+                          skipped=True)
     except si.SkillInstallError as e:
         return StepResult(
             t("init.step_skill"), False, str(e),

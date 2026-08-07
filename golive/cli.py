@@ -1142,6 +1142,11 @@ def cmd_skill(args) -> int:
             print(t("skill.backup", backup=res['backup']))
         print(t("skill.next_step"))
         return 0
+    except si.NoAgentDetected as e:
+        # Not an error: the user simply has no AI agent installed. Say so
+        # plainly, on stdout, and exit 0 — a red ✗ here reads as breakage.
+        print(t("skill.not_applicable", detail=e))
+        return 0
     except si.SkillInstallError as e:
         print(t("skill.install_error", error=e), file=sys.stderr)
         return 1

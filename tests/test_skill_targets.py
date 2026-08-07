@@ -124,7 +124,7 @@ class TestMultipleTargets(TargetBase):
         self.assertEqual(how, "auto")
         self.assertEqual(path, self.home / ".claude" / "skills")  # exists wins
         out = buf.getvalue()
-        self.assertIn("自动选择第一个", out)
+        self.assertIn("non-interactive", out)
         self.assertIn("--target", out, "must tell the user how to override")
         # every other candidate is listed so the choice is auditable
         self.assertIn(str(self.home / ".codex" / "skills"), out)

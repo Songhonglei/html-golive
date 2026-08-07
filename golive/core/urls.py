@@ -147,35 +147,27 @@ def format_share_message(
 ) -> str:
     """Produce a human-friendly multi-line message for the publish CLI.
 
-    This is the suggested text the CLI should print. The i18n layer can
-    override the wording; the structure (which URLs to show) is driven by
-    ``share_urls()``.
-
-    Keys for i18n mapping:
-      - ``publish.success`` — the ✅ line
-      - ``publish.url.local`` — "本机" label
-      - ``publish.url.lan`` — "局域网" label
-      - ``publish.url.public`` — the single public URL line
-      - ``publish.needs_host`` — the --host 0.0.0.0 hint
+    The structure — which URLs are worth showing — comes from
+    ``share_urls()``; the wording comes from the active language table.
     """
+    from golive.i18n import t
+
     urls = share_urls(site_path, port, cfg)
 
-    lines = [f"✅ 发布成功「{site_name}」"]
+    lines = [t("publish.success", name=site_name)]
 
     if urls["public"]:
         # public_base configured → one clean URL, nothing else
-        lines.append(f"   URL:     {urls['public']}")
+        lines.append(t("publish.url.public", url=urls["public"]))
         return "\n".join(lines)
 
-    lines.append(f"   本机:    {urls['local']}")
+    lines.append(t("publish.url.local", url=urls["local"]))
 
     if urls["lan"]:
-        lines.append(f"   局域网:  {urls['lan']}   ← 分享给同事用这个")
+        lines.append(t("publish.url.lan", url=urls["lan"]))
         if urls["needs_host_flag"]:
-            lines.append(
-                "   （需要 golive serve --host 0.0.0.0 才能被其他机器访问）"
-            )
+            lines.append(t("publish.needs_host"))
     else:
-        lines.append("   局域网:  未检测到（本机可访问）")
+        lines.append(t("publish.url.lan_none"))
 
     return "\n".join(lines)

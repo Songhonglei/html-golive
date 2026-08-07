@@ -81,6 +81,20 @@ class SkillInstallError(RuntimeError):
     """Raised for anything the caller should see as a clean CLI error."""
 
 
+class NoAgentDetected(SkillInstallError):
+    """Raised when no AI agent directory is found on this machine.
+
+    This is *not* an error — many users have no AI agent installed.
+    Callers (especially ``init_wizard._step_skill``) should catch this
+    separately and treat it as a neutral skip rather than a failure.
+
+    The message is phrased as guidance, not an error:
+
+        ⊘ agent skill：未检测到 AI agent
+           （需要时运行 golive skill install）
+    """
+
+
 class Candidate:
     """One possible install location.
 
@@ -276,7 +290,7 @@ def choose_target(cwd=None, home=None, interactive=None,
     out = stream or sys.stderr
     cands = viable_targets(cwd=cwd, home=home)
     if not cands:
-        raise SkillInstallError(_no_target_message(
+        raise NoAgentDetected(_no_target_message(
             detect_targets(cwd=cwd, home=home)))
     if len(cands) == 1:
         return cands[0].path, "only"
@@ -323,8 +337,10 @@ def resolve_target(target: Optional[str] = None, cwd=None, home=None,
 
 
 def _no_target_message(candidates) -> str:
-    lines = ["could not detect a skills directory — pass --target <DIR>",
-             "", "common locations (create one, then re-run):"]
+    """Phrased as guidance, not an error — no agent is a valid state."""
+    lines = ["未检测到 AI agent（需要时运行 golive skill install，"
+             "或用 --target <DIR> 指定目录）",
+             "", "常见安装位置（创建后重新运行即可）："]
     lines += [f"  {c.path}" for c in candidates[:6]]
     return "\n".join(lines)
 

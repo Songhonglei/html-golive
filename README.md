@@ -60,6 +60,7 @@ golive serve
 
 ```bash
 pip install html-golive              # core
+pip install 'html-golive[oidc]'      # + SSO / OpenID Connect login
 pip install 'html-golive[image]'     # + image compression (Pillow)
 pip install 'html-golive[s3]'        # + S3-compatible backends (boto3)
 ```
@@ -119,6 +120,36 @@ the site owner + maintainers, and every overwrite is preceded by a
 rollback snapshot. With `auth.provider: oidc` the editor accepts the
 login session instead of the token+header pair.
 
+### SSO quickstart (v0.8.0)
+
+Enable OpenID Connect login — Google, Keycloak, Authentik, Auth0, or any
+IdP with a discovery document:
+
+```yaml
+auth:
+  provider: oidc
+  oidc:
+    preset: google          # or auth0 / okta / azure / keycloak / authentik
+    client_id: your-client-id
+    redirect_uri: https://pages.example.com/auth/callback
+```
+
+Set the client secret via `GOLIVE_OIDC_CLIENT_SECRET` and a stable
+`GOLIVE_COOKIE_SECRET` in production. Since v0.8.0 every `id_token` is
+signature-verified against the IdP's published keys (requires `pip install
+'html-golive[oidc]'`).
+
+> **Login ≠ admin.** Signing in proves who someone is; it does not grant
+> management access. List superadmin emails separately:
+> ```yaml
+> admin:
+>   admins: [alice@corp.example]
+> ```
+> A common slip is putting `admins:` at the top level — it has no effect
+> there. See [manual §16](docs/manual.md#16-identity--login) for details.
+
+---
+
 ## Upgrading
 
 ```bash
@@ -172,7 +203,7 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
 - `golive migrate-check` — port pages from other golive deployments
 - Docker Compose deployment (+ optional MinIO profile)
 
-**Editing, identity & watermarking** *(v0.3)*
+**Editing, identity & watermarking** *(v0.3, signature-verified OIDC in v0.8)*
 - In-browser inline editor (`publish --enable-editor`): contenteditable
   text editing with a save API that re-runs the full security pipeline,
   snapshots before every overwrite, and enforces owner/maintainer ACLs
@@ -180,19 +211,25 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
 - Page watermarking (`--watermark [text]`): canvas-tiled identity
   watermark — OIDC user, static text, or page meta tag; optional
   view-report webhook; `GOLIVE_WATERMARK_OFF=1` kill switch
-- Generic **OIDC login** (`auth.provider: oidc`): Google / Keycloak /
-  Authentik / any discovery-document IdP; PKCE + signed session cookies;
-  sessions accepted by the management and editor APIs
+- **Signature-verified OIDC login** (v0.8.0): `auth.provider: oidc`
+  with Google / Keycloak / Authentik / any discovery-document IdP;
+  PKCE + signed session cookies; every `id_token` checked against IdP
+  signing keys (iss/aud/exp/nonce, `alg: none` refused); presets for
+  common providers; sessions accepted by the management and editor APIs
 - Optional **LLM security review** of weak scan hits via any
   OpenAI-compatible endpoint (`security.llm.*`), with a conservative
   degrade path and a `strict_mode` gate
 
-**Admin portal** *(v0.5)*
+**Admin portal** *(v0.5, config-store in v0.8)*
 - Web management portal at `/admin`: site list/search, metadata editing,
   maintainer & ownership management, snapshot rollback, delete with
   slug confirmation — role-scoped (owner / maintainer / superadmin via
   `admin.admins` or `GOLIVE_ADMINS`), plus superadmin stats dashboard
   and a JSONL audit trail (`/api/admin/*` JSON API for scripting)
+- **9-page admin console** (v0.8.0): identity, data backends, security,
+  global parameters — all configurable through the web UI with
+  **config-store**: settings saved to the registry are live on next
+  restart, no yaml editing required
 
 **AI agent skill** *(v0.7)*
 - `golive skill install` drops a ready-made AgentSkill into your agent's

@@ -57,6 +57,7 @@ golive serve
 
 ```bash
 pip install html-golive              # 核心
+pip install 'html-golive[oidc]'      # + SSO / OpenID Connect 登录
 pip install 'html-golive[image]'     # + 图片压缩（Pillow）
 pip install 'html-golive[s3]'        # + S3 兼容后端（boto3）
 ```
@@ -115,6 +116,34 @@ golive serve
 能改，每次覆盖前自动生成回滚快照。配置 `auth.provider: oidc` 后，
 编辑器直接认登录会话，无需 token 参数。
 
+### SSO 快速上手（v0.8.0）
+
+一行 yaml 接上 OpenID Connect 登录——Google / Keycloak / Authentik /
+Auth0 或任意带 discovery 文档的 IdP：
+
+```yaml
+auth:
+  provider: oidc
+  oidc:
+    preset: google          # 或 auth0 / okta / azure / keycloak / authentik
+    client_id: your-client-id
+    redirect_uri: https://pages.example.com/auth/callback
+```
+
+生产环境通过 `GOLIVE_OIDC_CLIENT_SECRET` 设置 client secret，通过
+`GOLIVE_COOKIE_SECRET` 设置会话 cookie 签名密钥。v0.8.0 起，每个
+`id_token` 都会根据 IdP 公开的签名密钥验签（iss/aud/exp/nonce 全部
+校验，`alg: none` 直接拒绝），需安装 `pip install 'html-golive[oidc]'`。
+
+> **登录 ≠ 管理权限。** 登录只是证明"你是谁"，不等于有管理权限。
+> 超管邮箱需单独配置：
+> ```yaml
+> admin:
+>   admins: [alice@corp.example]
+> ```
+> 常见错误：把 `admins:` 写在顶层——那样不生效。详见
+> [手册 §16](docs/manual.md#16-identity--login)。
+
 ## 升级
 
 ```bash
@@ -167,25 +196,30 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
 - `golive migrate-check` —— 从其他 golive 部署迁移页面
 - Docker Compose 部署（含可选 MinIO profile）
 
-**编辑、身份与水印** *(v0.3)*
+**编辑、身份与水印** *(v0.3；签名验签 OIDC v0.8)*
 - 浏览器在线编辑器（`publish --enable-editor`）：contenteditable 文字
   编辑，保存 API 复跑完整安全管线、覆盖前先打快照、owner/maintainer
   权限控制（`golive maintainer add/remove/list`）
 - 页面水印（`--watermark [文本]`）：canvas 平铺身份水印——OIDC 用户 /
   静态文本 / 页面 meta 标签三选一；可选访问上报 webhook；
   `GOLIVE_WATERMARK_OFF=1` 全局禁用
-- 通用 **OIDC 登录**（`auth.provider: oidc`）：Google / Keycloak /
-  Authentik 等任意带 discovery 文档的 IdP；PKCE + 签名会话 cookie；
+- **签名验签 OIDC 登录**（v0.8.0）：`auth.provider: oidc`，支持
+  Google / Keycloak / Authentik 等任意带 discovery 文档的 IdP；PKCE
+  + 签名会话 cookie；每个 `id_token` 都校验 IdP 签名密钥
+  （iss/aud/exp/nonce，`alg: none` 拒绝）；内置常见 IdP 预设；
   管理 API 与编辑器 API 均认会话
 - 可选 **LLM 安全复核**：弱命中送任意 OpenAI 兼容端点二次判定
   （`security.llm.*`），失败保守降级，支持 `strict_mode` 硬门槛
 
-**运营管理门户** *(v0.5)*
+**运营管理门户** *(v0.5；配置入库 v0.8)*
 - `/admin` Web 管理门户：站点列表/搜索、基本信息编辑、maintainer 与
   owner 移交管理、快照回滚、输入 slug 确认删除——按角色隔离
   （owner / maintainer / 超管，超管名单来自 `admin.admins` 或
   `GOLIVE_ADMINS`）；超管另有统计看板与审计日志页；全部操作
   也可通过 `/api/admin/*` JSON API 脚本化调用
+- **9 页管理后台**（v0.8.0）：身份、数据后端、安全、全局参数——
+  全部通过 Web UI 配置，**配置入库**：设置保存到注册表，重启后
+  生效，无需手编 yaml
 
 **AI agent skill** *(v0.7)*
 - `golive skill install` 把随包分发的 AgentSkill 装进 agent 的 skills

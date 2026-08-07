@@ -32,6 +32,9 @@ def _free_port() -> int:
 
 class DemoBase(unittest.TestCase):
     def setUp(self):
+        os.environ["GOLIVE_LANG"] = "en"
+        from golive.i18n import set_language
+        set_language("en")
         self.tmp = Path(tempfile.mkdtemp(prefix="golive_demo_"))
         self._saved = {k: os.environ.get(k)
                        for k in ("GOLIVE_HOME", "GOLIVE_CONFIG",
@@ -343,7 +346,7 @@ class TestDemoCli(DemoBase):
 
         code, out = self._cli("demo", "remove")
         self.assertEqual(code, 0)
-        self.assertIn("已删除", out)
+        self.assertIn("Removed", out)
 
         code, out = self._cli("demo", "status")
         self.assertIn("0/2", out)

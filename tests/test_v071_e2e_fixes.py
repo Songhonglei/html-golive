@@ -40,10 +40,8 @@ class TestInitBackgroundOption(unittest.TestCase):
 
     def test_foreground_hint_mentions_the_alternative(self):
         """A user stuck with an occupied terminal should be told the way out."""
-        import inspect
-        from golive.core import init_wizard
-        src = inspect.getsource(init_wizard)
-        self.assertIn("--background", src)
+        from golive.i18n import t
+        self.assertIn("--background", t("init.forever_hint", port=8787))
 
 
 class TestDoctorPortDiscovery(unittest.TestCase):

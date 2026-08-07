@@ -341,7 +341,7 @@ class TestServeCliWiring(unittest.TestCase):
         with temp_home():
             rc, out = run_cli("serve", "status", "--port", str(free_port()))
             self.assertEqual(rc, 1)
-            self.assertIn("未运行", out)
+            self.assertIn("Not running", out)
             self.assertIn("golive serve start", out)
 
     def test_serve_stop_when_not_running_is_quiet_success(self):
@@ -354,7 +354,7 @@ class TestServeCliWiring(unittest.TestCase):
         with temp_home():
             rc, out = run_cli("serve", "logs", "-n", "5")
             self.assertEqual(rc, 0)
-            self.assertIn("暂无日志", out)
+            self.assertIn("No logs yet", out)
 
     def test_serve_start_status_stop_through_the_cli(self):
         with temp_home():
@@ -362,18 +362,18 @@ class TestServeCliWiring(unittest.TestCase):
             rc, out = run_cli("serve", "start", "--port", str(port),
                               "--host", "127.0.0.1")
             self.assertEqual(rc, 0, out)
-            self.assertIn("后台启动", out)
+            self.assertIn("started in the background", out)
             try:
                 rc, out = run_cli("serve", "status", "--port", str(port))
                 self.assertEqual(rc, 0, out)
-                self.assertIn("运行中", out)
+                self.assertIn("Running", out)
 
                 rc, out = run_cli("serve", "logs", "-n", "5")
                 self.assertEqual(rc, 0)
 
                 rc, out = run_cli("serve", "restart")
                 self.assertEqual(rc, 0, out)
-                self.assertIn("已重启", out)
+                self.assertIn("Restarted", out)
             finally:
                 rc, out = run_cli("serve", "stop")
             self.assertEqual(rc, 0, out)

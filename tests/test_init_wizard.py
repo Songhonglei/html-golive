@@ -37,11 +37,14 @@ class WizardBase(unittest.TestCase):
         (self.agent_home / ".codex").mkdir(parents=True)
         self._saved = {k: os.environ.get(k)
                        for k in ("GOLIVE_HOME", "GOLIVE_CONFIG",
-                                 "XDG_CONFIG_HOME", "HOME")}
+                                 "XDG_CONFIG_HOME", "HOME", "GOLIVE_LANG")}
         os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
         os.environ["HOME"] = str(self.agent_home)
         os.environ.pop("GOLIVE_CONFIG", None)
         os.environ.pop("GOLIVE_HOME", None)
+        os.environ["GOLIVE_LANG"] = "en"
+        from golive.i18n import set_language
+        set_language("en")
         self._reset()
 
     def tearDown(self):
@@ -122,8 +125,8 @@ class TestFreshRun(WizardBase):
 
     def test_every_step_is_narrated(self):
         _c, steps, out = self.run_init(home=str(self.home))
-        for name in ("数据目录", "环境自检", "agent skill", "数据层",
-                     "示例页", "启动服务", "健康校验"):
+        for name in ("Data directory", "Environment check", "agent skill", "Data layer",
+                     "Demo sites", "Start server", "Health check"):
             self.assertIn(name, out)
         self.assertGreaterEqual(len(steps), 7)
 
@@ -134,7 +137,7 @@ class TestIdempotence(WizardBase):
         code2, steps2, out2 = self.run_init(home=str(self.home))
         self.assertEqual(code1, 0)
         self.assertEqual(code2, 0, out2)
-        self.assertIn("已存在，复用", out2)
+        self.assertIn("already exists, reusing", out2)
         for step in steps2:
             self.assertTrue(step.ok, f"{step.name}: {step.detail}")
 
@@ -162,7 +165,7 @@ class TestIdempotence(WizardBase):
     def test_second_run_reports_skill_already_current(self):
         self.run_init(home=str(self.home))
         _c, steps, _o = self.run_init(home=str(self.home))
-        self.assertIn("已安装且为最新", self.step(steps, "agent skill").detail)
+        self.assertIn("Already installed and up to date", self.step(steps, "agent skill").detail)
 
 
 class TestFlags(WizardBase):
@@ -216,7 +219,7 @@ class TestVerification(WizardBase):
     def test_success_is_backed_by_real_http(self):
         port = _free_port()
         _c, steps, _o = self.run_init(home=str(self.home), port=port)
-        detail = self.step(steps, "健康校验").detail
+        detail = self.step(steps, "Health check").detail
         self.assertIn("health ✅", detail)
         self.assertIn("demo-static ✅", detail)
         self.assertIn("demo-crud ✅", detail)
@@ -245,7 +248,7 @@ class TestVerification(WizardBase):
         code, _s, out = self.run_init(home=str(self.home), port=port,
                                       no_serve=False)
         self.assertEqual(code, 0, out)
-        self.assertIn("已有 golive", out)
+        self.assertIn("already has golive", out)
         # and the pre-existing server is still up
         with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/health", timeout=5) as r:
@@ -266,10 +269,10 @@ class TestFailuresAreReadable(WizardBase):
         finally:
             blocked.chmod(0o700)
         self.assertEqual(code, 1)
-        step = self.step(steps, "数据目录")
+        step = self.step(steps, "Data directory")
         self.assertFalse(step.ok)
         self.assertIn("--home", step.hint)
-        self.assertIn("怎么修", out)
+        self.assertIn("How to fix", out)
         self.assertNotIn("Traceback", out)
 
     def test_occupied_port_reports_the_step_and_the_fix(self):
@@ -280,7 +283,7 @@ class TestFailuresAreReadable(WizardBase):
         self.addCleanup(blocker.close)
         code, steps, out = self.run_init(home=str(self.home), port=port)
         self.assertEqual(code, 1)
-        step = self.step(steps, "环境自检")
+        step = self.step(steps, "Environment check")
         self.assertFalse(step.ok)
         self.assertIn("--port", step.hint)
         self.assertNotIn("Traceback", out)
@@ -291,7 +294,7 @@ class TestFailuresAreReadable(WizardBase):
                                                encoding="utf-8")
         code, steps, out = self.run_init(home=str(self.home))
         self.assertEqual(code, 1)
-        self.assertFalse(self.step(steps, "配置文件").ok)
+        self.assertFalse(self.step(steps, "Config file").ok)
         self.assertNotIn("Traceback", out)
 
     def test_skill_failure_does_not_abort_the_rest(self):
@@ -299,7 +302,7 @@ class TestFailuresAreReadable(WizardBase):
         shutil.rmtree(self.agent_home / ".codex")
         code, steps, out = self.run_init(home=str(self.home))
         self.assertFalse(self.step(steps, "agent skill").ok)
-        self.assertTrue(self.step(steps, "示例页").ok)
+        self.assertTrue(self.step(steps, "Demo sites").ok)
         self.assertEqual(code, 0, out)
         self.assertIn("--skip-skill", self.step(steps, "agent skill").hint)
 

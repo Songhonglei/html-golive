@@ -36,6 +36,7 @@ import urllib.parse
 from golive.backends.auth.token import get_auth_provider
 from golive.backends.registry.sqlite_store import SqliteRegistry
 from golive.backends.storage.local import LocalStorage
+from golive.i18n import t
 
 DEFAULT_PORT = 8787
 
@@ -94,7 +95,7 @@ def _make_oidc():
         from golive.backends.auth.oauth import OIDCAuth
         return OIDCAuth()
     except Exception as e:  # noqa: BLE001 — misconfig shouldn't kill serve
-        print(f"⚠️  OIDC 配置不完整，已禁用 OAuth 登录：{e}", file=sys.stderr)
+        print(t("serve.app.oidc_misconfig", error=e), file=sys.stderr)
         return None
 
 
@@ -517,7 +518,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             "padding:0 16px}h1{font-size:22px}li{margin:6px 0}small{color:#999}"
             "</style></head><body>"
             f"<h1>🚀 golive — {len(sites)} site(s)</h1>"
-            f"<ul>{''.join(rows) or '<li>暂无站点，试试 golive publish</li>'}</ul>"
+            f"<ul>{''.join(rows) or '<li>' + t('serve.app.index_empty') + '</li>'}</ul>"
             "</body></html>"
         )
         self._send(200, body.encode("utf-8"))
@@ -578,36 +579,34 @@ def _warn_open_data_layer(host: str) -> None:
     if has_token or has_oidc:
         return
     print("")
-    print("   ⚠️  数据层对外开放且未设访问控制")
-    print("      /api/data 供页面内 JS 直接调用，本身不鉴权；绑定到非本机")
-    print("      地址后，能访问该端口的人都可读写数据表。")
-    print("      建议：设置 GOLIVE_TOKEN、启用 OIDC，或用反向代理限制来源。")
-    print("      仅本机使用请改回 --host 127.0.0.1。")
+    print(t("serve.app.data_layer_warn_1"))
+    print(t("serve.app.data_layer_warn_2"))
+    print(t("serve.app.data_layer_warn_3"))
+    print(t("serve.app.data_layer_warn_4"))
+    print(t("serve.app.data_layer_warn_5"))
 
 
 def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     srv = make_server(host, port)
     loopback = host in ("127.0.0.1", "::1", "localhost")
-    print(f"🚀 golive serve 已启动")
-    print(f"   本机:  http://localhost:{port}/")
+    print(t("serve.app.started"))
+    print(t("serve.app.localhost", port=port))
     if not loopback:
-        # only worth probing when the URL would actually be shared
         ip = _lan_ip()
         if ip != "127.0.0.1":
-            print(f"   局域网: http://{ip}:{port}/")
+            print(t("serve.app.lan", ip=ip, port=port))
     else:
-        print("   （仅本机可访问；对外分享请加 --host 0.0.0.0，"
-              "并建议配合 GOLIVE_TOKEN / OIDC）")
+        print(t("serve.app.loopback_only"))
     if GoliveHandler.oidc is not None:
-        print(f"   OAuth:  http://localhost:{port}/auth/login")
-    print(f"   管理门户: http://localhost:{port}/admin")
+        print(t("serve.app.oauth", port=port))
+    print(t("serve.app.admin", port=port))
 
     _warn_open_data_layer(host)
 
-    print("   Ctrl+C 停止")
+    print(t("serve.app.stop"))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\n👋 已停止")
+        print(t("serve.app.stopped"))
     finally:
         srv.server_close()

@@ -496,10 +496,8 @@ class TestAdminPageHttp(unittest.TestCase):
 
     def test_serve_banner_mentions_admin(self):
         """The startup banner prints the portal URL (spec M5-D)."""
-        import inspect
-        from golive.server import app as app_mod
-        src = inspect.getsource(app_mod.serve)
-        self.assertIn("/admin", src)
+        from golive.i18n import t
+        self.assertIn("/admin", t("serve.app.admin", port=8787))
 
 
 if __name__ == "__main__":

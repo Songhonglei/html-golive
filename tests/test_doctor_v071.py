@@ -119,14 +119,14 @@ class TestDoctorVersionComparison(unittest.TestCase):
         self.assertIn("running service", out)
         self.assertIn(__version__, out)
         self.assertIn("pid 4242", out)
-        self.assertNotIn("版本不一致", out)
+        self.assertNotIn("Version mismatch", out)
 
     def test_version_mismatch_tells_you_to_restart(self):
         payload = {"status": "ok", "version": "0.0.1-old",
                    "home": _TMP_HOME, "data_backend": "sqlite", "pid": 4243}
         with health_server(payload) as port:
             rc, out = run_doctor("--port", str(port))
-        self.assertIn("版本不一致", out)
+        self.assertIn("Version mismatch", out)
         self.assertIn("golive serve restart", out)
         self.assertIn("0.0.1-old", out)
         # a stale service is a warning, not a hard failure
@@ -157,7 +157,7 @@ class TestDoctorPortOwnedByOtherProgram(unittest.TestCase):
         with health_server(None) as port:
             rc, out = run_doctor("--port", str(port))
         self.assertIn("not running", out)
-        self.assertIn("被其他程序占用", out)
+        self.assertIn("held by another", out)
         self.assertEqual(rc, 0, out)
 
 
@@ -247,6 +247,7 @@ class TestDoctorHelpers(unittest.TestCase):
     def test_display_width_counts_wide_glyphs(self):
         from golive.cli import _disp_width, _pad
         self.assertEqual(_disp_width("abc"), 3)
+        # CJK characters have double width
         self.assertEqual(_disp_width("未安装"), 6)
         self.assertEqual(_disp_width(_pad("未安装", 10)), 10)
 

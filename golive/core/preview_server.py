@@ -35,6 +35,7 @@ _SCRIPT_DIR = pathlib.Path(__file__).parent
 _CSS_DIR = _SCRIPT_DIR.parent / "resources" / "css_styles"
 
 from golive.core.paths import get_data_dir as _get_data_dir  # noqa: E402
+from golive.i18n import t  # noqa: E402
 
 # ── 常量 ────────────────────────────────────────────────────────────────────
 DEFAULT_PORT = 18765
@@ -107,9 +108,9 @@ def _get_access_url(port: int) -> tuple[str, str | None]:
         pass
 
     if lan_ip and not lan_ip.startswith("127."):
-        return f"http://{lan_ip}:{port}", "(Pod/远程环境,localhost 对你不可达,请用上方 IP 地址打开)"
+        return f"http://{lan_ip}:{port}", t("preview.access_lan")
     # 回退
-    return f"http://localhost:{port}", "(未能获取 LAN IP,若访问不到请手动替换为服务器 IP)"
+    return f"http://localhost:{port}", t("preview.access_fallback")
 
 
 def _ensure_tailwind_cache() -> bool:
@@ -122,7 +123,7 @@ def _ensure_tailwind_cache() -> bool:
         return True
     try:
         _TAILWIND_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        print("[preview] 首次下载 Tailwind CDN 缓存(之后预览无需等待)...", file=sys.stderr)
+        print(t("preview.tailwind_downloading"), file=sys.stderr)
         req = urllib.request.Request(
             _TAILWIND_CDN_URL,
             headers={"User-Agent": "Mozilla/5.0"},
@@ -130,10 +131,10 @@ def _ensure_tailwind_cache() -> bool:
         with urllib.request.urlopen(req, timeout=15) as resp:
             content = resp.read()
         _TAILWIND_CACHE_PATH.write_bytes(content)
-        print(f"[preview] Tailwind 缓存完成 ({len(content)//1024} KB)", file=sys.stderr)
+        print(t("preview.tailwind_cached", kb=len(content)//1024), file=sys.stderr)
         return True
     except Exception as e:
-        print(f"[preview] ⚠️  Tailwind 缓存失败,使用原始 CDN:{e}", file=sys.stderr)
+        print(t("preview.tailwind_failed", error=e), file=sys.stderr)
         return False
 
 
@@ -189,7 +190,7 @@ def _inject_for_preview(html: str, style_key: str | None) -> str:
             from golive.core.css_style_enhancer import inject_css
             html = inject_css(html, _load_css(style_key), style_key)
         except Exception as e:
-            print(f"[preview] CSS 注入失败:{e}", file=sys.stderr)
+            print(t("preview.css_inject_failed", error=e), file=sys.stderr)
 
     # 注入面板 + 热重载(追加在 </body> 前)
     panel_js = _build_panel_js(style_key)
@@ -414,15 +415,15 @@ def _rebundle(project_dir: pathlib.Path, entry_html: str | None) -> str | None:
         # 动态 import，避免循环依赖
         from golive.core.publish_utils import detect_framework_project, bundle_project
     except ImportError as e:
-        print(f"[preview] ❌ 无法导入 bundle 模块：{e}", file=sys.stderr)
+        print(t("preview.rebundle_failed", error=e), file=sys.stderr)
         return None
 
     # 框架项目检测：print 警告 + 中断，不支持
     warning = detect_framework_project(project_dir)
     if warning:
-        print(f"[preview] ⚠️  不支持预览此目录：", file=sys.stderr)
+        print(t("preview.dir_not_supported"), file=sys.stderr)
         print(f"{warning}", file=sys.stderr)
-        print(f"[preview] 请先 build 后，用 --dir 指向产物目录再预览。", file=sys.stderr)
+        print(t("preview.dir_build_first"), file=sys.stderr)
         return None
 
     # Monkey-patch builtins.input（线程安全）：bundle 过程遇到大 JSON 确认时自动回答 'y'
@@ -438,7 +439,7 @@ def _rebundle(project_dir: pathlib.Path, entry_html: str | None) -> str | None:
             # bundle_project 内部 sys.exit 的情况（极少，已拦截框架检测）
             html = None
         except Exception as e:
-            print(f"[preview] ❌ 打包失败：{e}", file=sys.stderr)
+            print(t("preview.bundle_error", error=e), file=sys.stderr)
             html = None
         finally:
             builtins.input = _orig_input
@@ -494,7 +495,7 @@ def _watch_loop(html_path: pathlib.Path | None):
             if last_mtimes.get(key, 0) != m:
                 last_mtimes[key] = m
                 changed = True
-                print(f"[preview] 检测到变化：{p.name}", file=sys.stderr)
+                print(t("preview.change_detected", name=p.name), file=sys.stderr)
 
         if not changed:
             # 打包进行中：跳过扫描和 debounce 检查，避免冗余 re-bundle
@@ -514,14 +515,14 @@ def _watch_loop(html_path: pathlib.Path | None):
                     entry_html = _state["entry_html"]
                     _state["bundling"] = True
                     _debounce_deadline = 0.0   # 清零，防止打包期间再次误触
-                print("[preview] 🔄 重新打包中…", file=sys.stderr)
+                print(t("preview.rebundling"), file=sys.stderr)
                 new_html = _rebundle(project_dir, entry_html)
                 with _state["lock"]:
                     _state["bundling"] = False
                     if new_html:
                         _state["raw_html"] = new_html
                         _state["version"] += 1
-                        print("[preview] ✅ 打包完成，已刷新", file=sys.stderr)
+                        print(t("preview.rebundle_done"), file=sys.stderr)
             continue
 
         if html_path:
@@ -533,7 +534,7 @@ def _watch_loop(html_path: pathlib.Path | None):
         else:
             # 目录模式：设置 debounce，1s 后再打包
             _debounce_deadline = time.time() + 1.0
-            print("[preview] 检测到目录变化，1s 后重新打包…", file=sys.stderr)
+            print(t("preview.dir_change"), file=sys.stderr)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -611,11 +612,11 @@ def _fetch_online_html(site_ref: str) -> str:
         from golive.backends.storage.local import LocalStorage
         site = SqliteRegistry().resolve(site_ref)
         if site is None:
-            print(f"[preview] 未找到站点: {site_ref}", file=sys.stderr)
+            print(t("preview.site_not_found", ref=site_ref), file=sys.stderr)
             return ""
         return LocalStorage().read(site["site_id"])
     except Exception as e:
-        print(f"[preview] 读取站点内容失败:{e}", file=sys.stderr)
+        print(t("preview.read_failed", error=e), file=sys.stderr)
     return ""
 
 
@@ -641,8 +642,8 @@ def start_preview(
     """
     # ── 加载初始内容 ──────────────────────────────────────────
     if project_dir is not None:
-        print(f"[preview] 📁 目录模式：{project_dir}", file=sys.stderr)
-        print("[preview] 正在打包（图片降级为 base64，不上传）…", file=sys.stderr)
+        print(t("preview.dir_mode", dir=project_dir), file=sys.stderr)
+        print(t("preview.bundling"), file=sys.stderr)
         # 首次打包期间置 bundling=True，防止 watcher 在 mtime 快照完成前误触额外 re-bundle
         with _state["lock"]:
             _state["bundling"] = True
@@ -651,7 +652,7 @@ def start_preview(
             _state["bundling"] = False
         if not raw:
             # _rebundle 内部已打印框架不支持/打包异常原因；这里补一句兜底
-            print("[preview] ❌ 打包失败，请检查项目目录。", file=sys.stderr)
+            print(t("preview.bundle_failed"), file=sys.stderr)
             sys.exit(1)
         with _state["lock"]:
             _state["project_dir"] = project_dir
@@ -663,7 +664,7 @@ def start_preview(
         watch_html_path = None  # 目录模式不传 html_path 给 watcher
     elif html_path and html_path.exists():
         raw = html_path.read_text(encoding="utf-8")
-        print(f"[preview] 加载本地文件：{html_path}", file=sys.stderr)
+        print(t("preview.file_loaded", path=html_path), file=sys.stderr)
         with _state["lock"]:
             _state["html_path"] = html_path
             _state["raw_html"] = raw
@@ -671,10 +672,10 @@ def start_preview(
             _state["version"] = 1
         watch_html_path = html_path
     elif site_ref:
-        print(f"[preview] 读取已发布站点：{site_ref} …", file=sys.stderr)
+        print(t("preview.site_loaded", ref=site_ref), file=sys.stderr)
         raw = _fetch_online_html(site_ref)
         if not raw:
-            print("[preview] ❌ 无法获取内容，退出", file=sys.stderr)
+            print(t("preview.site_read_failed"), file=sys.stderr)
             sys.exit(1)
         with _state["lock"]:
             _state["html_path"] = None
@@ -683,7 +684,7 @@ def start_preview(
             _state["version"] = 1
         watch_html_path = None  # 线上内容不监听文件
     else:
-        print("[preview] ❌ 请指定 --file、--dir 或 --site", file=sys.stderr)
+        print(t("preview.no_target"), file=sys.stderr)
         sys.exit(1)
 
     # 启动文件监听线程
@@ -716,14 +717,14 @@ def start_preview(
     url = f"{url_base}{style_hint}"
 
     print(f"\n{'─'*50}", file=sys.stderr)
-    print(f"🎨  预览服务已启动：{url}", file=sys.stderr)
+    print(t("preview.server_started", url=url), file=sys.stderr)
     if url_note:
-        print(f"    {url_note}", file=sys.stderr)
+        print(t("preview.url_note", note=url_note), file=sys.stderr)
     if project_dir:
-        print(f"📁  目录模式：监听 {project_dir}（变化后 1s 重新打包）", file=sys.stderr)
+        print(t("preview.dir_mode_listen", dir=project_dir), file=sys.stderr)
     else:
-        print(f"📁  监听文件变化（HTML + css_styles/）", file=sys.stderr)
-    print(f"    Ctrl+C 停止", file=sys.stderr)
+        print(t("preview.file_listen"), file=sys.stderr)
+    print(t("preview.stop"), file=sys.stderr)
     print(f"{'─'*50}\n", file=sys.stderr)
 
     # 自动打开浏览器（本机环境才有意义）
@@ -736,41 +737,28 @@ def start_preview(
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[preview] 已停止", file=sys.stderr)
+        print(t("preview.stopped"), file=sys.stderr)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="html-go-live 本地预览服务",
+        description=t("preview.arg_description"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  # 预览本地 HTML,无风格
-  python3 preview_server.py --file report.html
-
-  # 预览时默认注入 xhs 风格
-  python3 preview_server.py --file report.html --css-style xhs
-
-  # 预览已发布站点(拉取线上内容)
-  golive preview --site demo
-
-  # 指定端口
-  python3 preview_server.py --file report.html --port 9000
-""",
+        epilog=t("preview.arg_epilog"),
     )
     src = parser.add_mutually_exclusive_group(required=True)
-    src.add_argument("--file", metavar="PATH", help="本地 HTML 文件路径")
-    src.add_argument("--dir", metavar="DIR", help="多文件项目目录（自动打包后预览，监听变化 re-bundle）")
-    src.add_argument("--site", metavar="ID_OR_SLUG", help="已发布站点的 id 或 slug")
+    src.add_argument("--file", metavar="PATH", help=t("preview.arg_file"))
+    src.add_argument("--dir", metavar="DIR", help=t("preview.arg_dir"))
+    src.add_argument("--site", metavar="ID_OR_SLUG", help=t("preview.arg_site"))
 
     parser.add_argument("--entry", metavar="ENTRY", default=None,
-                        help="--dir 模式：指定入口 HTML（相对于目录，默认自动查找 index.html）")
+                        help=t("preview.arg_entry"))
     parser.add_argument("--css-style", metavar="STYLE", default=None,
-                        help="初始 CSS 风格（默认无风格）")
+                        help=t("preview.arg_css_style"))
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
-                        help=f"监听端口（默认 {DEFAULT_PORT})")
+                        help=t("preview.arg_port"))
     parser.add_argument("--no-browser", action="store_true",
-                        help="不自动打开浏览器")
+                        help=t("preview.arg_no_browser"))
 
     args = parser.parse_args()
 

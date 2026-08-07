@@ -21,6 +21,9 @@ from golive.core import skill_installer as si
 
 class TargetBase(unittest.TestCase):
     def setUp(self):
+        os.environ["GOLIVE_LANG"] = "en"
+        from golive.i18n import set_language
+        set_language("en")
         self.tmp = Path(tempfile.mkdtemp(prefix="golive_targets_"))
         self.cwd = self.tmp / "proj"
         self.home = self.tmp / "home"
@@ -106,6 +109,9 @@ class TestViability(TargetBase):
 
 class TestMultipleTargets(TargetBase):
     def setUp(self):
+        os.environ["GOLIVE_LANG"] = "en"
+        from golive.i18n import set_language
+        set_language("en")
         super().setUp()
         (self.home / ".codex").mkdir()
         (self.home / ".claude" / "skills").mkdir(parents=True)
@@ -229,6 +235,9 @@ class TestListTargetsCli(TargetBase):
         return code, buf.getvalue()
 
     def setUp(self):
+        os.environ["GOLIVE_LANG"] = "en"
+        from golive.i18n import set_language
+        set_language("en")
         super().setUp()
         self._old_cwd = os.getcwd()
         self._old_home = os.environ.get("HOME")
@@ -268,7 +277,7 @@ class TestListTargetsCli(TargetBase):
     def test_lists_conventions_even_when_no_agent_present(self):
         code, out = self._run()
         self.assertEqual(code, 0)
-        self.assertIn("没有找到任何已安装的 agent", out)
+        self.assertIn("No installed agents detected", out)
         self.assertIn(".codex", out)
 
     def test_marks_locations_that_already_have_the_skill(self):

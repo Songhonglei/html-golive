@@ -3,6 +3,61 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.5] - 2026-08-07
+
+This release is mostly about making golive usable by people who do not read
+Chinese, plus signature verification for OIDC logins.
+
+**Heads up:** the CLI now speaks English by default. Set `GOLIVE_LANG=zh`
+to get Chinese back — see "Changed" below.
+
+### Added
+- **`id_token` signature verification for OIDC.** Tokens are now checked
+  against the IdP's published signing keys before a session is created:
+  the signature must verify, `iss` / `aud` / `exp` / `nonce` must match,
+  and `alg: none` is refused. Requires `pip install 'html-golive[oidc]'`;
+  without it golive refuses to start in OIDC mode rather than quietly
+  skipping verification. Set `auth.oidc.verify_signature: false` to opt
+  out, and the server will say so loudly at every startup.
+- **Trusted reverse-proxy auth** (`auth.provider: proxy`) for setups where
+  the application is not allowed to talk to the IdP directly. Requires an
+  explicit `auth.proxy.trusted_ips` allowlist — golive will not start with
+  an empty one, because anyone able to reach the port could otherwise
+  forge the identity header.
+- **Four new admin pages**: identity, data backend, security scanning and
+  global settings. Each connection form has a test button that performs a
+  real probe rather than validating the shape of what you typed.
+- **Settings and security rules can now live in the database.** Values
+  declared in `golive.yaml` remain read-only built-ins; anything added
+  through the portal overrides them and survives `pip install -U`.
+  Previously custom scan rules lived inside the installed package and were
+  overwritten on upgrade.
+- **A shareable address after publishing.** Where a page used to be
+  advertised only as `localhost`, golive now also prints the LAN URL, and
+  says when `--host 0.0.0.0` is needed for anyone else to reach it.
+- **`GOLIVE_LANG`** to choose the CLI language explicitly.
+
+### Changed
+- **The CLI now defaults to English.** Chinese is used when `GOLIVE_LANG`
+  says so or the system locale is unambiguously Chinese; otherwise English.
+  If you parse golive's output in a script, check your matches — the text
+  has changed. `GOLIVE_LANG=zh` restores the previous wording exactly.
+- `golive init` treats a missing AI agent as "skipped" rather than a
+  failure. Not having one installed is a normal setup, and the old red ✗
+  read as breakage.
+
+### Fixed
+- **`server.public_base` was ignored when composing site URLs**, and a
+  loopback bind never warned that the printed address was unreachable from
+  other machines. Both settings were read from the wrong place in the
+  config tree.
+- Unknown top-level keys in `golive.yaml` are now reported at startup,
+  naming the correct location for the common mistakes. Writing `admins:`
+  at the top level instead of under `admin:` used to be silently ignored,
+  leaving you logged in but without access.
+- An `id_token` with no `exp` claim was accepted, and the clock-skew
+  tolerance was wide enough to keep expired tokens alive for minutes.
+
 ## [0.7.2] - 2026-07-31
 
 A macOS fix. If you are on macOS and `golive serve start` appeared to do

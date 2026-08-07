@@ -174,9 +174,11 @@ def _step_env(opts: InitOptions, out) -> StepResult:
             problems.append(t("init.step_env_port_taken", port=opts.port))
 
     if problems:
-        return StepResult(t("init.step_env"), False, "；".join(problems),
+        return StepResult(t("init.step_env"), False,
+                          t("punct.semicolon").join(problems),
                           t("init.step_env_hint", port=opts.port + 1))
-    return StepResult(t("init.step_env"), True, "；".join(notes))
+    return StepResult(t("init.step_env"), True,
+                      t("punct.semicolon").join(notes))
 
 
 def _step_skill(opts: InitOptions, out) -> StepResult:
@@ -237,9 +239,12 @@ def _step_demos(opts: InitOptions, out) -> StepResult:
     try:
         from golive.core import demo
         res = demo.install()
-        bits = [f"{d['slug']}（{'created' if d['action'] == 'created' else 'updated'}）"
+        bits = [t("init.demo_item", slug=d['slug'],
+                  action=t("init.demo_created") if d['action'] == 'created'
+                  else t("init.demo_updated"))
                 for d in res["demos"]]
-        return StepResult(t("init.step_demos"), True, "；".join(bits))
+        return StepResult(t("init.step_demos"), True,
+                          t("punct.semicolon").join(bits))
     except Exception as e:  # noqa: BLE001
         from golive.core.demo import DemoError
         hint = (t("init.step_demos_hint_reinstall")
@@ -263,7 +268,8 @@ def _step_verify(opts: InitOptions, out, port: int) -> StepResult:
     from golive.core import demo
     checks = demo.health_check(port=port)
     failed = [k for k, v in checks.items() if not v["ok"]]
-    detail = "；".join(f"{k} {'✅' if v['ok'] else '❌'} {v['detail']}"
+    detail = t("punct.semicolon").join(
+        f"{k} {'✅' if v['ok'] else '❌'} {v['detail']}"
                        for k, v in checks.items())
     if failed:
         return StepResult(
@@ -289,7 +295,7 @@ def run(opts: Optional[InitOptions] = None) -> tuple:
     def emit(step: StepResult):
         steps.append(step)
         icon = "⏭️ " if step.skipped else ("✅" if step.ok else "❌")
-        print(f"  {icon} {step.name}：{step.detail}", file=out)
+        print(f"  {icon} {step.name}{t('punct.colon')}{step.detail}", file=out)
         if not step.ok and step.hint:
             print(t("init.hint_prefix", hint=step.hint), file=out)
 

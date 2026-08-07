@@ -164,7 +164,20 @@ def cmd_publish(args) -> int:
     print(f"   site_id: {site['site_id']}")
     if site.get("slug"):
         print(f"   slug:    {site['slug']}")
-    print(f"   URL:     {_site_url(site, args.port)}")
+    # Show every address the page can be reached at, so the user knows
+    # which one is safe to send to a colleague.
+    from golive.core.urls import share_urls
+    from golive.config import get_config
+    _path = f"/{site['slug']}" if site.get("slug") else f"/s/{site['site_id']}"
+    _urls = share_urls(_path, args.port, get_config())
+    if _urls["public"]:
+        print(t("publish.url.public", url=_urls["public"]))
+    else:
+        print(t("publish.url.local", url=_urls["local"]))
+        if _urls["lan"]:
+            print(t("publish.url.lan", url=_urls["lan"]))
+            if _urls["needs_host_flag"]:
+                print(t("publish.needs_host"))
     print(t("publish.serve_hint", port=args.port))
     return 0
 

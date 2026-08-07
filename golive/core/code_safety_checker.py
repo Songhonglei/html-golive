@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-code_safety_checker.py — html-go-live HTML 代码安全检查模块
+code_safety_checker.py — golive HTML 代码安全检查模块
 
 功能：
   扫描待发布 HTML 中内嵌的 JS/CSS 代码，检测三类工程安全问题：

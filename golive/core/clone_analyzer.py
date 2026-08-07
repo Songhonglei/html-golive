@@ -483,53 +483,42 @@ def analyze(html_content: str, base_url: str = "") -> dict:
 
     # ── 汇总警告 ──
     if localstorage_usage:
-        warnings.append("检测到 localStorage 使用，迁移后数据持久化依赖用户浏览器，跨域访问可能受限")
+        warnings.append(_t("clone_analyzer.warn_localstorage"))
     if font_issues:
         replaceable_count = sum(1 for f in font_issues if f["replaceable"])
         if replaceable_count:
-            warnings.append(
-                f"发现 {replaceable_count} 处 Google Fonts 外链，建议替换为国内镜像（clone_patcher 会自动处理）"
-            )
+            warnings.append(_t("clone_analyzer.warn_fonts_replaceable",
+                                count=replaceable_count))
         if unreplaceable_fonts:
-            warnings.append(
-                f"发现 {len(unreplaceable_fonts)} 处无法自动替换的字体外链，可能影响加载速度"
-            )
+            warnings.append(_t("clone_analyzer.warn_fonts_unreplaceable",
+                                count=len(unreplaceable_fonts)))
     if external_apis_count > 0:
-        warnings.append(
-            f"共发现 {external_apis_count} 个外部 API 依赖，迁移后请逐一确认可访问性和跨域配置"
-        )
+        warnings.append(_t("clone_analyzer.warn_external_apis",
+                            count=external_apis_count))
     # 后端接口警告
     rel_count = len(backend_issues.get("relative", []))
     loc_count = len(backend_issues.get("localhost", []))
     if rel_count or loc_count:
         inferred = backend_issues.get("inferred_origin", "")
         if inferred:
-            warnings.append(
-                f"发现 {rel_count} 处相对路径接口 + {loc_count} 处 localhost 接口，"
-                f"已推断原始服务地址为 {inferred}，将在修补阶段自动重写"
-            )
+            warnings.append(_t("clone_analyzer.warn_backend_inferred",
+                                rel=rel_count, loc=loc_count, origin=inferred))
         else:
-            warnings.append(
-                f"发现 {rel_count} 处相对路径接口 + {loc_count} 处 localhost 接口，"
-                f"无法自动推断原始服务地址，需通过 --backend-origin 指定"
-            )
+            warnings.append(_t("clone_analyzer.warn_backend_unknown",
+                                rel=rel_count, loc=loc_count))
     if mpa_links:
-        warnings.append(
-            f"⚠️  检测到多页应用（MPA）：发现 {len(mpa_links)} 个内链跳转其他 HTML 页面"
-            f"（如 {mpa_links[0]!r}{'等' if len(mpa_links) > 1 else ''}），"
-            "克隆单页后这些链接会失效（404）。"
-            "建议：仅将此页作为展示用，或手动补齐所有子页面后打包上传。"
-        )
+        warnings.append(_t("clone_analyzer.warn_mpa",
+                            count=len(mpa_links), example=repr(mpa_links[0])))
 
     # ── 一句话总结 ──
     if score >= 90:
-        summary = "可迁移度极高，几乎无需改动即可上线"
+        summary = _t("clone_analyzer.summary_excellent")
     elif score >= 70:
-        summary = f"基本可迁移，存在 {external_apis_count} 个 API 依赖需确认"
+        summary = _t("clone_analyzer.summary_good", count=external_apis_count)
     elif score >= 50:
-        summary = f"迁移需要一定改造，建议逐项处理 API 依赖和安全问题"
+        summary = _t("clone_analyzer.summary_moderate")
     else:
-        summary = f"迁移复杂度较高（评分 {score}），存在凭证泄露或大量外部依赖，建议先做代码清理"
+        summary = _t("clone_analyzer.summary_hard", score=score)
 
     return {
         "api_deps": api_deps,

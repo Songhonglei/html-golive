@@ -79,8 +79,8 @@ def _sanitize(obj: Any, depth: int = 0) -> Any:
 # ── 日志切分（懒触发） ─────────────────────────────────────────────────────────
 def _rotate_if_needed():
     """
-    写日志前检查 html-go-live.log 的最后修改日。
-    若不是今天，则归档为 html-go-live.YYYY-MM-DD.log，再顺带清理 30 天前的归档。
+    写日志前检查 golive.log 的最后修改日。
+    若不是今天，则归档为 golive.YYYY-MM-DD.log，再顺带清理 30 天前的归档。
     """
     if not LOG_FILE.exists():
         return  # 不存在，直接新建，无需处理
@@ -92,7 +92,7 @@ def _rotate_if_needed():
             return  # 今天的，不需要切分
 
         # 归档
-        archive = LOG_DIR / f"html-go-live.{mtime_date}.log"
+        archive = LOG_DIR / f"golive.{mtime_date}.log"
         if not archive.exists():
             LOG_FILE.rename(archive)
 
@@ -103,13 +103,13 @@ def _rotate_if_needed():
 
 
 def _cleanup_old_archives():
-    """删除超过 _KEEP_DAYS 天的 html-go-live.YYYY-MM-DD.log 归档文件。"""
+    """删除超过 _KEEP_DAYS 天的 golive.YYYY-MM-DD.log 归档文件。"""
     try:
         cutoff = datetime.date.today() - datetime.timedelta(days=_KEEP_DAYS)
-        for f in LOG_DIR.glob("html-go-live.????-??-??.log"):
+        for f in LOG_DIR.glob("golive.????-??-??.log"):
             try:
                 # 从文件名解析日期
-                date_str = f.stem.replace("html-go-live.", "")
+                date_str = f.stem.replace("golive.", "")
                 file_date = datetime.date.fromisoformat(date_str)
                 if file_date < cutoff:
                     f.unlink(missing_ok=True)

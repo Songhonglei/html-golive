@@ -417,7 +417,7 @@ class Bundler:
         var_decls_str = "\n  ".join(var_decls)
 
         polyfill = f"""<script id="__go_live_json_inline__">
-/* html-go-live: JSON 数据内联 polyfill */
+/* golive: JSON 数据内联 polyfill */
 (function(){{
   {var_decls_str}
   var _D = {{

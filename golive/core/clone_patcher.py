@@ -129,7 +129,7 @@ def _clean_attributes(html: str) -> str:
     return html
 
 
-# ── 步骤4：敏感配置脱敏（html-go-live 注入模块）────────────────────────────────
+# ── 步骤4：敏感配置脱敏（golive 注入模块）────────────────────────────────
 
 # BI 直连模块敏感字段：字段名 → 占位符说明
 _BI_SENSITIVE_FIELDS: dict[str, str] = {
@@ -152,21 +152,23 @@ _TEMPLATE_SENSITIVE_FIELDS: dict[str, str] = {
     "baseUrl":   "__PLACEHOLDER_BASE_URL__",
 }
 
-# 字段说明（用于告知用户需要填什么）
+# What each scrubbed field was for. Written into the patched HTML, so it
+# stays in English regardless of CLI language — the file may well be read
+# by someone other than the person who ran the clone.
 _FIELD_DESCRIPTIONS: dict[str, str] = {
-    "dataRef":        "数据凭证 data_ref",
-    "storageUrl":     "对象存储地址",
-    "datasetId":      "数据集 ID",
-    "datasetName":    "数据集名称",
-    "query":          "取数查询描述",
-    "aimiBase":       "数据服务地址",
-    "aimiServiceTag": "数据服务标识",
-    "aimiProjectId":  "数据服务项目 ID",
-    "analysisUrl":    "BI 分析页链接",
-    "modelCode":      "在线数据存储 Model Code（业务模型标识符）",
-    "version":        "数据版本号",
-    "userId":         "用户 ID",
-    "baseUrl":        "数据网关服务地址",
+    "dataRef":        "data credential (data_ref)",
+    "storageUrl":     "object storage endpoint",
+    "datasetId":      "dataset id",
+    "datasetName":    "dataset name",
+    "query":          "query description",
+    "aimiBase":       "data service endpoint",
+    "aimiServiceTag": "data service tag",
+    "aimiProjectId":  "data service project id",
+    "analysisUrl":    "BI analysis page URL",
+    "modelCode":      "data store model code",
+    "version":        "data version",
+    "userId":         "user id",
+    "baseUrl":        "data gateway endpoint",
 }
 
 
@@ -207,7 +209,7 @@ def _scrub_script_block(script_content: str, field_map: dict[str, str]) -> tuple
 
 def _scrub_sensitive_configs(html: str) -> tuple[str, list[dict]]:
     """
-    检测并脱敏 html-go-live 注入的两类数据模块：
+    检测并脱敏 golive 注入的两类数据模块：
       - <script id="bi-data-layer">    → BI 数据直连敏感字段
       - <script id="template-data-layer"> → 在线数据存储敏感字段
 
@@ -257,7 +259,8 @@ def _scrub_sensitive_configs(html: str) -> tuple[str, list[dict]]:
         if scrubbed_fields:
             # 在 script 块开头插入醒目注释
             warning_comment = (
-                "\n// ⚠️  [html-go-live clone] 敏感配置已清除，发布前必须重新填写下列字段：\n"
+                "\n// \u26a0\ufe0f  [golive clone] Credentials were removed. "
+                "Fill these in again before publishing:\n"
                 + "".join(
                     f"//   {f}  →  {_FIELD_DESCRIPTIONS.get(f, f)}\n"
                     for f in scrubbed_fields
@@ -470,7 +473,7 @@ def patch(html: str, notes: list | None = None, backend_origin: str = "") -> tup
     (str, list[dict], dict)
         - str：处理后的 HTML
         - list[dict]：敏感配置清理报告，每项含 module / module_label / scrubbed_fields
-          空列表表示未发现任何 html-go-live 注入模块。
+          空列表表示未发现任何 golive 注入模块。
         - dict：后端接口重写摘要 {"relative_count": int, "localhost_count": int}
           未执行重写时两个字段均为 0。
     """
@@ -493,7 +496,7 @@ def patch(html: str, notes: list | None = None, backend_origin: str = "") -> tup
     # 3. 清理问题属性
     html = _clean_attributes(html)
 
-    # 4. 敏感配置脱敏（html-go-live 注入模块）
+    # 4. 敏感配置脱敏（golive 注入模块）
     html, sensitive_findings = _scrub_sensitive_configs(html)
 
     # 5. viewport 补全

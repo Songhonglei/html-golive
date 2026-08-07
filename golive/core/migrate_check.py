@@ -29,17 +29,13 @@ def _intranet_domain_patterns() -> list:
     corp = brand + r"\.com"
     pats = [
         (rf"(?:fin|aifin|web|edith|builder)[.\w-]*\.(?:devops\.)?{corp}",
-         "内网 API/托管域名",
-         "改用你自己的部署域名或 golive serve；数据接口改走 data backend"),
+         _t("migrate.label_api_domain"), _t("migrate.advice_api_domain")),
         (rf"[\w.-]*\.{corp}",
-         "内网域名引用",
-         "替换为公网可达资源或删除"),
+         _t("migrate.label_domain"), _t("migrate.advice_domain")),
         (rf"[\w.-]*{cdn}\.com",
-         "内网 CDN 资源",
-         "用 golive 的资源本地化（cdn_localizer）或换公网 CDN"),
+         _t("migrate.label_cdn"), _t("migrate.advice_cdn")),
         (r"builder\.devops[\w.-]*",
-         "内网 Builder 服务地址",
-         "开源版 SupabaseAPI 直连你自己的 Supabase，无需 Builder 代理"),
+         _t("migrate.label_builder"), _t("migrate.advice_builder")),
     ]
     return [(re.compile(p, re.IGNORECASE), label, advice)
             for p, label, advice in pats]
@@ -50,12 +46,12 @@ def _intranet_api_path_patterns() -> list:
     seg_a = "rf" + "phecda"
     seg_b = "rfmulti" + "data"
     pats = [
-        (rf"/{seg_a}/[\w/]+", "内网模板网关路径",
-         "开源版 TemplateAPI 打 PostgREST，重新发布时会自动注入新数据层"),
-        (rf"/{seg_b}/[\w/]+", "内网数据网关路径",
-         "改走 data backend（Supabase PostgREST）"),
-        (r"/builder-api/v1(?:/[\w/]*)?", "内网 Builder API 路径",
-         "开源版 SupabaseAPI 直连 Supabase REST"),
+        (rf"/{seg_a}/[\w/]+", _t("migrate.label_tpl_gateway"),
+         _t("migrate.advice_tpl_gateway")),
+        (rf"/{seg_b}/[\w/]+", _t("migrate.label_data_gateway"),
+         _t("migrate.advice_data_gateway")),
+        (r"/builder-api/v1(?:/[\w/]*)?", _t("migrate.label_builder_api"),
+         _t("migrate.advice_builder_api")),
     ]
     return [(re.compile(p, re.IGNORECASE), label, advice)
             for p, label, advice in pats]
@@ -105,8 +101,8 @@ def scan_html(html: str) -> dict:
         if m:
             findings["layer_hits"].append({
                 "line": i, "text": m.group(1),
-                "label": "内网数据层注入残留",
-                "advice": "用开源版重新发布会自动替换为新数据层"})
+                "label": _t("migrate.label_datalayer_residue"),
+                "advice": _t("migrate.advice_datalayer_residue")})
 
     for m in _TPL_CALL_RE.finditer(html):
         meth = m.group(1)

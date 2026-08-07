@@ -82,27 +82,40 @@ def apply_font_cdn_base(text: str, base: str | None = None) -> str:
 
 BACKUP_TTL_DAYS = 90
 
-STYLE_MAP = {
-    "minimal":    "极简优雅风",
-    "apple":      "Apple 质感风",
-    "cowork":     "轻科技协作风",
-    "morandi":    "莫兰迪高级灰风",
-    "fresh":      "清新自然绿风",
-    "earthy":     "大地原木风",
-    "glass":      "玻璃拟态风",
-    "dreamy":     "优雅紫梦幻风",
-    "macaron":    "马卡龙粉彩风",
-    "carbon":     "暗色极简风",
-    "vivid":      "活力渐变风",
-    "newspaper":  "报纸杂志风",
-    "bloomberg":  "Bloomberg 终端风",
-    "ink":        "水墨卷轴风",
-    "steampunk":  "蒸汽朋克风",
-    "palace":     "故宫风",
-    "cyberpunk":  "赛博科技风",
-    "xhs":        "小红书简洁风",
-    "xhs-fun":    "小红书趣味风",
-}
+# Style keys are part of the public CLI surface (`--style <key>`) and must
+# stay stable; the labels are looked up per language at print time.
+STYLE_KEYS = (
+    "minimal", "apple", "cowork", "morandi", "fresh", "earthy", "glass",
+    "dreamy", "macaron", "carbon", "vivid", "newspaper", "bloomberg", "ink",
+    "steampunk", "palace", "cyberpunk", "xhs", "xhs-fun",
+)
+
+
+def style_label(key: str) -> str:
+    """Human-readable name for a style, in the active language."""
+    return _t("style." + key.replace("-", "_"))
+
+
+class _StyleMap(dict):
+    """Keeps ``STYLE_MAP[key]`` working while labels became translatable."""
+
+    def __init__(self):
+        super().__init__((k, k) for k in STYLE_KEYS)
+
+    def __getitem__(self, key):
+        return style_label(key)
+
+    def get(self, key, default=None):
+        return style_label(key) if key in STYLE_KEYS else default
+
+    def items(self):
+        return [(k, style_label(k)) for k in STYLE_KEYS]
+
+    def values(self):
+        return [style_label(k) for k in STYLE_KEYS]
+
+
+STYLE_MAP = _StyleMap()
 
 
 def list_styles() -> None:

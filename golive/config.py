@@ -31,6 +31,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from golive.i18n import t as _t
+
 
 class ConfigError(RuntimeError):
     """Raised when a config file exists but cannot be parsed."""
@@ -608,7 +610,7 @@ def get_config() -> Config:
         try:
             _current = load_config()
         except ConfigError as e:
-            print(f"⚠️  golive.yaml 解析失败，已回退默认配置：{e}", file=sys.stderr)
+            print(_t("config.parse_failed", error=e), file=sys.stderr)
             _current = Config()
     return _current
 

@@ -5,6 +5,8 @@ clone_analyzer.py — HTML 克隆迁移可行性分析器
 
 
 from __future__ import annotations
+
+from golive.i18n import t as _t
 import re
 from html.parser import HTMLParser
 from urllib.parse import urlparse
@@ -550,14 +552,14 @@ if __name__ == "__main__":
     import json
 
     if len(sys.argv) < 2:
-        print("Usage: python clone_analyzer.py <html_file>", file=sys.stderr)
+        print(_t("clone_analyzer.usage"), file=sys.stderr)
         sys.exit(1)
 
     try:
         with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     except OSError as e:
-        print(f"[clone_analyzer] 读取文件失败: {sys.argv[1]} — {e}", file=sys.stderr)
+        print(_t("clone_analyzer.read_failed", path=sys.argv[1], error=e), file=sys.stderr)
         sys.exit(1)
 
     result = analyze(content)

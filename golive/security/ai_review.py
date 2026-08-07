@@ -34,6 +34,8 @@ import json
 import sys
 from typing import Optional
 
+from golive.i18n import t as _t
+
 DEFAULT_TIMEOUT = 20
 MAX_CANDIDATES_PER_CALL = 30
 
@@ -112,13 +114,12 @@ def _call_llm(cfg_llm, messages: list) -> Optional[str]:
         resp = requests.post(url, json=body, headers=headers,
                              timeout=cfg_llm.timeout or DEFAULT_TIMEOUT)
         if resp.status_code >= 400:
-            print(f"⚠️  AI 复核请求失败（HTTP {resp.status_code}）: "
-                  f"{resp.text[:200]}", file=sys.stderr)
+            print(_t("ai_review.request_failed", status=resp.status_code, text=resp.text[:200]), file=sys.stderr)
             return None
         data = resp.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:  # noqa: BLE001 — any failure degrades to rules
-        print(f"⚠️  AI 复核调用异常（{type(e).__name__}: {e}）", file=sys.stderr)
+        print(_t("ai_review.call_error", type=type(e).__name__, error=e), file=sys.stderr)
         return None
 
 
@@ -174,7 +175,7 @@ def review_hits(candidates: list, cfg=None) -> AIReviewResult:
     if not llm.configured:
         # default policy: skip AI, keep rule verdicts untouched
         result.kept = list(candidates)
-        result.note = "AI 复核未配置，按规则命中处理"
+        result.note = _t("ai_review.not_configured")
         return result
 
     # batch the candidates
@@ -195,7 +196,7 @@ def review_hits(candidates: list, cfg=None) -> AIReviewResult:
         content = _call_llm(llm, messages)
         parsed = _parse_json_array(content) if content else None
         if parsed is None:
-            print("⚠️  AI 复核此批未拿到可解析结果，保持规则命中", file=sys.stderr)
+            print(_t("ai_review.batch_failed"), file=sys.stderr)
             continue
         any_success = True
         for item in parsed:
@@ -213,7 +214,7 @@ def review_hits(candidates: list, cfg=None) -> AIReviewResult:
         # LLM down / timeout -> conservative: keep every rule hit
         result.kept = list(candidates)
         result.ai_used = False
-        result.note = "AI 复核失败（超时/不可达），已按规则命中保守处理"
+        result.note = _t("ai_review.failed")
         return result
 
     for i, c in enumerate(candidates):
@@ -232,10 +233,9 @@ def review_hits(candidates: list, cfg=None) -> AIReviewResult:
 
     result.ai_used = True
     if result.dropped:
-        result.note = (f"AI 复核清除 {len(result.dropped)}/{len(candidates)} "
-                       f"个字面误报")
+        result.note = _t("ai_review.dropped", dropped=len(result.dropped), total=len(candidates))
     else:
-        result.note = f"AI 复核确认 {len(result.kept)} 个命中均为疑似敏感"
+        result.note = _t("ai_review.confirmed", count=len(result.kept))
     return result
 
 
@@ -246,7 +246,5 @@ def strict_mode_gate(cfg=None) -> tuple:
         cfg = get_config()
     llm = cfg.security.llm
     if llm.strict_mode and not llm.configured:
-        return False, ("security.llm.strict_mode 已开启但未配置 LLM "
-                       "（security.llm.base_url）——按策略拒绝发布。\n"
-                       "   配置 LLM 或关闭 strict_mode 后重试。")
+        return False, _t("ai_review.strict_no_llm")
     return True, ""

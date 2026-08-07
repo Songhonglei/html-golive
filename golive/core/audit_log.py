@@ -34,6 +34,8 @@ import time
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
+
+from golive.i18n import t as _t
 from typing import Any
 
 # ── 路径配置（GOLIVE_HOME/logs/） ────────────────────────────────────────────
@@ -155,7 +157,7 @@ def _append_line(file_path: Path, entry: dict):
             f.write(line)
     except (PermissionError, OSError) as e:
         import sys as _sys
-        print(f"⚠️  审计日志写入失败（不影响主流程）: {file_path}: {e}", file=_sys.stderr)
+        print(_t("audit.write_failed", path=file_path, error=e), file=_sys.stderr)
 
 
 def log_call(

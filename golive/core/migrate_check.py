@@ -17,6 +17,8 @@ import re
 import sys
 from pathlib import Path
 
+from golive.i18n import t as _t
+
 # ── pattern construction (fragments joined at runtime) ───────────────────────
 
 def _intranet_domain_patterns() -> list:
@@ -123,63 +125,60 @@ def print_report(path: str, findings: dict, data_backend_ready: bool) -> int:
     tpl_n = sum(findings["tpl_calls"].values())
     sb_n = sum(findings["sb_calls"].values())
 
-    print(f"🔎 migrate-check: {path}\n")
+    print(_t("migrate.scan_header", path=path))
 
     if findings["domain_hits"]:
-        print(f"⚠️  内网域名硬编码（{len(findings['domain_hits'])} 处）：")
+        print(_t("migrate.domain_header", count=len(findings['domain_hits'])))
         for h in findings["domain_hits"][:20]:
-            print(f"   {path}:{h['line']}  {h['text']}")
-            print(f"     ↳ {h['advice']}")
+            print(_t("migrate.domain_item", path=path, line=h['line'], text=h['text']))
+            print(_t("migrate.domain_advice", advice=h['advice']))
         if len(findings["domain_hits"]) > 20:
-            print(f"   ... 另有 {len(findings['domain_hits']) - 20} 处")
+            print(_t("migrate.domain_more", count=len(findings['domain_hits']) - 20))
         print()
 
     if findings["api_path_hits"]:
-        print(f"⚠️  内网 API 路径（{len(findings['api_path_hits'])} 处）：")
+        print(_t("migrate.api_header", count=len(findings['api_path_hits'])))
         for h in findings["api_path_hits"][:20]:
-            print(f"   {path}:{h['line']}  {h['text']}")
-            print(f"     ↳ {h['advice']}")
+            print(_t("migrate.domain_item", path=path, line=h['line'], text=h['text']))
+            print(_t("migrate.domain_advice", advice=h['advice']))
         print()
 
     if findings["layer_hits"]:
-        print(f"⚠️  内网数据层注入残留（{len(findings['layer_hits'])} 处）：")
+        print(_t("migrate.layer_header", count=len(findings['layer_hits'])))
         for h in findings["layer_hits"]:
-            print(f"   {path}:{h['line']}  <script id=\"{h['text']}\">")
-            print(f"     ↳ {h['advice']}")
+            print(_t("migrate.layer_item", path=path, line=h['line'], text=h['text']))
+            print(_t("migrate.domain_advice", advice=h['advice']))
         print()
 
     if tpl_n or sb_n:
-        print("ℹ️  数据层调用统计：")
+        print(_t("migrate.data_stats_header"))
         if tpl_n:
             calls = ", ".join(f"{k}×{v}" for k, v in
                               sorted(findings["tpl_calls"].items()))
-            print(f"   TemplateAPI：{tpl_n} 次（{calls}）")
+            print(_t("migrate.data_tpl", count=tpl_n, calls=calls))
         if sb_n:
             calls = ", ".join(f"{k}×{v}" for k, v in
                               sorted(findings["sb_calls"].items()))
-            print(f"   SupabaseAPI：{sb_n} 次（{calls}）")
+            print(_t("migrate.data_sb", count=sb_n, calls=calls))
         if data_backend_ready:
-            print("   ✅ data backend 已配置，重新发布即可自动注入开源数据层")
+            print(_t("migrate.data_ready"))
         else:
-            print("   ⚠️  data backend 未就绪 —— 在 golive.yaml 配置 "
-                  "data.backend: sqlite（零配置，默认值）或 supabase + "
-                  "supabase.url/key，否则页面数据调用将报错")
+            print(_t("migrate.data_not_ready"))
         print()
 
     if not hits and not ((tpl_n or sb_n) and not data_backend_ready):
-        print("✅ 未发现内网专属引用，可直接用 golive publish 发布。")
+        print(_t("migrate.clean"))
         return 0
 
     n_block = len(hits) + (1 if (tpl_n or sb_n) and not data_backend_ready else 0)
-    print(f"共 {n_block} 类问题需要处理（见上方清单）。"
-          f"迁移指南：docs/data-layer.md")
+    print(_t("migrate.summary", count=n_block))
     return 1
 
 
 def run(path_str: str) -> int:
     p = Path(path_str).expanduser()
     if not p.exists():
-        print(f"❌ 文件不存在：{p}", file=sys.stderr)
+        print(_t("migrate.file_not_found", path=p), file=sys.stderr)
         return 1
     html = p.read_text(encoding="utf-8", errors="replace")
     findings = scan_html(html)

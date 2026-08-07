@@ -29,6 +29,7 @@ import tempfile
 from pathlib import Path
 
 from golive.backends.images.base import ImageUploader, UploadError
+from golive.i18n import t as _t
 
 COMMAND_TIMEOUT = 60  # seconds
 
@@ -128,12 +129,12 @@ def get_uploader(config: dict | None = None):
                 from golive.backends.images.s3 import S3Uploader
                 return S3Uploader()
         except Exception as e:  # noqa: BLE001 — uploader must never break publish
-            print(f"⚠️  忽略无效的 uploader 配置：{e}", file=sys.stderr)
+            print(_t("img.uploader_invalid", error=e), file=sys.stderr)
             return None
     if not template:
         return None
     try:
         return CommandUploader(template)
     except ValueError as e:
-        print(f"⚠️  忽略无效的 uploader 配置：{e}", file=sys.stderr)
+        print(_t("img.uploader_invalid", error=e), file=sys.stderr)
         return None

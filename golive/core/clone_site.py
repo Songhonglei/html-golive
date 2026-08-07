@@ -35,6 +35,7 @@ from urllib.parse import urlparse
 from golive.core import clone_analyzer as analyzer
 from golive.core import clone_fetcher as fetcher
 from golive.core import clone_patcher as patcher
+from golive.i18n import t as _t
 
 FETCH_TIMEOUT = 90  # seconds — overall fetch + inline budget
 
@@ -103,22 +104,22 @@ def scrub_model_code(html: str) -> tuple[str, list[str]]:
 
 def print_report(url: str, strategy: str, notes: list, analysis: dict):
     print()
-    print("📋 迁移性分析报告")
+    print(_t("clone_site.report_title"))
     _separator()
-    print(f"来源: {url}")
-    print(f"策略: {strategy}")
+    print(_t("clone_site.source", url=url))
+    print(_t("clone_site.strategy", strategy=strategy))
     score = analysis.get("score", "?")
-    print(f"迁移评分: {score}/100")
+    print(_t("clone_site.score", score=score))
     summary = analysis.get("summary", "")
     if summary:
-        print(f"摘要: {summary}")
+        print(_t("clone_site.summary", summary=summary))
     api_deps = analysis.get("api_deps", [])
     if api_deps:
-        print(f"\nAPI 依赖（{len(api_deps)} 处，发布后可能无法访问）：")
+        print(_t("clone_site.api_deps_header", count=len(api_deps)))
         for dep in api_deps[:8]:
             print(f"  · {dep}")
         if len(api_deps) > 8:
-            print(f"  · ... 等共 {len(api_deps)} 处")
+            print(_t("clone_site.api_deps_more", count=len(api_deps)))
     for w in analysis.get("warnings", []):
         print(f"⚠️  {w}")
     for n in notes:
@@ -127,13 +128,13 @@ def print_report(url: str, strategy: str, notes: list, analysis: dict):
 
 
 def print_sensitive_report(findings: list[dict]):
-    print("🔒 敏感配置清理报告")
+    print(_t("clone_site.sensitive_title"))
     _separator()
     for finding in findings:
-        print(f"模块: {finding.get('module_label', '?')}")
+        print(_t("clone_site.sensitive_module", label=finding.get('module_label', '?')))
         for f in finding.get("scrubbed_fields", []):
-            print(f"  · {f.get('name')} → 已替换为占位符")
-    print("提示：发布前请搜索 __PLACEHOLDER_ 并按需填写真实配置。")
+            print(_t("clone_site.sensitive_replaced", name=f.get('name')))
+    print(_t("clone_site.sensitive_hint"))
     _separator()
 
 
@@ -152,15 +153,15 @@ def run_clone(
     """
     url = url.strip()
     print()
-    print("🌐 golive 一键拷贝")
+    print(_t("clone_site.banner"))
     _separator()
-    print(f"目标 URL: {url}")
+    print(_t("clone_site.target_url", url=url))
     print()
 
     # Step 1: classify
-    print("🔍 正在分析 URL 类型...")
+    print(_t("clone_site.analyzing_url"))
     url_type = fetcher.classify_url(url)
-    print(f"   类型: {url_type}")
+    print(_t("clone_site.url_type", url_type=url_type))
     print()
 
     clone_info = None
@@ -170,7 +171,7 @@ def run_clone(
         pass
 
     # Step 2: fetch (in a daemon thread with a hard timeout)
-    print(f"📥 正在抓取页面内容{'（无头浏览器模式）' if use_headless else ''}...")
+    print(_t("clone_site.fetching", headless_note=_t("clone_site.fetching_headless_note") if use_headless else ""))
     result_box: list = []
     error_box: list = []
 
@@ -189,32 +190,32 @@ def run_clone(
     t.join(timeout=FETCH_TIMEOUT)
 
     if t.is_alive():
-        print(f"\n⏱️  抓取超时（>{FETCH_TIMEOUT}s）。", file=sys.stderr)
-        print("   页面资源可能过多，建议：", file=sys.stderr)
-        print("   1. 在浏览器打开页面 → Ctrl+S 保存 HTML → golive publish 该文件", file=sys.stderr)
-        print("   2. 或使用 --headless 参数（无头浏览器模式）重试", file=sys.stderr)
+        print(_t("clone_site.fetch_timeout", timeout=FETCH_TIMEOUT), file=sys.stderr)
+        print(_t("clone_site.fetch_timeout_hint_1"), file=sys.stderr)
+        print(_t("clone_site.fetch_timeout_hint_2"), file=sys.stderr)
+        print(_t("clone_site.fetch_timeout_hint_3"), file=sys.stderr)
         sys.exit(1)
     if error_box:
-        print(f"❌ 页面抓取失败: {error_box[0]}", file=sys.stderr)
+        print(_t("clone_site.fetch_failed", error=error_box[0]), file=sys.stderr)
         sys.exit(1)
 
     fetch_result = result_box[0]
     html_content = fetch_result.get("html", "")
-    strategy_used = fetch_result.get("strategy_used", "未知")
+    strategy_used = fetch_result.get("strategy_used", "unknown")
     notes = fetch_result.get("notes", [])
     source_zip = fetch_result.get("source_zip")
 
-    print(f"   策略: {strategy_used}")
+    print(_t("clone_site.strategy_label", strategy=strategy_used))
     if not html_content and not source_zip:
         print()
-        print("❌ 未能获取到页面内容。可能原因：")
-        print("   • 网络不可达 / 需要登录")
-        print("   • 页面由 JS 动态渲染（纯 requests 拿不到内容）")
+        print(_t("clone_site.no_content"))
+        print(_t("clone_site.no_content_reason_1"))
+        print(_t("clone_site.no_content_reason_2"))
         print()
-        print("   💡 建议：在浏览器打开页面 → Ctrl+S 保存 HTML → golive publish 该文件")
+        print(_t("clone_site.no_content_hint"))
         sys.exit(1)
     if html_content:
-        print(f"   内容大小: {len(html_content):,} 字节")
+        print(_t("clone_site.content_size", size=len(html_content)))
     print()
 
     # zip fast-path — no HTML analysis possible
@@ -222,7 +223,7 @@ def run_clone(
         return {
             "html": "",
             "source_zip": source_zip,
-            "name": f"克隆站点 {domain_from_url(url)}",
+            "name": _t("clone_site.cloned_site_name", domain=domain_from_url(url)),
             "notes": notes,
             "analysis": {},
             "sensitive_findings": [],
@@ -230,13 +231,13 @@ def run_clone(
         }
 
     # Step 3: migration analysis
-    print("🔬 正在进行迁移性分析...")
+    print(_t("clone_site.analyzing"))
     try:
         analysis = analyzer.analyze(html_content, base_url=url)
     except Exception as e:  # noqa: BLE001
-        print(f"⚠️  分析失败（将跳过分析继续流程）: {e}", file=sys.stderr)
+        print(_t("clone_site.analysis_failed", error=e), file=sys.stderr)
         analysis = {"api_deps": [], "font_issues": [], "localstorage_usage": False,
-                    "score": 100, "warnings": [], "summary": "分析不可用"}
+                    "score": 100, "warnings": [], "summary": ""}
 
     print_report(url, strategy_used, notes, analysis)
 
@@ -258,39 +259,39 @@ def run_clone(
     if not skip_backend_rewrite and has_backend_issues:
         if backend_origin:
             resolved_backend_origin = backend_origin.rstrip("/")
-            print(f"🔧 后端接口重写: 使用指定地址 {resolved_backend_origin}")
+            print(_t("clone_site.backend_rewrite_specified", origin=resolved_backend_origin))
         elif backend_issues.get("inferred_origin"):
             resolved_backend_origin = backend_issues["inferred_origin"]
-            print(f"🔧 后端接口重写: 自动推断原始服务地址 → {resolved_backend_origin}")
+            print(_t("clone_site.backend_rewrite_inferred", origin=resolved_backend_origin))
         else:
-            print("⚠️  检测到后端接口依赖，但无法推断原始服务地址；"
-                  "可通过 --backend-origin 指定。本次保持原样。")
+            print(_t("clone_site.backend_rewrite_cannot_infer"))
     elif skip_backend_rewrite and has_backend_issues:
-        print("⚠️  [--skip-backend-rewrite] 已跳过后端接口重写，接口调用可能失败。")
+        print(_t("clone_site.backend_rewrite_skipped"))
 
     # Step 5: patch
     print()
-    print("🔧 正在修补 HTML（字体替换 / 敏感配置脱敏等）...")
+    print(_t("clone_site.patching"))
     sensitive_findings: list = []
     try:
         patched_html, sensitive_findings, backend_summary = patcher.patch(
             html_content, notes, backend_origin=resolved_backend_origin
         )
     except Exception as e:  # noqa: BLE001
-        print(f"⚠️  修补失败（将使用原始 HTML）: {e}", file=sys.stderr)
+        print(_t("clone_site.patch_failed", error=e), file=sys.stderr)
         patched_html = html_content
         backend_summary = {}
-        print("⚠️  HTML 修补异常，敏感配置脱敏可能未完成，请手动检查后再发布。", file=sys.stderr)
+        print(_t("clone_site.patch_warning"), file=sys.stderr)
 
     if backend_summary.get("relative_count") or backend_summary.get("localhost_count"):
-        print(f"   ✅ 已重写接口：相对路径 {backend_summary.get('relative_count', 0)} 处"
-              f" + localhost {backend_summary.get('localhost_count', 0)} 处"
-              f" → {resolved_backend_origin}")
+        print(_t("clone_site.rewrite_summary",
+                 rel_count=backend_summary.get('relative_count', 0),
+                 loc_count=backend_summary.get('localhost_count', 0),
+                 origin=resolved_backend_origin))
 
     # Step 6: scrub residual modelCode
     patched_html, leaked = scrub_model_code(patched_html)
     if leaked:
-        print(f"   ⚠️  检测到残留 modelCode（{', '.join(leaked)}），已替换为占位符。")
+        print(_t("clone_site.model_code_leaked", codes=", ".join(leaked)))
 
     if sensitive_findings:
         print()
@@ -302,7 +303,7 @@ def run_clone(
     if m:
         name = m.group(1).strip()[:60]
     if not name:
-        name = f"克隆站点 {domain_from_url(url)}"
+        name = _t("clone_site.cloned_site_name", domain=domain_from_url(url))
 
     return {
         "html": patched_html,

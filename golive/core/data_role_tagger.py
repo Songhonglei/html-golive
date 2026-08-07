@@ -68,6 +68,8 @@ from __future__ import annotations
 import re
 from bs4 import BeautifulSoup, Tag
 
+from golive.i18n import t as _t
+
 
 # ── 基于类名关键词的静态映射 ──────────────────────────────────
 CLASS_ROLE_HINTS = {
@@ -438,7 +440,7 @@ if __name__ == '__main__':
 
     path = sys.argv[1] if len(sys.argv) > 1 else None
     if not path:
-        print("Usage: python3 data_role_tagger.py <html_file>")
+        print(_t("tagger.usage"))
         sys.exit(1)
 
     src = pathlib.Path(path).read_text(encoding='utf-8')
@@ -446,7 +448,7 @@ if __name__ == '__main__':
 
     out = pathlib.Path(path).with_suffix('.tagged.html')
     out.write_text(result, encoding='utf-8')
-    print(f"✅ 标注完成，共 {count} 个元素，输出：{out}")
+    print(_t("tagger.done", count=count, out=out))
 
     # 打印 data-role 分布
     soup2 = BeautifulSoup(result, 'html.parser')

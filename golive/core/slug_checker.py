@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from golive.i18n import t as _t
+
 # ── format rules ─────────────────────────────────────────────────────────────
 _MIN_LEN = 2
 _MAX_LEN = 32
@@ -54,15 +56,12 @@ def _all_reserved() -> set:
 def check_format(slug: str) -> tuple[bool, str]:
     """Validate slug format. Returns (ok, error_message)."""
     if len(slug) < _MIN_LEN:
-        return False, f"短域名长度不能少于 {_MIN_LEN} 个字符（当前：{len(slug)}）"
+        return False, _t("slug.too_short", min=_MIN_LEN, current=len(slug))
     if len(slug) > _MAX_LEN:
-        return False, f"短域名长度不能超过 {_MAX_LEN} 个字符（当前：{len(slug)}）"
+        return False, _t("slug.too_long", max=_MAX_LEN, current=len(slug))
     if not _VALID_CHAR_RE.match(slug):
         invalid_chars = set(c for c in slug if not re.match(r'[a-zA-Z0-9_-]', c))
-        return False, (
-            f"短域名只能包含字母、数字、下划线（_）和中划线（-），"
-            f"不允许使用：{'、'.join(repr(c) for c in sorted(invalid_chars))}"
-        )
+        return False, _t("slug.invalid_chars", chars=", ".join(repr(c) for c in sorted(invalid_chars)))
     return True, ""
 
 
@@ -80,12 +79,12 @@ def check_reserved(slug: str) -> tuple[bool, str]:
     """Check against reserved slugs. Returns (hit, error_message)."""
     slug_lower = slug.lower()
     if slug_lower in _all_reserved():
-        return True, f"短域名 `{slug}` 是系统保留字，请更换"
+        return True, _t("slug.reserved", slug=slug)
     # normalized variant match（防连字符/数字变体绕过）
     stripped = _strip_for_match(slug)
     for r in _all_reserved():
         if _strip_for_match(r) and stripped == _strip_for_match(r):
-            return True, f"短域名 `{slug}` 与系统保留字 `{r}` 等价，请更换"
+            return True, _t("slug.reserved_variant", slug=slug, reserved=r)
     return False, ""
 
 
@@ -106,10 +105,7 @@ def check_occupation(slug: str, current_site_id: str,
         return False, ""
     if site["site_id"] == current_site_id:
         return False, ""  # updating own site — keep the slug
-    return True, (
-        f"短域名 `{slug}` 已被其他站点占用（{site.get('name') or site['site_id']}），"
-        f"请更换，或先删除旧站点"
-    )
+    return True, _t("slug.occupied", slug=slug, name=site.get('name') or site['site_id'])
 
 
 # ── combined API ─────────────────────────────────────────────────────────────
@@ -139,14 +135,14 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="短域名校验工具（调试用）")
-    parser.add_argument("slug", help="要校验的短域名")
-    parser.add_argument("--site-id", default="", help="当前站点 site_id（更新场景用）")
+    parser = argparse.ArgumentParser(description=_t("slug.cli_desc"))
+    parser.add_argument("slug", help=_t("slug.cli_arg_slug"))
+    parser.add_argument("--site-id", default="", help=_t("slug.cli_arg_site"))
     args = parser.parse_args()
 
     ok, msg = validate_slug(args.slug, args.site_id)
     if ok:
-        print(f"✅ 短域名 '{args.slug}' 校验通过，可以使用")
+        print(_t("slug.check_ok", slug=args.slug))
     else:
-        print(f"❌ {msg}")
+        print(_t("slug.check_fail", msg=msg))
         sys.exit(1)

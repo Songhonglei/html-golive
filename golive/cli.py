@@ -436,7 +436,7 @@ def _serve_manage(action: str, args) -> int:
             print(t("serve.start.stop"))
             return 0
         if res["state"] == "already-running":
-            pid_str = f"（pid {res['pid']}）" if res.get("pid") else ""
+            pid_str = f"(pid {res['pid']})" if res.get("pid") else ""
             print(t("serve.already_running", port=res['port'], pid=pid_str))
             print(t("serve.already_running_hint"))
             return 0
@@ -480,7 +480,7 @@ def _serve_manage(action: str, args) -> int:
         if res.get("stop", {}).get("message"):
             print(f"   {res['stop']['message']}")
         if res["state"] in ("started", "already-running"):
-            pid_str = f"（pid {res['pid']}）" if res.get("pid") else ""
+            pid_str = f"(pid {res['pid']})" if res.get("pid") else ""
             print(t("serve.restart.done", port=res['port'], pid=pid_str))
             return 0
         print(t("serve.restart.failed", message=res['message']), file=sys.stderr)
@@ -874,9 +874,9 @@ def _doctor_render(rep: dict, port: int) -> None:
         """Wrap a detail string in brackets without doubling them up."""
         if not detail:
             return ""
-        if detail[0] in "（(⚠❌✅":
+        if detail[0] in "(⚠❌✅":
             return detail
-        return f"（{detail}）"
+        return f"({detail})"
 
     print(t("doctor.title"))
     row("golive", rep["cli_version"], t("doctor.cli_version"))

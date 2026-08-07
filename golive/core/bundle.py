@@ -26,6 +26,8 @@ import re
 import sys
 from pathlib import Path
 
+from golive.i18n import t as _t
+
 # 图片/字体扩展名
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".avif"}
 FONT_EXTENSIONS = {".woff", ".woff2", ".ttf", ".otf", ".eot"}
@@ -90,7 +92,7 @@ def file_to_base64_data_uri(file_path: Path) -> str:
         with open(file_path, "rb") as f:
             data = base64.b64encode(f.read()).decode("ascii")
     except (FileNotFoundError, PermissionError, OSError) as e:
-        print(f"⚠️  资源文件读取失败，跳过内联 {file_path}: {e}", file=sys.stderr)
+        print(_t("bundle.asset_read_failed", path=file_path, error=e), file=sys.stderr)
         raise
     return f"data:{mime_type};base64,{data}"
 
@@ -132,18 +134,18 @@ class Bundler:
                     image_bytes = f.read()
                 cdn_url = self.uploader.upload(image_bytes, asset_path.name)
                 if cdn_url:
-                    print(f"  📤 上传图床: {asset_path.name} → {cdn_url}", file=sys.stderr)
+                    print(_t("bundle.upload_ok", name=asset_path.name, url=cdn_url), file=sys.stderr)
                     return cdn_url
             except Exception as e:
-                print(f"  ⚠️  上传失败，降级为 Base64 [{asset_path.name}]: {e}", file=sys.stderr)
+                print(_t("bundle.upload_failed", name=asset_path.name, error=e), file=sys.stderr)
 
         # 降级：Base64
         try:
             uri = file_to_base64_data_uri(asset_path)
-            print(f"  🔒 Base64 内联: {asset_path.name}", file=sys.stderr)
+            print(_t("bundle.base64_inline", name=asset_path.name), file=sys.stderr)
             return uri
         except Exception as e:
-            print(f"  ⚠️  无法读取资源文件 [{asset_path.name}]: {e}", file=sys.stderr)
+            print(_t("bundle.asset_read_err", name=asset_path.name, error=e), file=sys.stderr)
             return ""
 
     # ─── CSS 处理 ────────────────────────────────────────────────────────────
@@ -167,10 +169,10 @@ class Bundler:
             try:
                 with open(imported_path, "r", encoding="utf-8", errors="replace") as f:
                     imported_css = f.read()
-                print(f"  📎 内联 CSS @import: {imported_path.name}", file=sys.stderr)
+                print(_t("bundle.css_import_inline", name=imported_path.name), file=sys.stderr)
                 return self._process_css_content(imported_css, imported_path)
             except Exception as e:
-                print(f"  ⚠️  无法读取 @import [{url}]: {e}", file=sys.stderr)
+                print(_t("bundle.css_import_failed", url=url, error=e), file=sys.stderr)
                 return m.group(0)
 
         css_content = re.sub(
@@ -215,7 +217,7 @@ class Bundler:
                 content = f.read()
             return self._process_css_content(content, css_file)
         except Exception as e:
-            print(f"  ⚠️  无法读取 CSS 文件 [{css_file.name}]: {e}", file=sys.stderr)
+            print(_t("bundle.css_read_failed", name=css_file.name, error=e), file=sys.stderr)
             return ""
 
     # ─── JS 处理 ────────────────────────────────────────────────────────────
@@ -226,7 +228,7 @@ class Bundler:
             with open(js_file, "r", encoding="utf-8", errors="replace") as f:
                 return f.read()
         except Exception as e:
-            print(f"  ⚠️  无法读取 JS 文件 [{js_file.name}]: {e}", file=sys.stderr)
+            print(_t("bundle.js_read_failed", name=js_file.name, error=e), file=sys.stderr)
             return ""
 
     # ─── JSON 内联处理 ───────────────────────────────────────────────────────
@@ -244,17 +246,14 @@ class Bundler:
         try:
             raw = file_path.read_text(encoding="utf-8")
         except UnicodeDecodeError as e:
-            return "", f"文件编码错误（不是 UTF-8）：{e}"
+            return "", _t("bundle.json_encode_error", error=e)
         except OSError as e:
-            return "", f"文件读取失败：{e}"
+            return "", _t("bundle.json_read_error", error=e)
 
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as e:
-            return "", (
-                f"JSON 格式错误（第 {e.lineno} 行，第 {e.colno} 列）：{e.msg}\n"
-                f"  → 请修复 {file_path.name} 后重新部署"
-            )
+            return "", _t("bundle.json_format_error", lineno=e.lineno, colno=e.colno, msg=e.msg, name=file_path.name)
 
         # 重新序列化（规范化 + Python 内置转义）
         safe = json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
@@ -317,10 +316,7 @@ class Bundler:
         for ref in refs:
             file_path = resolve_path(self.base_dir, html_file, ref)
             if file_path is None:
-                print(
-                    f"  ⚠️  JSON 引用未找到，跳过：{ref}",
-                    file=sys.stderr,
-                )
+                print(_t("bundle.json_ref_not_found", ref=ref), file=sys.stderr)
                 continue
             if file_path not in resolved_map:
                 resolved_map[file_path] = []
@@ -343,8 +339,8 @@ class Bundler:
             # ≤ 300KB：直接内联
             safe_str, err = self._safe_json_to_js(file_path)
             if err:
-                print(f"\n❌  {file_path.name} 无法内联：{err}", file=sys.stderr)
-                print("本次部署已取消，请修复 JSON 文件后重新部署。", file=sys.stderr)
+                print(_t("bundle.json_inline_failed", name=file_path.name, error=err), file=sys.stderr)
+                print(_t("bundle.json_deploy_cancelled"), file=sys.stderr)
                 sys.exit(1)
 
             # 注册所有等效 key：所有原始引用 + 相对路径 + 带./ + 文件名
@@ -358,22 +354,12 @@ class Bundler:
                 self._json_warn_list.append((file_path.name, size))
             else:
                 # < 50KB：静默
-                print(f"  📋 内联 JSON: {file_path.name} ({size / 1024:.1f}KB)", file=sys.stderr)
+                print(_t("bundle.json_inline_silent", name=file_path.name, size=size / 1024), file=sys.stderr)
 
         # 处理大文件（交互式）
         for file_path, all_refs, size in large_files:
             size_str = f"{size / 1024:.0f}KB" if size < 1024 * 1024 else f"{size / 1024 / 1024:.1f}MB"
-            print(
-                f"\n⚠️  发现超大 JSON 文件：{file_path.name}（{size_str}）\n\n"
-                f"直接内联会使页面体积增加 {size_str}，可能导致页面加载较慢。\n\n"
-                f"是否仍要内联大数据 JSON，继续部署？\n"
-                f"  y = 内联并继续部署（页面加载可能变慢）\n"
-                f"  n = 跳过该文件，继续部署（页面中该数据将缺失）\n"
-                f"  d = 引导我使用线上数据存储（推荐，数据独立管理）\n"
-                f"请输入 (y/n/d)：",
-                end="",
-                file=sys.stderr,
-            )
+            print(_t("bundle.json_large_prompt", name=file_path.name, size_str=size_str), end="", file=sys.stderr)
             try:
                 choice = input().strip().lower()
             except EOFError:
@@ -382,38 +368,23 @@ class Bundler:
             if choice == "y":
                 safe_str, err = self._safe_json_to_js(file_path)
                 if err:
-                    print(f"\n❌  {file_path.name} 无法内联：{err}", file=sys.stderr)
-                    print("本次部署已取消，请修复 JSON 文件后重新部署。", file=sys.stderr)
+                    print(_t("bundle.json_inline_failed", name=file_path.name, error=err), file=sys.stderr)
+                    print(_t("bundle.json_deploy_cancelled"), file=sys.stderr)
                     sys.exit(1)
                 rel_path = str(file_path.relative_to(self.base_dir))
                 keys = set(all_refs) | {rel_path, "./" + rel_path, file_path.name}
                 for key in keys:
                     self._json_inline_map[key] = safe_str
                 self._json_warn_list.append((file_path.name, size))
-                print(f"  ✅ 已将 {file_path.name} 强制内联", file=sys.stderr)
+                print(_t("bundle.json_large_ok", name=file_path.name), file=sys.stderr)
 
             elif choice == "d":
-                print(
-                    f"\n📦 线上数据存储配置向导\n"
-                    f"{'─' * 40}\n"
-                    f"1. 为你的数据起一个模型名称（字母/数字/下划线，如 {file_path.stem}_v1）：\n"
-                    f"   （模型名称用于在服务端标识你的数据集）\n\n"
-                    f"2. 配置好后，使用以下命令重新部署：\n\n"
-                    f"   python3 html_go_live.py --dir <你的项目目录> --name \"<应用名称>\" \\\n"
-                    f"     --data-model {file_path.stem}_v1\n\n"
-                    f"   部署完成后，页面可通过 window.TemplateAPI 读取数据，\n"
-                    f"   数据更新无需重新部署页面。\n\n"
-                    f"本次部署已取消，请按上方命令重新运行。",
-                    file=sys.stderr,
-                )
+                print(_t("bundle.json_data_wizard", stem=file_path.stem), file=sys.stderr)
                 sys.exit(0)
 
             else:
                 # n 或其他输入 → 跳过
-                print(
-                    f"  ⏭️  已跳过 {file_path.name}，页面中该数据将缺失",
-                    file=sys.stderr,
-                )
+                print(_t("bundle.json_large_skipped", name=file_path.name), file=sys.stderr)
 
     def _build_json_polyfill(self) -> str:
         """
@@ -577,7 +548,7 @@ class Bundler:
             css_path = resolve_path(self.base_dir, html_file, href)
             if not css_path:
                 return tag
-            print(f"  📎 内联 CSS: {css_path.name}", file=sys.stderr)
+            print(_t("bundle.css_inline_link", name=css_path.name), file=sys.stderr)
             css_content = self._process_css_file(css_path)
             return f"<style>\n{css_content}\n</style>"
 
@@ -605,7 +576,7 @@ class Bundler:
             js_path = resolve_path(self.base_dir, html_file, src)
             if not js_path:
                 return m.group(0)
-            print(f"  📎 内联 JS: {js_path.name}", file=sys.stderr)
+            print(_t("bundle.js_inline_link", name=js_path.name), file=sys.stderr)
             js_content = self._process_js_file(js_path)
             # 收集外链 JS 源码
             _collected_js_sources.append(js_content)
@@ -805,12 +776,7 @@ class Bundler:
             # 输出轻提示（50KB-300KB 文件）
             for fname, fsize in self._json_warn_list:
                 size_str = f"{fsize / 1024:.0f}KB"
-                print(
-                    f"\n  ℹ️  已内联 JSON 数据：{fname}（{size_str}）\n"
-                    f"     数据已写入 HTML，更新数据需重新部署。\n"
-                    f"     如需动态更新，可改用 --data-model（线上存储）。",
-                    file=sys.stderr,
-                )
+                print(_t("bundle.json_warn_info", name=fname, size_str=size_str), file=sys.stderr)
 
         return html_content
 
@@ -839,22 +805,19 @@ class Bundler:
         if entry_html is None:
             entry_html = self.find_entry_html()
             if entry_html is None:
-                raise FileNotFoundError(
-                    f"在 {self.base_dir} 中未找到入口 HTML 文件，"
-                    f"请确认目录中存在 index.html 或其他 HTML 文件。"
-                )
+                raise FileNotFoundError(_t("bundle.entry_not_found", dir=self.base_dir))
 
-        print(f"🔍 入口文件: {entry_html.name}", file=sys.stderr)
+        print(_t("bundle.entry_html", name=entry_html.name), file=sys.stderr)
 
         try:
             with open(entry_html, "r", encoding="utf-8", errors="replace") as f:
                 html_content = f.read()
         except (PermissionError, OSError) as e:
-            raise OSError(f"无法读取入口 HTML 文件 {entry_html}: {e}") from e
+            raise OSError(_t("bundle.read_entry_failed", path=entry_html, error=e)) from e
 
-        print("⚙️  开始打包...", file=sys.stderr)
+        print(_t("bundle.start"), file=sys.stderr)
         result = self._process_html(html_content, entry_html)
-        print("✅ 打包完成", file=sys.stderr)
+        print(_t("bundle.done"), file=sys.stderr)
         return result
 
 
@@ -874,36 +837,36 @@ def find_entry_interactive(base_dir: Path) -> Path:
             unique_files.append(f)
 
     if not unique_files:
-        raise FileNotFoundError(f"在 {base_dir} 中未找到任何 HTML 文件")
+        raise FileNotFoundError(_t("bundle.no_html_files", dir=base_dir))
 
     if len(unique_files) == 1:
         return unique_files[0]
 
-    print("⚠️  找到多个 HTML 文件，请选择入口：", file=sys.stderr)
+    print(_t("bundle.multiple_html"), file=sys.stderr)
     for i, f in enumerate(unique_files, 1):
         rel = f.relative_to(base_dir)
-        print(f"  {i}. {rel}", file=sys.stderr)
-    print("请输入序号：", file=sys.stderr, end=" ")
+        print(_t("bundle.multiple_html_item", i=i, rel=rel), file=sys.stderr)
+    print(_t("bundle.choose_prompt"), file=sys.stderr, end=" ")
     choice = input().strip()
     try:
         idx = int(choice) - 1
         return unique_files[idx]
     except (ValueError, IndexError):
-        raise ValueError(f"无效序号：{choice}")
+        raise ValueError(_t("bundle.invalid_choice", choice=choice))
 
 
 # ── 独立测试入口 ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="将多文件项目打包为单 HTML")
-    parser.add_argument("--dir", "-d", required=True, help="项目文件夹路径")
-    parser.add_argument("--entry", "-e", help="指定入口 HTML 文件（相对于 --dir）")
-    parser.add_argument("--no-image-upload", action="store_true", help="禁用图床上传，图片降级为 Base64")
-    parser.add_argument("--output", "-o", help="输出文件路径（默认输出到 stdout）")
+    parser = argparse.ArgumentParser(description=_t("bundle.cli_desc"))
+    parser.add_argument("--dir", "-d", required=True, help=_t("bundle.cli_arg_dir"))
+    parser.add_argument("--entry", "-e", help=_t("bundle.cli_arg_entry"))
+    parser.add_argument("--no-image-upload", action="store_true", help=_t("bundle.cli_arg_no_upload"))
+    parser.add_argument("--output", "-o", help=_t("bundle.cli_arg_output"))
     args = parser.parse_args()
 
     base_dir = Path(args.dir).resolve()
     if not base_dir.is_dir():
-        print(f"错误：不是有效目录：{args.dir}", file=sys.stderr)
+        print(_t("bundle.cli_invalid_dir", dir=args.dir), file=sys.stderr)
         sys.exit(1)
 
     # 图床上传：配置了 GOLIVE_UPLOADER_CMD 时启用，否则 Base64 内联
@@ -920,7 +883,7 @@ if __name__ == "__main__":
     if args.entry:
         entry = (base_dir / args.entry).resolve()
         if not entry.exists():
-            print(f"错误：入口文件不存在：{entry}", file=sys.stderr)
+            print(_t("bundle.cli_entry_not_found", entry=entry), file=sys.stderr)
             sys.exit(1)
     else:
         try:
@@ -928,7 +891,7 @@ if __name__ == "__main__":
             if entry is None:
                 entry = find_entry_interactive(base_dir)
         except Exception as e:
-            print(f"错误：{e}", file=sys.stderr)
+            print(_t("bundle.cli_error", error=e), file=sys.stderr)
             sys.exit(1)
 
     try:
@@ -937,9 +900,9 @@ if __name__ == "__main__":
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(result)
             size_kb = len(result.encode("utf-8")) / 1024
-            print(f"💾 已写入: {args.output} ({size_kb:.1f} KB)", file=sys.stderr)
+            print(_t("bundle.cli_written", path=args.output, size=size_kb), file=sys.stderr)
         else:
             print(result)
     except Exception as e:
-        print(f"错误：{e}", file=sys.stderr)
+        print(_t("bundle.cli_error", error=e), file=sys.stderr)
         sys.exit(1)

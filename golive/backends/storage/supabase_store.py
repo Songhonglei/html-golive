@@ -23,6 +23,8 @@ from typing import Optional
 
 import requests
 
+from golive.i18n import t as _t
+
 BACKUP_MAX_KEEP = 10
 CACHE_TTL = 60  # seconds
 DEFAULT_TIMEOUT = 20
@@ -195,8 +197,7 @@ class SupabaseStorage:
     def _prune(self, site_id: str) -> None:
         if not self._try_acquire_prune_lock(site_id):
             import sys as _sys
-            print(f"ℹ️  {site_id} 快照清理被其他发布进程占用，本次跳过"
-                  "（下次发布自动补）", file=_sys.stderr)
+            print(_t("supabase.snapshot_skip", site_id=site_id), file=_sys.stderr)
             return
         try:
             snaps = sorted(self.list_snapshots(site_id), key=lambda s: s["ts"])

@@ -21,6 +21,8 @@ import re
 import sys
 from pathlib import Path
 
+from golive.i18n import t as _t
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
@@ -67,7 +69,7 @@ def load_rules(extra_files=None) -> dict:
     for f in extra_files or []:
         p = Path(f).expanduser()
         if not p.exists():
-            print(f"⚠️  扩展规则文件不存在，跳过：{p}", file=sys.stderr)
+            print(_t("scanner.ext_not_found", path=p), file=sys.stderr)
             continue
         extra = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         keyword_rules.extend(extra.get("keyword_rules") or [])
@@ -83,7 +85,7 @@ def load_rules(extra_files=None) -> dict:
                 "pattern": re.compile(r["pattern"], re.IGNORECASE),
             })
         except (KeyError, re.error) as e:
-            print(f"⚠️  规则编译失败，跳过 {r.get('name')}：{e}", file=sys.stderr)
+            print(_t("scanner.regex_failed", name=r.get('name'), error=e), file=sys.stderr)
 
     rules = {"keyword_rules": keyword_rules, "regex_rules": compiled_regex}
     if not extra_files:
@@ -276,7 +278,7 @@ def run_scan(html: str, skip_scan: bool = False,
     hits always block — they are never sent to the LLM.
     """
     if skip_scan:
-        print("⏭️  已跳过安全扫描（--skip-scan）", file=sys.stderr)
+        print(_t("scanner.skip"), file=sys.stderr)
         return True, None
 
     # strict mode: user demands AI review; none configured -> refuse
@@ -289,12 +291,11 @@ def run_scan(html: str, skip_scan: bool = False,
     result = scan_html(html, load_rules(extra_rule_files))
 
     if result.blocked:
-        print("\n🚫 安全扫描未通过 — 检测到疑似机密内容，发布已阻断：", file=sys.stderr)
+        print(_t("scanner.block_title"), file=sys.stderr)
         for d in result.strong_hits:
-            print(f"   · [{d['name']}] {d['keyword']}", file=sys.stderr)
-            print(f"     上下文: {d['context']}", file=sys.stderr)
-        print("\n   请删除上述内容后重试；确认为误报可用 --skip-scan 跳过。",
-              file=sys.stderr)
+            print(_t("scanner.block_item", name=d['name'], keyword=d['keyword']), file=sys.stderr)
+            print(_t("scanner.block_context", context=d['context']), file=sys.stderr)
+        print(_t("scanner.block_hint"), file=sys.stderr)
         return False, result
 
     weak = result.weak_hits
@@ -314,12 +315,12 @@ def run_scan(html: str, skip_scan: bool = False,
             print(f"⚠️  {review.note}", file=sys.stderr)
 
     if weak:
-        print("\n⚠️  安全扫描提示 — 检测到疑似敏感词（不阻断发布）：", file=sys.stderr)
+        print(_t("scanner.warn_title"), file=sys.stderr)
         for d in weak[:10]:
             reason = (d.get("ai_review") or {}).get("reason", "")
             suffix = f"（AI: {reason}）" if reason else ""
-            print(f"   · [{d['name']}] {d['keyword']}{suffix}", file=sys.stderr)
-        print("   请确认页面不含真实敏感数据。", file=sys.stderr)
+            print(_t("scanner.warn_item", name=d['name'], keyword=d['keyword'], suffix=suffix), file=sys.stderr)
+        print(_t("scanner.warn_hint"), file=sys.stderr)
 
     return True, result
 
@@ -336,11 +337,11 @@ def ai_review(candidates, html=None, cfg=None):
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser(description="golive 安全扫描（调试用）")
-    ap.add_argument("file", help="HTML 文件")
+    ap = argparse.ArgumentParser(description=_t("scanner.cli_desc"))
+    ap.add_argument("file", help=_t("scanner.cli_arg_file"))
     args = ap.parse_args()
     html_text = Path(args.file).read_text(encoding="utf-8")
     ok, res = run_scan(html_text)
     if res is not None and not res.matched_details:
-        print("✅ 未发现敏感内容")
+        print(_t("scanner.no_sensitive"))
     sys.exit(0 if ok else 1)

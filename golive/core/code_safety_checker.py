@@ -40,6 +40,8 @@ from __future__ import annotations
 import re
 import sys
 
+from golive.i18n import t as _t
+
 # ── 规则定义 ──────────────────────────────────────────────────────────────────
 
 # B 类：机密凭证（BLOCK）——在原始 HTML 全文扫描，注释里也拦
@@ -273,7 +275,7 @@ def run_check(
     all_issues.extend(_check_c_class(html))
 
     if not all_issues:
-        print("✅ 代码安全检查通过：未检测到硬编码凭证或身份信息", file=sys.stderr)
+        print(_t("safety.check_passed"), file=sys.stderr)
         return True, []
 
     # 分组
@@ -286,54 +288,54 @@ def run_check(
     if block_issues:
         print(file=sys.stderr)
         print("=" * 60, file=sys.stderr)
-        print("🚫  代码安全检查：发现机密凭证明文 — 发布已阻断", file=sys.stderr)
+        print(_t("safety.block_title"), file=sys.stderr)
         print("=" * 60, file=sys.stderr)
-        print(f"  共 {len(block_issues)} 处需要处理：\n", file=sys.stderr)
+        print(_t("safety.block_count", count=len(block_issues)), file=sys.stderr)
         for idx, issue in enumerate(block_issues, 1):
-            print(f"  [{idx}] [{issue['category']}] {issue['label']}", file=sys.stderr)
+            print(_t("safety.block_item", idx=idx, cat=issue['category'], label=issue['label']), file=sys.stderr)
             if issue["context"]:
-                print(f"       上下文：{issue['context']}", file=sys.stderr)
+                print(_t("safety.block_context", context=issue['context']), file=sys.stderr)
         print(file=sys.stderr)
-        print("💡 修复建议：", file=sys.stderr)
-        print("   • token/key/secret → 移到 references/credentials.json 或环境变量", file=sys.stderr)
-        print("   • password         → 使用在线数据存储，或联系 go-live 管理员", file=sys.stderr)
-        print("   • 数据库连接串     → 禁止在前端代码中使用，联系后端同学", file=sys.stderr)
-        print("   • 云平台密钥       → 立即撤销并轮换，不得出现在前端代码中", file=sys.stderr)
+        print(_t("safety.block_hint_title"), file=sys.stderr)
+        print(_t("safety.block_hint_token"), file=sys.stderr)
+        print(_t("safety.block_hint_password"), file=sys.stderr)
+        print(_t("safety.block_hint_db"), file=sys.stderr)
+        print(_t("safety.block_hint_cloud"), file=sys.stderr)
         print(f"\n{_SEP}", file=sys.stderr)
 
     # ── 打印 WARN 报告（有 BLOCK 时跳过交互，skip_warn 时直接静默跳过）──
     if warn_issues and not skip_warn:
         print(file=sys.stderr)
         print(_SEP, file=sys.stderr)
-        print("⚠️   代码安全检查：发现硬编码身份信息/本地路径", file=sys.stderr)
+        print(_t("safety.warn_title"), file=sys.stderr)
         print(_SEP, file=sys.stderr)
-        print(f"  共 {len(warn_issues)} 处建议修复：\n", file=sys.stderr)
+        print(_t("safety.warn_count", count=len(warn_issues)), file=sys.stderr)
         for idx, issue in enumerate(warn_issues, 1):
-            print(f"  [{idx}] [{issue['category']}] {issue['label']}", file=sys.stderr)
+            print(_t("safety.block_item", idx=idx, cat=issue['category'], label=issue['label']), file=sys.stderr)
             if issue["context"]:
-                print(f"       上下文：{issue['context']}", file=sys.stderr)
+                print(_t("safety.block_context", context=issue['context']), file=sys.stderr)
         print(file=sys.stderr)
-        print("💡 修复建议：", file=sys.stderr)
-        print("   • 邮箱用于判断  → 改为通过 SSO 接口动态获取当前用户，或从在线存储读取白名单", file=sys.stderr)
-        print("   • 本地绝对路径  → 改为相对路径或运行时动态获取", file=sys.stderr)
+        print(_t("safety.block_hint_title"), file=sys.stderr)
+        print(_t("safety.warn_hint_email"), file=sys.stderr)
+        print(_t("safety.warn_hint_path"), file=sys.stderr)
 
         if block_issues:
             # 已有 BLOCK 阻断，WARN 仅输出不再询问
-            print(f"\n   （存在 BLOCK 问题，请一并修复以上警告）", file=sys.stderr)
+            print(_t("safety.warn_block_note"), file=sys.stderr)
             print(_SEP, file=sys.stderr)
         elif auto_yes:
-            print(f"\n   （--yes 已自动跳过，继续发布）", file=sys.stderr)
+            print(_t("safety.warn_yes_note"), file=sys.stderr)
             print(_SEP, file=sys.stderr)
         else:
             # 交互确认
-            print(f"\n是否忽略以上警告继续发布？[y/N]：", file=sys.stderr, end=" ")
+            print(_t("safety.warn_prompt"), file=sys.stderr, end=" ")
             try:
                 ans = input().strip().lower()
             except (EOFError, KeyboardInterrupt):
                 ans = ""
             print(_SEP, file=sys.stderr)
             if ans not in ("y", "yes", "是", "继续"):
-                print("⛔ 发布已中止，请修改后重新发布。", file=sys.stderr)
+                print(_t("safety.abort"), file=sys.stderr)
                 return False, all_issues
 
     # BLOCK 存在 → 无论 WARN 如何都返回 False
@@ -347,13 +349,10 @@ def run_check(
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser(
-        description="扫描 HTML 文件中的硬编码凭证、身份信息和本地路径"
-    )
-    ap.add_argument("file", help="待扫描的 HTML 文件路径")
-    ap.add_argument("--yes", action="store_true", help="自动跳过 WARN 类警告")
-    ap.add_argument("--skip-code-check", action="store_true",
-                    help="跳过 A/C 类 WARN 警告（B 类 BLOCK 不可跳过）")
+    ap = argparse.ArgumentParser(description=_t("safety.cli_desc"))
+    ap.add_argument("file", help=_t("safety.cli_arg_file"))
+    ap.add_argument("--yes", action="store_true", help=_t("safety.cli_arg_yes"))
+    ap.add_argument("--skip-code-check", action="store_true", help=_t("safety.cli_arg_skip"))
     _args = ap.parse_args()
 
     from pathlib import Path as _Path

@@ -21,6 +21,8 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
+from golive.i18n import t as _t
+
 # ---------------------------------------------------------------------------
 # 常量
 # ---------------------------------------------------------------------------
@@ -291,7 +293,7 @@ def fetch_site(
     else:
         # 未知类型，回退到通用抓取
         _fetch_static_or_generic(url, result, use_headless)
-        result["notes"].append(f"未知 URL 类型 '{url_type}'，已使用通用抓取策略。")
+        result["notes"].append(_t("clone_fetcher.unknown_url_type", url_type=url_type))
 
     # 资源内联（仅当拿到 HTML 且不是 ZIP，且未要求跳过时）
     if result["html"] and not result["source_zip"] and not skip_inline:
@@ -299,7 +301,7 @@ def fetch_site(
         result["html"] = inlined_html
         result["notes"].extend(inline_notes)
     elif skip_inline and result["html"]:
-        result["notes"].append("ℹ️ 已跳过资源内联（analyze-only 模式）")
+        result["notes"].append(_t("clone_fetcher.inline_skipped"))
 
     return result
 
@@ -344,11 +346,11 @@ def _fetch_local(url: str, result: dict) -> None:
         resp = requests.get(url, headers=HEADERS, timeout=LOCAL_TIMEOUT, allow_redirects=True)
         resp.raise_for_status()
         result["html"] = _fix_encoding(resp)
-        result["strategy_used"] = "requests (本地直连)"
+        result["strategy_used"] = "requests (local direct)"
     except Exception as e:
         result["html"] = ""
-        result["strategy_used"] = "requests (失败)"
-        result["notes"].append(f"⚠️ 无法访问本地地址 {url}：{e}")
+        result["strategy_used"] = "requests (failed)"
+        result["notes"].append(_t("clone_fetcher.local_failed", url=url, error=e))
 
 
 def _fetch_zip(url: str, result: dict) -> None:
@@ -369,11 +371,8 @@ def _fetch_zip(url: str, result: dict) -> None:
         if _cl_int > MAX_ZIP_BYTES:
             size_mb = _cl_int // (1024 * 1024)
             result["html"] = ""
-            result["strategy_used"] = "ZIP 下载中止（超限）"
-            result["notes"].append(
-                f"⚠️ ZIP 文件过大（{size_mb} MB > {MAX_ZIP_BYTES // 1024 // 1024} MB 限制），已中止下载。"
-                "建议手动下载后通过 --file 参数上传发布。"
-            )
+            result["strategy_used"] = "ZIP download aborted (size limit)"
+            result["notes"].append(_t("clone_fetcher.zip_too_large", size_mb=size_mb, limit_mb=MAX_ZIP_BYTES // 1024 // 1024))
             return
 
         # 流式下载，中途超限则中止并清理
@@ -393,17 +392,14 @@ def _fetch_zip(url: str, result: dict) -> None:
             except OSError:
                 pass
             result["html"] = ""
-            result["strategy_used"] = "ZIP 下载中止（超限）"
-            result["notes"].append(
-                f"⚠️ ZIP 文件超过 {MAX_ZIP_BYTES // 1024 // 1024} MB 限制，已中止下载并清理临时文件。"
-                "建议手动下载后通过 --file 参数上传发布。"
-            )
+            result["strategy_used"] = "ZIP download aborted (size limit)"
+            result["notes"].append(_t("clone_fetcher.zip_too_large_stream", limit_mb=MAX_ZIP_BYTES // 1024 // 1024))
             return
 
         result["source_zip"] = dest
         result["html"] = ""
-        result["strategy_used"] = f"直接下载 ZIP → {dest}"
-        result["notes"].append(f"ZIP 文件已下载至：{dest}")
+        result["strategy_used"] = f"Downloaded ZIP → {dest}"
+        result["notes"].append(_t("clone_fetcher.zip_downloaded", dest=dest))
     except Exception as e:
         # 清理可能已创建的临时文件
         try:
@@ -412,8 +408,8 @@ def _fetch_zip(url: str, result: dict) -> None:
         except OSError:
             pass
         result["html"] = ""
-        result["strategy_used"] = "ZIP 下载失败"
-        result["notes"].append(f"⚠️ ZIP 下载失败 ({url})：{e}")
+        result["strategy_used"] = "ZIP download failed"
+        result["notes"].append(_t("clone_fetcher.zip_download_failed", url=url, error=e))
 
 
 def _fetch_perplexity(url: str, result: dict) -> None:
@@ -429,13 +425,13 @@ def _fetch_perplexity(url: str, result: dict) -> None:
         html_text = _fix_encoding(resp)
     except Exception as e:
         html_text = ""
-        result["notes"].append(f"⚠️ Perplexity 页面初步抓取失败：{e}")
+        result["notes"].append(_t("clone_fetcher.perplexity_initial_failed", error=e))
 
     # 检查下载按钮
     if html_text:
         zip_url = _find_download_link(html_text, url)
         if zip_url:
-            result["notes"].append("Perplexity 页面已检测到下载包，正在下载…")
+            result["notes"].append(_t("clone_fetcher.perplexity_download_detected"))
             timestamp = int(time.time() * 1000)
             # 根据实际链接后缀推断扩展名，避免 .tar.gz 被存为 .zip
             zip_path_lower = urllib.parse.urlparse(zip_url).path.lower()
@@ -451,10 +447,8 @@ def _fetch_perplexity(url: str, result: dict) -> None:
                 except (ValueError, TypeError):
                     _cl = 0
                 if _cl > MAX_ZIP_BYTES:
-                    result["notes"].append(
-                        f"⚠️ Perplexity ZIP 文件过大（{_cl // 1024 // 1024} MB），已跳过下载。"
-                    )
-                    raise RuntimeError("ZIP 超限，跳过")
+                    result["notes"].append(_t("clone_fetcher.perplexity_zip_too_large", size_mb=_cl // 1024 // 1024))
+                    raise RuntimeError("ZIP size limit exceeded")
 
                 _exceeded = False
                 downloaded = 0
@@ -471,20 +465,18 @@ def _fetch_perplexity(url: str, result: dict) -> None:
                         os.unlink(dest)
                     except OSError:
                         pass
-                    result["notes"].append(
-                        f"⚠️ Perplexity ZIP 超过 {MAX_ZIP_BYTES // 1024 // 1024} MB 限制，已中止。"
-                    )
-                    raise RuntimeError("ZIP 超限，跳过")
+                    result["notes"].append(_t("clone_fetcher.perplexity_zip_limit_exceeded", limit_mb=MAX_ZIP_BYTES // 1024 // 1024))
+                    raise RuntimeError("ZIP size limit exceeded")
 
                 result["source_zip"] = dest
                 result["html"] = ""
-                result["strategy_used"] = f"Perplexity 下载按钮 → {dest}"
+                result["strategy_used"] = f"Perplexity download → {dest}"
                 return
             except Exception as e2:
-                result["notes"].append(f"⚠️ 下载包获取失败：{e2}，回退至浏览器快照")
+                result["notes"].append(_t("clone_fetcher.perplexity_download_failed", error=e2))
 
     # 无下载包 → headless
-    result["notes"].append("使用浏览器快照方式（Perplexity headless 渲染）")
+    result["notes"].append(_t("clone_fetcher.perplexity_headless_mode"))
     headless_html = _fetch_headless(url)
     if headless_html:
         result["html"] = headless_html
@@ -494,8 +486,8 @@ def _fetch_perplexity(url: str, result: dict) -> None:
         result["html"] = html_text
         result["strategy_used"] = "Perplexity requests fallback"
         if not html_text:
-            result["notes"].append("⚠️ Perplexity 页面抓取失败（headless 和 requests 均失败）")
-            result["notes"].append("💡 建议：在浏览器打开页面，找页面内「下载/Export」按钮下载 ZIP，再用 golive publish <zip> 发布")
+            result["notes"].append(_t("clone_fetcher.perplexity_headless_failed"))
+            result["notes"].append(_t("clone_fetcher.perplexity_fallback_hint"))
 
 
 def _fetch_ai_generated(url: str, result: dict) -> None:
@@ -509,47 +501,38 @@ def _fetch_ai_generated(url: str, result: dict) -> None:
 
     if not chrome_bin:
         # 明确告知用户 Chrome 不可用
-        result["notes"].append(
-            "⚠️ 未检测到 Chrome/Chromium，无法使用 headless 渲染。"
-            "AI 生成页通常需要渲染才能完整抓取，建议安装：\n"
-            "  Ubuntu/Debian: sudo apt-get install -y google-chrome-stable\n"
-            "  或下载：https://www.google.com/chrome/"
-        )
+        result["notes"].append(_t("clone_fetcher.ai_no_chrome"))
         try:
             resp = requests.get(url, headers=HEADERS, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
             resp.raise_for_status()
             result["html"] = _fix_encoding(resp)
-            result["strategy_used"] = "AI 生成页 requests fallback（无 Chrome）"
+            result["strategy_used"] = "AI page requests fallback (no Chrome)"
         except Exception as e:
             result["html"] = ""
-            result["strategy_used"] = "AI 生成页抓取失败"
-            result["notes"].append(f"⚠️ 直接抓取也失败：{e}")
+            result["strategy_used"] = "AI page fetch failed"
+            result["notes"].append(_t("clone_fetcher.ai_fetch_failed", error=e))
     else:
         headless_html = _fetch_headless(url)
         if headless_html and len(headless_html) >= 500:
             result["html"] = headless_html
-            result["strategy_used"] = "AI 生成页 headless browser"
+            result["strategy_used"] = "AI page headless browser"
         else:
             if headless_html:
-                result["notes"].append(
-                    "⚠️ headless 渲染内容过少（< 500字符），页面可能需要登录或 JS 执行超时，回退至直接抓取"
-                )
+                result["notes"].append(_t("clone_fetcher.ai_headless_too_short"))
             else:
-                result["notes"].append(
-                    "⚠️ headless 渲染失败（页面可能需要登录或超时），回退至直接抓取"
-                )
+                result["notes"].append(_t("clone_fetcher.ai_headless_failed"))
             try:
                 resp = requests.get(url, headers=HEADERS, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
                 resp.raise_for_status()
                 result["html"] = _fix_encoding(resp)
-                result["strategy_used"] = "AI 生成页 requests fallback"
+                result["strategy_used"] = "AI page requests fallback"
             except Exception as e:
                 result["html"] = headless_html or ""
-                result["strategy_used"] = "AI 生成页抓取失败"
-                result["notes"].append(f"⚠️ 直接抓取也失败：{e}")
+                result["strategy_used"] = "AI page fetch failed"
+                result["notes"].append(_t("clone_fetcher.ai_fetch_failed", error=e))
 
     if result["html"]:
-        result["notes"].append("⚠️ AI生成页已快照，动态交互功能需重新接入")
+        result["notes"].append(_t("clone_fetcher.ai_snapshot_taken"))
 
 
 def _fetch_static_or_generic(url: str, result: dict, use_headless: bool) -> None:
@@ -563,39 +546,36 @@ def _fetch_static_or_generic(url: str, result: dict, use_headless: bool) -> None
         resp = requests.get(url, headers=HEADERS, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
         resp.raise_for_status()
         html_text = _fix_encoding(resp)
-        result["strategy_used"] = "requests 直接抓取"
-        result["notes"].append("使用 requests 直接抓取页面")
+        result["strategy_used"] = "requests direct"
+        result["notes"].append(_t("clone_fetcher.requests_direct"))
     except Exception as e:
-        result["notes"].append(f"⚠️ requests 抓取失败：{e}")
-        result["strategy_used"] = "requests 失败"
+        result["notes"].append(_t("clone_fetcher.requests_fetch_failed", error=e))
+        result["strategy_used"] = "requests failed"
         # 降级：尝试 Firecrawl（处理境外托管站点如 vercel.app / github.io）
         if FIRECRAWL_API_KEY:
-            result["notes"].append("🔄 尝试 Firecrawl 降级抓取...")
+            result["notes"].append(_t("clone_fetcher.firecrawl_retrying"))
             fc_html = _fetch_via_firecrawl(url)
             if fc_html:
                 html_text = fc_html
-                result["strategy_used"] = "Firecrawl 抓取"
-                result["notes"].append("✅ Firecrawl 抓取成功")
+                result["strategy_used"] = "Firecrawl"
+                result["notes"].append(_t("clone_fetcher.firecrawl_ok"))
             else:
-                result["notes"].append("⚠️ Firecrawl 抓取也失败")
+                result["notes"].append(_t("clone_fetcher.firecrawl_failed"))
 
     # 检查是否是 SPA 壳（内容过少）
     body_text = _extract_body_text(html_text)
     if len(body_text) < 500:
         if use_headless:
-            result["notes"].append(f"页面内容较少（{len(body_text)}字符），疑似 SPA，降级使用 headless 渲染")
+            result["notes"].append(_t("clone_fetcher.spa_headless_fallback", count=len(body_text)))
             headless_html = _fetch_headless(url)
             if headless_html and len(headless_html) > len(html_text):
                 html_text = headless_html
-                result["strategy_used"] = "headless browser（SPA 降级）"
-                result["notes"].append("已使用 headless browser 渲染 SPA 页面")
+                result["strategy_used"] = "headless browser (SPA fallback)"
+                result["notes"].append(_t("clone_fetcher.spa_headless_ok"))
             else:
-                result["notes"].append("⚠️ headless 渲染结果不优于直接抓取，保留原始内容")
+                result["notes"].append(_t("clone_fetcher.spa_headless_no_better"))
         else:
-            result["notes"].append(
-                f"⚠️ 页面内容较少（{len(body_text)}字符），疑似 SPA（JavaScript 渲染）。"
-                "💡 建议加上 --headless 参数重试以获取完整内容。"
-            )
+            result["notes"].append(_t("clone_fetcher.spa_detected", count=len(body_text)))
 
     result["html"] = html_text
 
@@ -676,7 +656,7 @@ def inline_resources(html: str, base_url: str) -> tuple:
     try:
         soup = BeautifulSoup(html, "html.parser")
     except Exception as e:
-        notes.append(f"⚠️ HTML 解析失败，跳过资源内联：{e}")
+        notes.append(_t("clone_fetcher.html_parse_failed", error=e))
         return html, notes
 
     session = requests.Session()
@@ -707,7 +687,7 @@ def inline_resources(html: str, base_url: str) -> tuple:
     # --- 内联 CSS ---
     for tag in soup.find_all("link", rel=lambda r: r and "stylesheet" in r):
         if time.time() > _inline_deadline:
-            _note_timeout("⚠️ 资源内联超时（30s），剩余外链保留原链接")
+            _note_timeout(_t("clone_fetcher.inline_timeout"))
             break
         href = tag.get("href", "")
         if not href or href.startswith("data:"):
@@ -727,12 +707,12 @@ def inline_resources(html: str, base_url: str) -> tuple:
             new_tag.string = css_content
             tag.replace_with(new_tag)
         except Exception as e:
-            notes.append(f"⚠️ CSS 内联失败，保留原链接 ({abs_href})：{e}")
+            notes.append(_t("clone_fetcher.css_inline_failed", url=abs_href, error=e))
 
     # --- 内联 JS ---
     for tag in soup.find_all("script", src=True):
         if time.time() > _inline_deadline:
-            _note_timeout("⚠️ 资源内联超时（30s），剩余外链保留原链接")
+            _note_timeout(_t("clone_fetcher.inline_timeout"))
             break
         src = tag.get("src", "")
         if not src or src.startswith("data:"):
@@ -750,12 +730,12 @@ def inline_resources(html: str, base_url: str) -> tuple:
                 new_tag["type"] = tag["type"]
             tag.replace_with(new_tag)
         except Exception as e:
-            notes.append(f"⚠️ JS 内联失败，保留原链接 ({abs_src})：{e}")
+            notes.append(_t("clone_fetcher.js_inline_failed", url=abs_src, error=e))
 
     # --- 内联图片 ---
     for tag in soup.find_all("img", src=True):
         if time.time() > _inline_deadline:
-            _note_timeout("⚠️ 资源内联超时（30s），剩余图片保留原链接")
+            _note_timeout(_t("clone_fetcher.inline_timeout_images"))
             break
         src = tag.get("src", "")
         if not src or src.startswith("data:"):
@@ -768,17 +748,17 @@ def inline_resources(html: str, base_url: str) -> tuple:
             resp.raise_for_status()
             content_length = resp.headers.get("Content-Length")
             if content_length and int(content_length) > MAX_IMAGE_BYTES:
-                notes.append(f"⚠️ 图片超过 2MB，跳过内联，保留原链接：{abs_src}")
+                notes.append(_t("clone_fetcher.image_too_large", url=abs_src))
                 continue
             img_bytes = resp.content
             if len(img_bytes) > MAX_IMAGE_BYTES:
-                notes.append(f"⚠️ 图片超过 2MB，跳过内联，保留原链接：{abs_src}")
+                notes.append(_t("clone_fetcher.image_too_large", url=abs_src))
                 continue
             mime = _guess_mime(abs_src, resp.headers.get("Content-Type", ""))
             b64 = base64.b64encode(img_bytes).decode("ascii")
             tag["src"] = f"data:{mime};base64,{b64}"
         except Exception as e:
-            notes.append(f"⚠️ 图片内联失败，保留原链接 ({abs_src})：{e}")
+            notes.append(_t("clone_fetcher.image_inline_failed", url=abs_src, error=e))
 
     return str(soup), notes
 
@@ -802,13 +782,13 @@ def _inline_css_urls(css: str, css_base_url: str, session: requests.Session) -> 
             resp.raise_for_status()
             data = resp.content
             if len(data) > MAX_IMAGE_BYTES:
-                notes.append(f"⚠️ CSS 资源超过 2MB，跳过内联：{abs_url}")
+                notes.append(_t("clone_fetcher.css_resource_too_large", url=abs_url))
                 return match.group(0)
             mime = _guess_mime(abs_url, resp.headers.get("Content-Type", ""))
             b64 = base64.b64encode(data).decode("ascii")
             return f"url(data:{mime};base64,{b64})"
         except Exception as e:
-            notes.append(f"⚠️ CSS 资源内联失败，保留原引用 ({abs_url})：{e}")
+            notes.append(_t("clone_fetcher.css_resource_failed", url=abs_url, error=e))
             return match.group(0)
 
     processed = re.sub(r"url\(([^)]+)\)", replace_url, css)

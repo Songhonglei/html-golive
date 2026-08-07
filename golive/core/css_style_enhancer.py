@@ -32,6 +32,7 @@ except Exception:
 
 STYLES_DIR = Path(__file__).parent.parent / "resources" / "css_styles"
 from golive.core.paths import get_data_dir as _get_data_dir
+from golive.i18n import t as _t
 BACKUP_DIR = _get_data_dir() / "css_style_backup"
 BACKUP_INDEX_FILE = BACKUP_DIR / "backup_index.json"
 
@@ -106,7 +107,7 @@ STYLE_MAP = {
 
 def list_styles() -> None:
     """打印带编号的风格菜单。"""
-    print("可用 CSS 风格：")
+    print(_t("css.list_header"))
     for i, (key, name) in enumerate(STYLE_MAP.items(), 1):
         print(f"  {i:2d}. {key:<12}  {name}")
 
@@ -115,10 +116,7 @@ def load_css(style_key: str) -> str:
     """读取指定风格的 CSS 内容（应用 GOLIVE_FONT_CDN_BASE 字体源替换）。"""
     css_file = STYLES_DIR / f"{style_key}.css"
     if not css_file.exists():
-        raise ValueError(
-            f"CSS 风格文件不存在：{css_file}\n"
-            f"可用风格：{', '.join(STYLE_MAP.keys())}"
-        )
+        raise ValueError(_t("css.style_not_found", path=css_file, styles=', '.join(STYLE_MAP.keys())))
     return apply_font_cdn_base(css_file.read_text(encoding="utf-8"))
 
 
@@ -175,7 +173,7 @@ def save_backup(original_html: str, source_label: str, style_key: str) -> Path:
         return backup_file
 
     except Exception as exc:
-        raise RuntimeError(f"备份失败：{exc}") from exc
+        raise RuntimeError(_t("css.backup_failed", error=exc)) from exc
 
 
 def restore_backup(backup_id: str, target_path: Path, yes: bool = False) -> bool:
@@ -187,26 +185,26 @@ def restore_backup(backup_id: str, target_path: Path, yes: bool = False) -> bool
     record = next((e for e in entries if e.get("backup_id") == backup_id), None)
 
     if record is None:
-        print(f"❌ 未找到备份记录：{backup_id}", file=sys.stderr)
+        print(_t("css.restore_not_found", id=backup_id), file=sys.stderr)
         return False
 
     backup_file = Path(record["backup_file"])
     if not backup_file.exists():
-        print(f"❌ 备份文件不存在：{backup_file}", file=sys.stderr)
+        print(_t("css.restore_file_missing", file=backup_file), file=sys.stderr)
         return False
 
-    print(f"\n📂 备份信息：", file=sys.stderr)
-    print(f"   时间  : {record.get('created_at', '未知')[:19]}", file=sys.stderr)
-    print(f"   风格  : {record.get('style_key', '未知')}", file=sys.stderr)
-    print(f"   来源  : {record.get('source_label', '未知')}", file=sys.stderr)
-    print(f"   目标  : {target_path}", file=sys.stderr)
+    print(_t("css.restore_info"), file=sys.stderr)
+    print(_t("css.restore_time", time=record.get('created_at', '?')[:19]), file=sys.stderr)
+    print(_t("css.restore_style", style=record.get('style_key', '?')), file=sys.stderr)
+    print(_t("css.restore_source", source=record.get('source_label', '?')), file=sys.stderr)
+    print(_t("css.restore_target", target=target_path), file=sys.stderr)
 
     if not yes:
-        print(f"\n确认将备份恢复到 {target_path}？(y/N) ", end="", flush=True)
+        print(_t("css.restore_prompt", target=target_path), end="", flush=True)
         try:
             choice = input().strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n已取消。", file=sys.stderr)
+            print(_t("css.restore_cancelled"), file=sys.stderr)
             return False
         if choice.lower() != "y":
             return False
@@ -577,7 +575,7 @@ def enhance(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="CSS 风格增强工具",
+        description=_t("css.cli_desc"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -585,39 +583,39 @@ def main() -> None:
     group.add_argument(
         "--list",
         action="store_true",
-        help="列出所有可用 CSS 风格",
+        help=_t("css.cli_arg_list"),
     )
     group.add_argument(
         "--list-backups",
         action="store_true",
         dest="list_backups",
-        help="列出备份记录",
+        help=_t("css.cli_arg_list_backups"),
     )
     group.add_argument(
         "--restore",
         metavar="BACKUP_ID",
-        help="从备份恢复 HTML（需同时指定 --target）",
+        help=_t("css.cli_arg_restore"),
     )
     group.add_argument(
         "--clean",
         action="store_true",
-        help=f"清理超过 {BACKUP_TTL_DAYS} 天的过期备份",
+        help=_t("css.cli_arg_clean"),
     )
 
     parser.add_argument(
         "--source",
         metavar="LABEL",
-        help="配合 --list-backups，按 source_label 精确过滤",
+        help=_t("css.cli_arg_source"),
     )
     parser.add_argument(
         "--target",
         metavar="PATH",
-        help="配合 --restore，指定目标文件路径",
+        help=_t("css.cli_arg_target"),
     )
     parser.add_argument(
         "--yes", "-y",
         action="store_true",
-        help="配合 --restore，跳过确认提示",
+        help=_t("css.cli_arg_yes"),
     )
 
     args = parser.parse_args()
@@ -630,28 +628,28 @@ def main() -> None:
         source = getattr(args, "source", None)
         backups = list_backups(source_label=source)
         if not backups:
-            print("📂 暂无备份记录。")
+            print(_t("css.no_backups"))
             return
-        print(f"\n📂 CSS 增强备份列表（共 {len(backups)} 条）：\n")
+        print(_t("css.backups_header", count=len(backups)))
         for i, b in enumerate(backups, 1):
-            print(f"  {i}. [{b['created_at'][:19]}] 来源: {b['source_label']}  风格: {b['style_key']}")
-            print(f"     backup_id: {b['backup_id']}")
+            print(_t("css.backups_item", i=i, time=b['created_at'][:19], source=b['source_label'], style=b['style_key']))
+            print(_t("css.backups_id", id=b['backup_id']))
         return
 
     if args.restore:
         if not args.target:
-            parser.error("--restore 需要同时指定 --target <路径>")
+            parser.error("--restore requires --target <path>")
         target_path = Path(args.target).resolve()
         ok = restore_backup(args.restore, target_path, yes=args.yes)
         if ok:
-            print(f"✅ 已恢复到：{target_path}")
+            print(_t("css.restore_ok", target=target_path))
         else:
-            print("ℹ️  已取消恢复。")
+            print(_t("css.restore_skipped"))
         return
 
     if args.clean:
         count = clean_expired_backups()
-        print(f"✅ 已清理 {count} 条过期备份。")
+        print(_t("css.clean_done", count=count))
         return
 
 

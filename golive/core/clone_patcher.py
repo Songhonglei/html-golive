@@ -11,6 +11,8 @@ import re
 import sys
 from datetime import datetime, timezone
 
+from golive.i18n import t as _t
+
 
 # ── 字体 URL 替换表 ───────────────────────────────────────────────────────────
 
@@ -38,7 +40,7 @@ def _replace_fonts(html: str) -> tuple[str, int]:
         new_html, n = pattern.subn(mirror_host, html)
         if n:
             print(
-                f"[clone_patcher] 字体替换: {original_host} → {mirror_host}（{n} 处）",
+                _t("clone_patcher.font_replace", orig=original_host, mirror=mirror_host, count=n),
                 file=sys.stderr,
             )
             count += n
@@ -50,7 +52,7 @@ def _inject_font_comment(html: str, replaced: bool) -> str:
     """在 </head> 前注入字体替换说明注释（仅当有替换时）。"""
     if not replaced:
         return html
-    comment = "<!-- golive: Google Fonts已替换为镜像源，访问更稳定 -->\n"
+    comment = "<!-- golive: Google Fonts replaced with mirror source for better access -->\n"
     # 大小写不敏感匹配 </head>
     new_html, n = re.subn(
         r'(</head\s*>)',
@@ -60,10 +62,10 @@ def _inject_font_comment(html: str, replaced: bool) -> str:
         flags=re.IGNORECASE,
     )
     if n:
-        print("[clone_patcher] 已注入字体替换注释到 </head> 前", file=sys.stderr)
+        print(_t("clone_patcher.font_comment_injected"), file=sys.stderr)
     else:
         # 没有 </head> 标签时追加到开头
-        print("[clone_patcher] 未找到 </head>，注释追加到文档开头", file=sys.stderr)
+        print(_t("clone_patcher.font_comment_no_head"), file=sys.stderr)
         new_html = comment + html
     return new_html
 
@@ -82,12 +84,12 @@ def _inject_source_marker(html: str) -> str:
         flags=re.IGNORECASE,
     )
     if n:
-        print(f"[clone_patcher] 已注入来源标记（时间: {iso_time}）", file=sys.stderr)
+        print(_t("clone_patcher.source_marker_injected", time=iso_time), file=sys.stderr)
     else:
         # 没有 </body>，追加到末尾
         new_html = html + "\n" + marker
         print(
-            f"[clone_patcher] 未找到 </body>，来源标记追加到文档末尾（时间: {iso_time}）",
+            _t("clone_patcher.source_marker_no_body", time=iso_time),
             file=sys.stderr,
         )
     return new_html
@@ -103,7 +105,7 @@ def _remove_integrity(html: str) -> tuple[str, int]:
     )
     new_html, n = pattern.subn("", html)
     if n:
-        print(f"[clone_patcher] 已移除 {n} 处 integrity 属性", file=sys.stderr)
+        print(_t("clone_patcher.integrity_removed", count=n), file=sys.stderr)
     return new_html, n
 
 
@@ -116,7 +118,7 @@ def _remove_crossorigin(html: str) -> tuple[str, int]:
     )
     new_html, n = pattern.subn("", html)
     if n:
-        print(f"[clone_patcher] 已移除 {n} 处 crossorigin 属性", file=sys.stderr)
+        print(_t("clone_patcher.crossorigin_removed", count=n), file=sys.stderr)
     return new_html, n
 
 
@@ -276,13 +278,13 @@ def _scrub_sensitive_configs(html: str) -> tuple[str, list[dict]]:
                 ],
             })
             print(
-                f"[clone_patcher] 敏感配置已脱敏: {script_id} "
-                f"({len(scrubbed_fields)} 个字段: {', '.join(scrubbed_fields)})",
+                _t("clone_patcher.scrub_ok", script_id=script_id,
+                   count=len(scrubbed_fields), fields=", ".join(scrubbed_fields)),
                 file=sys.stderr,
             )
         else:
             print(
-                f"[clone_patcher] 检测到 {script_id}，但未匹配到已知敏感字段（字段格式可能已变化）",
+                _t("clone_patcher.scrub_no_match", script_id=script_id),
                 file=sys.stderr,
             )
 
@@ -312,7 +314,7 @@ def _ensure_viewport(html: str) -> str:
         flags=re.IGNORECASE,
     )
     if n:
-        print("[clone_patcher] 已注入 meta viewport 到 <head> 内", file=sys.stderr)
+        print(_t("clone_patcher.viewport_injected_head"), file=sys.stderr)
         return new_html
 
     # 没有 <head>，尝试注入到 </head> 前
@@ -324,11 +326,11 @@ def _ensure_viewport(html: str) -> str:
         flags=re.IGNORECASE,
     )
     if n:
-        print("[clone_patcher] 已注入 meta viewport 到 </head> 前", file=sys.stderr)
+        print(_t("clone_patcher.viewport_injected_close"), file=sys.stderr)
         return new_html
 
     # 既无 <head> 也无 </head>，追加到文档开头
-    print("[clone_patcher] 未找到 <head>，meta viewport 追加到文档开头", file=sys.stderr)
+    print(_t("clone_patcher.viewport_no_head"), file=sys.stderr)
     return viewport_tag + html
 
 
@@ -437,12 +439,12 @@ def patch_backend_origin(html: str, backend_origin: str) -> tuple[str, dict]:
 
     if relative_count or localhost_count:
         print(
-            f"[clone_patcher] 后端接口重写: "
-            f"相对路径 {relative_count} 处 + localhost {localhost_count} 处 → {origin}",
+            _t("clone_patcher.backend_rewrite_summary",
+               rel_count=relative_count, loc_count=localhost_count, origin=origin),
             file=sys.stderr,
         )
     else:
-        print("[clone_patcher] 后端接口重写: 未发现需重写的接口", file=sys.stderr)
+        print(_t("clone_patcher.backend_rewrite_none"), file=sys.stderr)
 
     return html, summary
 
@@ -479,7 +481,7 @@ def patch(html: str, notes: list | None = None, backend_origin: str = "") -> tup
     if not html or not html.strip():
         return html, [], {}
 
-    print("[clone_patcher] ── 开始处理 ──", file=sys.stderr)
+    print(_t("clone_patcher.start"), file=sys.stderr)
 
     # 1. 字体替换
     html, font_replace_count = _replace_fonts(html)
@@ -502,7 +504,7 @@ def patch(html: str, notes: list | None = None, backend_origin: str = "") -> tup
     if backend_origin and backend_origin.strip():
         html, backend_summary = patch_backend_origin(html, backend_origin.strip())
 
-    print("[clone_patcher] ── 处理完成 ──", file=sys.stderr)
+    print(_t("clone_patcher.done"), file=sys.stderr)
     return html, sensitive_findings, backend_summary
 
 
@@ -510,7 +512,7 @@ def patch(html: str, notes: list | None = None, backend_origin: str = "") -> tup
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python clone_patcher.py <html_file> [output_file]", file=sys.stderr)
+        print(_t("clone_patcher.usage"), file=sys.stderr)
         sys.exit(1)
 
     input_path = sys.argv[1]
@@ -520,24 +522,24 @@ if __name__ == "__main__":
         with open(input_path, "r", encoding="utf-8", errors="replace") as f:
             raw_html = f.read()
     except OSError as e:
-        print(f"[clone_patcher] 读取文件失败: {input_path} — {e}", file=sys.stderr)
+        print(_t("clone_patcher.read_failed", path=input_path, error=e), file=sys.stderr)
         sys.exit(1)
 
     patched_html, findings = patch(raw_html)
 
     if findings:
-        print(f"[clone_patcher] 敏感配置清理汇总：", file=sys.stderr)
+        print(_t("clone_patcher.scrub_summary"), file=sys.stderr)
         for f in findings:
             fields = [x["name"] for x in f["scrubbed_fields"]]
-            print(f"  · {f['module_label']}: {', '.join(fields)}", file=sys.stderr)
+            print(_t("clone_patcher.scrub_summary_item", label=f['module_label'], fields=", ".join(fields)), file=sys.stderr)
 
     if output_path:
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(patched_html)
-            print(f"[clone_patcher] 输出已写入: {output_path}", file=sys.stderr)
+            print(_t("clone_patcher.output_written", path=output_path), file=sys.stderr)
         except OSError as e:
-            print(f"[clone_patcher] 写入文件失败: {output_path} — {e}", file=sys.stderr)
+            print(_t("clone_patcher.write_failed", path=output_path, error=e), file=sys.stderr)
             sys.exit(1)
     else:
         print(patched_html)

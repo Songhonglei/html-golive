@@ -1,19 +1,40 @@
 # html-golive
 
 [![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
+[![PyPI](https://img.shields.io/pypi/v/html-golive)](https://pypi.org/project/html-golive/)
+[![Python](https://img.shields.io/pypi/pyversions/html-golive)](https://pypi.org/project/html-golive/)
+[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](LICENSE)
 
 > **Self-hosted one-command HTML deployment — Vercel-lite for your intranet.**
 
 Turn any HTML file, project folder or zip archive into a shareable URL on
 your own machine, NAS, VPS or intranet server.
 
+### 60 seconds to a live page
+
 ```bash
 pip install html-golive
+golive init
+```
 
+`init` sets up a data directory, starts the server, and creates two demo
+pages. When it finishes it prints the URLs — open one and you're looking at
+a page served by golive:
+
+```
+🎉 All set! Open these URLs:
+   Static demo: http://localhost:8787/demo-static
+   CRUD demo:   http://localhost:8787/demo-crud
+   Admin panel: http://localhost:8787/admin
+```
+
+Now publish your own:
+
+```bash
 golive publish report.html --name "Q3 Report" --slug q3
-# ✅ Published → http://localhost:8787/q3
-
-golive serve
+# ✅ Published "Q3 Report"
+#    Local:   http://localhost:8787/q3
+#    Network: http://192.168.1.23:8787/q3   ← share this one
 ```
 
 **Zero config to start** — local storage + SQLite + built-in server.
@@ -38,6 +59,12 @@ golive serve
 > 📖 **Full user manual**: [docs/manual.md](docs/manual.md) — every feature,
 > organised by task (publishing, editor, access control, data, security,
 > identity, migration, FAQ).
+
+![The admin portal — site management](docs/assets/admin-portal.png)
+
+<sub>The built-in admin portal at `/admin`: site management, data, roles,
+audit, identity, data backend, security and settings — dark/light themes,
+English and Chinese (toggle top-right).</sub>
 
 ## Why html-golive
 
@@ -380,9 +407,18 @@ docker compose --profile minio up -d        # + local S3 stack for images
   (superadmin/owner/maintainer), ownership transfer, audit trail~~ ✅ v0.5
 - ~~**M6 — data management**: data tab in the portal, audit log
   rotation~~ ✅ v0.6
-- **Next**: bulk data import/export, aggregation for very large tables,
-  shared session store (redis), multi-user editing conflict UX,
-  group-based ACLs.
+- ~~**M7 — production identity & config**: id_token signature verification
+  for OIDC, trusted reverse-proxy auth, four admin pages (identity / data
+  backend / security / settings), settings & scan rules in the database,
+  English-by-default CLI, shareable LAN URLs~~ ✅ v0.7.5
+
+**Beyond v0.7.5** — the groundwork is complete, so what comes next is driven
+by what people actually run into. Candidates, roughly in order of likely
+demand: bulk data import/export, aggregation for very large tables, a shared
+session store (redis) for multi-instance setups, multi-user editing conflict
+UX, and group-based ACLs. If you hit a wall or want one of these sooner,
+[open an issue](https://github.com/Songhonglei/html-golive/issues) — real
+use cases decide the order.
 
 ## Contributing
 

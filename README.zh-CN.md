@@ -1,6 +1,9 @@
 # html-golive
 
 [![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
+[![PyPI](https://img.shields.io/pypi/v/html-golive)](https://pypi.org/project/html-golive/)
+[![Python](https://img.shields.io/pypi/pyversions/html-golive)](https://pypi.org/project/html-golive/)
+[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](LICENSE)
 
 > **自部署的一键 HTML 发布工具 —— 你的内网 Vercel-lite。**
 
@@ -8,12 +11,30 @@
 电脑、NAS、VPS 或内网服务器上。
 
 ```bash
+### 60 秒看到一个真实页面
+
+```bash
 pip install html-golive
+golive init
+```
 
+`init` 会建好数据目录、启动服务、生成两个示例页。跑完后它会打印出网址——
+打开任意一个，你看到的就是 golive 托管的页面：
+
+```
+🎉 All set! Open these URLs:
+   Static demo: http://localhost:8787/demo-static
+   CRUD demo:   http://localhost:8787/demo-crud
+   Admin panel: http://localhost:8787/admin
+```
+
+然后发布你自己的页面：
+
+```bash
 golive publish report.html --name "季度报告" --slug q3
-# ✅ 发布成功 → http://localhost:8787/q3
-
-golive serve
+# ✅ 发布成功「季度报告」
+#    本机:   http://localhost:8787/q3
+#    局域网: http://192.168.1.23:8787/q3   ← 分享给同事用这个
 ```
 
 **零配置起步** —— 本地存储 + SQLite + 内置服务。
@@ -37,6 +58,11 @@ golive serve
 
 > 📖 **完整用户手册**：[docs/manual.md](docs/manual.md)（英文）—— 按任务组织
 > 的全功能指南：发布、在线编辑、权限、数据、安全、身份登录、迁移、FAQ。
+
+![管理后台 —— 站点管理](docs/assets/admin-portal.png)
+
+<sub>内置管理后台 `/admin`：站点管理、数据、权限、审计、身份认证、数据后端、
+安全扫描、全局参数 —— 支持亮/暗主题、中英双语（右上角切换）。</sub>
 
 ## 为什么选 html-golive
 
@@ -360,8 +386,15 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 - ~~**M5 — 运营管理门户**：`/admin` 网页控制台、三级角色（超管 / 站点
   owner / maintainer）、所有权移交、审计日志~~ ✅ v0.5
 - ~~**M6 — 数据管理**：门户内数据管理页、审计日志轮转~~ ✅ v0.6
-- **下一步**：数据批量导入导出、超大表聚合优化、共享会话存储（redis）、
-  多人编辑冲突体验、基于组的权限。
+- ~~**M7 — 生产级身份与配置**：OIDC 的 id_token 签名验证、受信任反代认证、
+  四个管理页（身份 / 数据后端 / 安全 / 全局参数）、配置与安全规则入库、
+  CLI 默认英文、可分享的局域网链接~~ ✅ v0.7.5
+
+**v0.7.5 之后** —— 基础能力已经完整，接下来做什么由真实需求驱动。候选项
+（大致按需求可能性排序）：数据批量导入导出、超大表聚合优化、多实例场景的共享
+会话存储（redis）、多人编辑冲突体验、基于组的权限。如果你撞上了某个问题、
+或希望某项提前，[提个 issue](https://github.com/Songhonglei/html-golive/issues)
+—— 真实用例决定优先级。
 
 ## 参与贡献
 

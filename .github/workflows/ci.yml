@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -37,10 +38,14 @@ jobs:
         run: python -m compileall -q golive/
 
       - name: Run tests
-        run: python -m pytest tests/ -q
+        # --timeout kills any single test that hangs (e.g. a socket that
+        # blocks on reverse DNS) so a stuck test fails loudly in ~1min
+        # instead of holding the whole job to the 6h GitHub ceiling.
+        run: python -m pytest tests/ -q --timeout=60 --timeout-method=thread
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

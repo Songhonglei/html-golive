@@ -62,9 +62,9 @@ golive publish report.html --name "Q3 Report" --slug q3
 
 ![The admin portal — site management](docs/assets/admin-portal.png)
 
-<sub>The built-in admin portal at `/admin`: site management, data, roles,
-audit, identity, data backend, security and settings — dark/light themes,
-English and Chinese (toggle top-right).</sub>
+<sub>The built-in admin portal at `/admin`: sites, data, permissions,
+stats, audit log, identity, data backend, security and settings —
+dark/light themes, English and Chinese (toggle top-right).</sub>
 
 ## Why html-golive
 

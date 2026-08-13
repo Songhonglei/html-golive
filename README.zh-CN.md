@@ -61,8 +61,8 @@ golive publish report.html --name "季度报告" --slug q3
 
 ![管理后台 —— 站点管理](docs/assets/admin-portal.png)
 
-<sub>内置管理后台 `/admin`：站点管理、数据、权限、审计、身份认证、数据后端、
-安全扫描、全局参数 —— 支持亮/暗主题、中英双语（右上角切换）。</sub>
+<sub>内置管理后台 `/admin`：站点、数据、权限、统计、审计日志、身份认证、
+数据后端、安全扫描、全局参数 —— 支持亮/暗主题、中英双语（右上角切换）。</sub>
 
 ## 为什么选 html-golive
 

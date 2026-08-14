@@ -5,6 +5,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Postgres now actually works for published pages.** 0.7.6 shipped working
+  Postgres stores but the page path still refused them: `publish` reported
+  "data.backend is none — injected a stub", the injected script fell back to
+  supabase mode with an empty URL, and `/api/data` answered 404. Data backends
+  are now classified by *shape* — server-proxied (`sqlite`, `postgres`, page
+  calls the local `/api/data`, no credentials in the HTML) versus page-direct
+  (`supabase`) — behind `factory.is_server_proxied_data()` /
+  `data_backend_ready()`, and publish, injection, `/api/data` and the admin
+  data API all consult that instead of hardcoding `== "sqlite"`. The injected
+  `mode` is now `local` for both sqlite and postgres.
+- The admin portal's data API (`/api/admin/data/*`) now serves Postgres.
+- `migrate-check`, `context` and `doctor` no longer report a healthy Postgres
+  backend as unconfigured or disabled. `doctor` reports the real Postgres
+  table (`sites`, not Supabase's `golive_sites`), the DSN env var name,
+  connection state, server version and row count — never the DSN itself.
+- `registry.touch()` now always advances `updated_at`: timestamps moved from
+  second to microsecond precision, so create-then-touch inside one second is
+  no longer a no-op. Both registries changed together.
+- Docs, `golive.example.yaml`, the bundled skill and `backends.md` agreed that
+  Postgres either did not exist or was unfinished. All of them now document it
+  consistently, including the two backend shapes.
+
+### Tests
+- Added `tests/test_data_layer_e2e.py`: walks config → publish readiness →
+  injected script → HTTP `/api/data` → store for every server-proxied
+  backend, which is the chain that had no coverage and let the 0.7.6 page
+  breakage ship. Postgres cases skip without `GOLIVE_PG_DSN`.
+- The Postgres suite no longer deletes `GOLIVE_PG_DSN` from the environment
+  mid-run (it used `os.environ.pop` without restoring, which disarmed every
+  integration test that followed and produced 45 misleading failures); it now
+  uses `mock.patch.dict` and asserts the exact exception types and messages.
+- Registry integration tests track created sites by id, so a test that renames
+  its site no longer leaves rows behind in a shared database.
+
+### Changed
+- `golive skill install --force` now backs the old copy up to
+  `$GOLIVE_HOME/backups/skills/` instead of leaving
+  `html-golive.bak-<stamp>/` inside the agent's skills root, where a valid
+  SKILL.md made agents list html-golive twice (once stale).
+
 ## [0.7.6] - 2026-08-14
 
 ### Added

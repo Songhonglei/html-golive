@@ -90,6 +90,7 @@ pip install html-golive              # core
 pip install 'html-golive[oidc]'      # + SSO / OpenID Connect login
 pip install 'html-golive[image]'     # + image compression (Pillow)
 pip install 'html-golive[s3]'        # + S3-compatible backends (boto3)
+pip install 'html-golive[postgres]' # + self-hosted Postgres (psycopg3)
 ```
 
 ### 2 · Publish
@@ -221,9 +222,9 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
   get a real database with zero backend code
 - Three independent backend layers, each switchable on its own:
   - **storage** (site HTML): `local` *(default)* / `s3` / `supabase`
-  - **registry** (site metadata): `sqlite` *(default)* / `supabase`
-  - **data** (TemplateAPI rows): `sqlite` *(default)* / `supabase` /
-    `none`
+  - **registry** (site metadata): `sqlite` *(default)* / `postgres` / `supabase`
+  - **data** (TemplateAPI rows): `sqlite` *(default)* / `postgres` /
+    `supabase` / `none`
   Defaults are fully local — SQLite files under `GOLIVE_HOME`, nothing
   to register. One Supabase project can back all three when you want
   them shared across machines.
@@ -281,8 +282,8 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
   StorageBackend    RegistryBackend     DataBackend
   site HTML/assets  site metadata       TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    sqlite / supabase   sqlite (local file) /
-  supabase storage                       supabase (PostgREST) / none
+  local-fs / s3 /    sqlite / postgres /   sqlite (local file) /
+  supabase storage   supabase             postgres / supabase (PostgREST) / none
        │
   AuthProvider: none (default) / token (GOLIVE_TOKEN) / oidc (generic OIDC)
 ```

@@ -21,13 +21,21 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes
 
 
-class _QuietHTTPServer(HTTPServer):
-    """HTTPServer without the reverse-DNS lookup in server_bind().
+class _QuietHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """Threaded HTTPServer without the reverse-DNS lookup in server_bind().
 
-    The stock implementation calls socket.getfqdn(), which can hang for
-    a long time on macOS when asked to resolve 127.0.0.1 — the same trap
-    the production server had to work around.
+    Two CI-only traps are handled here:
+
+    * ``server_bind`` skips ``socket.getfqdn()``, which can hang for a long
+      time on macOS when asked to resolve 127.0.0.1 — the same trap the
+      production server had to work around.
+    * ``ThreadingMixIn`` serves every connection on its own thread, so a
+      single lingering client connection can never block the accept loop.
+      ``daemon_threads`` lets those handler threads die with the process
+      instead of keeping it (and the test suite) alive.
     """
+
+    daemon_threads = True
 
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)
@@ -108,7 +116,14 @@ class FakeIdP:
         idp = self
 
         class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
+            # HTTP/1.0 (no keep-alive): this fake IdP runs a single-threaded
+            # HTTPServer. Under HTTP/1.1 keep-alive, one lingering client
+            # connection makes serve_forever() block in handle_one_request()
+            # waiting for a request that never comes — a hang that only shows
+            # up on CI runners (different socket timing than a dev box) and
+            # sits in a daemon thread where pytest-timeout's signal can't
+            # reach it. Closing the connection after each response avoids it.
+            protocol_version = "HTTP/1.0"
 
             def log_message(self, *a):
                 pass

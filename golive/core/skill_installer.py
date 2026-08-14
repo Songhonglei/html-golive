@@ -365,11 +365,33 @@ def _copy_tree(src: Path, dst: Path) -> list:
     return copied
 
 
-def _backup(existing: Path) -> Path:
+def _backup(existing: Path, home=None) -> Path:
+    """Move the old skill out of the way, *outside* the skills root.
+
+    Keeping ``html-golive.bak-<stamp>/`` next to the live copy leaves a second
+    directory with a valid SKILL.md inside the agent's skills root, and agents
+    that scan that root then list html-golive twice — one of them the stale
+    version. Backups therefore go to ``$GOLIVE_HOME/backups/skills/``, which
+    no agent scans.
+    """
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup = existing.with_name(f"{existing.name}.bak-{stamp}")
-    shutil.move(str(existing), str(backup))
-    return backup
+    try:
+        if home is not None:
+            root = Path(home)
+        else:
+            from golive.core.paths import get_home
+            root = get_home()
+        backup_root = Path(root) / "backups" / "skills"
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup = backup_root / f"{existing.name}.bak-{stamp}"
+        shutil.move(str(existing), str(backup))
+        return backup
+    except Exception:  # noqa: BLE001 — never lose the old copy
+        # Fall back to a sibling directory, but mark it so a SKILL.md scan
+        # does not pick it up as an installable skill.
+        backup = existing.with_name(f".{existing.name}.bak-{stamp}")
+        shutil.move(str(existing), str(backup))
+        return backup
 
 
 def install(target: Optional[str] = None, from_github: bool = False,
@@ -400,7 +422,7 @@ def install(target: Optional[str] = None, from_github: bool = False,
             raise SkillInstallError(
                 f"{dest} already exists — re-run with --force to replace it "
                 "(the current copy is backed up first)")
-        backup = _backup(dest)
+        backup = _backup(dest, home=home)
 
     try:
         target_dir.mkdir(parents=True, exist_ok=True)

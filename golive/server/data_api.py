@@ -82,14 +82,20 @@ def _prefer(headers: dict) -> str:
 
 
 def _store(cfg=None):
-    """SQLite TemplateStore when data.backend == sqlite, else None."""
+    """TemplateStore for a server-proxied backend, else None.
+
+    Covers sqlite and postgres — both keep the connection on the server and
+    expose it to pages through this endpoint. Supabase pages talk to their
+    project directly and never reach here.
+    """
     if cfg is None:
         from golive.config import get_config
         cfg = get_config()
-    if cfg.data.backend != "sqlite":
+    from golive.backends.factory import is_server_proxied_data, \
+        get_template_store
+    if not is_server_proxied_data(cfg):
         return None
-    from golive.backends.data.sqlite_store import TemplateStore
-    return TemplateStore()
+    return get_template_store(cfg)
 
 
 def handle(method: str, path: str, query: dict, body: bytes,
@@ -98,9 +104,10 @@ def handle(method: str, path: str, query: dict, body: bytes,
     if cfg is None:
         from golive.config import get_config
         cfg = get_config()
-    if cfg.data.backend != "sqlite":
-        return _err(404, "local data API is only served when "
-                         "data.backend is 'sqlite'")
+    from golive.backends.factory import is_server_proxied_data
+    if not is_server_proxied_data(cfg):
+        return _err(404, "local data API is only served for server-proxied "
+                         "data backends (sqlite, postgres)")
 
     parts = [p for p in (path or "").strip("/").split("/") if p]
     # parts[0:2] == ['api', 'data']

@@ -180,6 +180,6 @@ def run(path_str: str) -> int:
     findings = scan_html(html)
     from golive.config import get_config
     cfg = get_config()
-    ready = (cfg.data.backend in ("", "sqlite")
-             or (cfg.data.backend == "supabase" and cfg.supabase.configured))
+    from golive.backends.factory import data_backend_ready
+    ready, _label = data_backend_ready(cfg)
     return print_report(str(p), findings, ready)

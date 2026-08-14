@@ -20,6 +20,7 @@ from __future__ import annotations
 import inspect
 import os
 import unittest
+from unittest import mock
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -155,17 +156,34 @@ class TestFactoryPostgresBranch(unittest.TestCase):
         cfg = get_config()
         self.assertEqual(cfg.registry.backend, "postgres")
 
-    def test_factory_error_message_mentions_postgres(self):
-        """The factory error message should list postgres as valid."""
+    def test_missing_dsn_raises_an_actionable_error(self):
+        """No DSN (or no driver) must fail with a message you can act on.
+
+        ``mock.patch.dict`` restores the environment afterwards — an earlier
+        version popped GOLIVE_PG_DSN for good, which silently disarmed every
+        integration test that ran later in the same process.
+        """
         self._write_yaml("data:\n  backend: postgres\n")
         from golive.config import get_config
         cfg = get_config()
-        # Without GOLIVE_PG_DSN set, the factory should raise a clear error
-        # (either ImportError for missing psycopg or RuntimeError for no DSN)
-        os.environ.pop("GOLIVE_PG_DSN", None)
         from golive.backends.factory import get_template_store
-        with self.assertRaises((ImportError, RuntimeError, Exception)):
-            get_template_store(cfg)
+        with mock.patch.dict(os.environ, {"GOLIVE_PG_DSN": ""}, clear=False):
+            with self.assertRaises((ImportError, RuntimeError)) as ctx:
+                get_template_store(cfg)
+        msg = str(ctx.exception)
+        # Either branch must tell the operator exactly what to do next.
+        self.assertTrue(
+            "GOLIVE_PG_DSN" in msg or "html-golive[postgres]" in msg,
+            f"error message is not actionable: {msg!r}")
+
+    def test_factory_error_names_postgres_for_an_unknown_backend(self):
+        """An unknown backend must list postgres among the valid choices."""
+        self._write_yaml("data:\n  backend: nonsense\n")
+        from golive.config import get_config
+        from golive.backends.factory import get_template_store
+        with self.assertRaises(ValueError) as ctx:
+            get_template_store(get_config())
+        self.assertIn("postgres", str(ctx.exception))
 
 
 # ── missing psycopg error (runs without PG) ─────────────────────────────────
@@ -390,20 +408,37 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
     def setUp(self):
         from golive.backends.registry.postgres_store import PostgresRegistry
         self.reg = PostgresRegistry()
-        # Clean up any leftover test sites
-        sites = self.reg.list_all(limit=1000)
-        for s in sites:
-            if s["name"].startswith("pg_test_"):
-                self.reg.delete(s["site_id"])
+        # Track by id, not by name: a test that renames its site (test_update
+        # does) would otherwise escape a name-prefix sweep and stay behind in
+        # a real shared database.
+        self._ids: list = []
+        self._sweep_by_name()
 
     def tearDown(self):
-        sites = self.reg.list_all(limit=1000)
-        for s in sites:
-            if s["name"].startswith("pg_test_"):
-                self.reg.delete(s["site_id"])
+        for site_id in self._ids:
+            try:
+                self.reg.delete(site_id)
+            except Exception:  # noqa: BLE001 — cleanup must not mask failures
+                pass
+        self._sweep_by_name()
+
+    def _sweep_by_name(self):
+        """Best-effort sweep of leftovers from older/interrupted runs."""
+        try:
+            for s in self.reg.list_all(limit=1000):
+                if (s.get("name") or "").startswith("pg_test_"):
+                    self.reg.delete(s["site_id"])
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _make(self, **kw):
+        """create() + remember the id so tearDown can always remove it."""
+        site = self.reg.create(**kw)
+        self._ids.append(site["site_id"])
+        return site
 
     def test_create_and_get(self):
-        site = self.reg.create(name="pg_test_site", slug="pgtest1",
+        site = self._make(name="pg_test_site", slug="pgtest1",
                                owner="alice@example.com", notes="test")
         self.assertTrue(site["site_id"])
         self.assertEqual(site["name"], "pg_test_site")
@@ -418,13 +453,13 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
         self.assertIsNone(self.reg.get("no-such-id"))
 
     def test_get_by_slug(self):
-        site = self.reg.create(name="pg_test_slug", slug="pgtest2")
+        site = self._make(name="pg_test_slug", slug="pgtest2")
         got = self.reg.get_by_slug("pgtest2")
         self.assertEqual(got["site_id"], site["site_id"])
         self.assertIsNone(self.reg.get_by_slug(""))
 
     def test_resolve(self):
-        site = self.reg.create(name="pg_test_resolve", slug="pgtest3")
+        site = self._make(name="pg_test_resolve", slug="pgtest3")
         by_id = self.reg.resolve(site["site_id"])
         by_slug = self.reg.resolve("pgtest3")
         self.assertEqual(by_id["site_id"], site["site_id"])
@@ -432,7 +467,7 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
         self.assertIsNone(self.reg.resolve("nonexistent"))
 
     def test_update(self):
-        site = self.reg.create(name="pg_test_update", slug="pgtest4")
+        site = self._make(name="pg_test_update", slug="pgtest4")
         out = self.reg.update(site["site_id"], name="renamed",
                               notes="updated")
         self.assertEqual(out["name"], "renamed")
@@ -443,27 +478,27 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
             self.reg.update("nonexistent", name="x")
 
     def test_touch(self):
-        site = self.reg.create(name="pg_test_touch")
+        site = self._make(name="pg_test_touch")
         before = site["updated_at"]
         self.reg.touch(site["site_id"])
         after = self.reg.get(site["site_id"])
         self.assertNotEqual(before, after["updated_at"])
 
     def test_delete(self):
-        site = self.reg.create(name="pg_test_delete")
+        site = self._make(name="pg_test_delete")
         self.assertTrue(self.reg.delete(site["site_id"]))
         self.assertFalse(self.reg.delete(site["site_id"]))
         self.assertIsNone(self.reg.get(site["site_id"]))
 
     def test_list_all(self):
-        self.reg.create(name="pg_test_list1")
-        self.reg.create(name="pg_test_list2")
+        self._make(name="pg_test_list1")
+        self._make(name="pg_test_list2")
         sites = self.reg.list_all()
         test_sites = [s for s in sites if s["name"].startswith("pg_test_list")]
         self.assertEqual(len(test_sites), 2)
 
     def test_slug_taken(self):
-        self.reg.create(name="pg_test_slug_taken", slug="pgtest5")
+        self._make(name="pg_test_slug_taken", slug="pgtest5")
         self.assertTrue(self.reg.slug_taken("pgtest5"))
         self.assertFalse(self.reg.slug_taken("pgtest5_unique"))
         # exclude_site_id
@@ -471,7 +506,7 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
         self.assertFalse(self.reg.slug_taken("pgtest5", site["site_id"]))
 
     def test_set_editable(self):
-        site = self.reg.create(name="pg_test_editable")
+        site = self._make(name="pg_test_editable")
         self.reg.set_editable(site["site_id"], True)
         got = self.reg.get(site["site_id"])
         self.assertTrue(got["editable"])
@@ -484,7 +519,7 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
             self.reg.set_editable("nonexistent", True)
 
     def test_set_owner(self):
-        site = self.reg.create(name="pg_test_owner")
+        site = self._make(name="pg_test_owner")
         self.reg.set_owner(site["site_id"], "bob@example.com")
         got = self.reg.get(site["site_id"])
         self.assertEqual(got["owner"], "bob@example.com")
@@ -494,7 +529,7 @@ class TestPostgresRegistryIntegration(unittest.TestCase):
             self.reg.set_owner("nonexistent", "x")
 
     def test_add_remove_list_maintainers(self):
-        site = self.reg.create(name="pg_test_maint")
+        site = self._make(name="pg_test_maint")
         m = self.reg.add_maintainer(site["site_id"], "alice@example.com")
         self.assertIn("alice@example.com", m)
         m = self.reg.add_maintainer(site["site_id"], "bob@example.com")

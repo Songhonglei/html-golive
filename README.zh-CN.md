@@ -86,6 +86,7 @@ pip install html-golive              # 核心
 pip install 'html-golive[oidc]'      # + SSO / OpenID Connect 登录
 pip install 'html-golive[image]'     # + 图片压缩（Pillow）
 pip install 'html-golive[s3]'        # + S3 兼容后端（boto3）
+pip install 'html-golive[postgres]' # + 自托管 Postgres（psycopg3）
 ```
 
 ### 2 · 发布
@@ -214,9 +215,9 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
   代码获得真实数据库
 - 三层后端各自独立切换：
   - **storage**（站点 HTML）：`local`（默认）/ `s3` / `supabase`
-  - **registry**（站点元信息）：`sqlite`（默认）/ `supabase`
-  - **data**（TemplateAPI 数据行）：`sqlite`（默认）/ `supabase` /
-    `none`
+  - **registry**（站点元信息）：`sqlite`（默认）/ `postgres` / `supabase`
+  - **data**（TemplateAPI 数据行）：`sqlite`（默认）/ `postgres` /
+    `supabase` / `none`
   默认三层全本地——SQLite 文件落在 `GOLIVE_HOME` 下，无需注册任何服务；
   需要多机共享时，一个 Supabase 项目可以同时承载三层。
 - `golive migrate-check` —— 从其他 golive 部署迁移页面
@@ -269,8 +270,8 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
   StorageBackend    RegistryBackend     DataBackend
   站点 HTML/资源     站点元信息          TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    sqlite / supabase   sqlite（本地文件）/
-  supabase storage                       supabase (PostgREST) / none
+  local-fs / s3 /    sqlite / postgres /   sqlite（本地文件）/
+  supabase storage   supabase             postgres / supabase（PostgREST）/ none
        │
   AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oidc（通用 OIDC）
 ```

@@ -1023,6 +1023,40 @@ def cmd_db(args) -> int:
     reg_table = cfg.registry.supabase_table or REG_TABLE
     tpl_table = cfg.data.templates_table or TPL_TABLE
 
+    # Postgres backends create tables on first use (like SQLite) but need
+    # psycopg installed and GOLIVE_PG_DSN set.
+    pg_registry = cfg.registry.backend == "postgres"
+    pg_data = cfg.data.backend == "postgres"
+    if pg_registry or pg_data:
+        dsn_env = cfg.registry.postgres_dsn_env or "GOLIVE_PG_DSN"
+        import os as _os
+        if not _os.environ.get(dsn_env, "").strip():
+            print(f"⚠️  ${dsn_env} is not set — cannot connect to Postgres.",
+                  file=sys.stderr)
+            print("   Set it to a libpq connection string, e.g.:",
+                  file=sys.stderr)
+            print(f"   export {dsn_env}='host=localhost dbname=golive user=postgres'",
+                  file=sys.stderr)
+            return 1
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            print("⚠️  psycopg is required for the postgres backend.",
+                  file=sys.stderr)
+            print("   pip install 'html-golive[postgres]'", file=sys.stderr)
+            return 1
+        if pg_registry:
+            from golive.backends.factory import get_registry
+            get_registry()
+            print(f"✅ Postgres registry table ready (DSN via ${dsn_env})")
+        if pg_data:
+            from golive.backends.factory import get_template_store
+            store = get_template_store()
+            if store is not None:
+                print(f"✅ Postgres data table ready: {store.table} (DSN via ${dsn_env})")
+        if not args.print_sql:
+            return 0
+
     # Local backends create their own tables on first use — report and exit
     # unless the user explicitly asked for the remote SQL.
     local_registry = cfg.registry.backend in ("", "sqlite")

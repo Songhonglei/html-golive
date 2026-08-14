@@ -18,8 +18,11 @@ def get_registry(cfg=None):
     if backend == "supabase":
         from golive.backends.registry.supabase_store import SupabaseRegistry
         return SupabaseRegistry()
+    if backend == "postgres":
+        from golive.backends.registry.postgres_store import PostgresRegistry
+        return PostgresRegistry()
     raise ValueError(f"unknown registry backend: {backend!r} "
-                     "(expected sqlite | supabase)")
+                     "(expected sqlite | postgres | supabase)")
 
 
 def get_storage(cfg=None):
@@ -57,7 +60,10 @@ def get_template_store(cfg=None):
     if backend == "supabase":
         from golive.backends.data.supabase import TemplateStore
         return TemplateStore()
+    if backend == "postgres":
+        from golive.backends.data.postgres_store import TemplateStore
+        return TemplateStore()
     if backend == "none":
         return None
     raise ValueError(f"unknown data backend: {backend!r} "
-                     "(expected sqlite | supabase | none)")
+                     "(expected sqlite | supabase | postgres | none)")

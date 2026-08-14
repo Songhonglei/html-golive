@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Self-hosted Postgres backend** for the data and registry layers. Users
+  with an intranet PostgreSQL instance can now skip Supabase and use a real
+  database without cloud dependencies. Set `data.backend: postgres` and/or
+  `registry.backend: postgres` in `golive.yaml`, install
+  `pip install 'html-golive[postgres]'`, and set `GOLIVE_PG_DSN` to a
+  libpq connection string. Tables auto-create on first use (same as
+  SQLite); `content` is stored as JSONB; all public method signatures and
+  return types are identical to the SQLite stores. `golive db init` now
+  detects the postgres backend and connects accordingly.
+
 ## [0.7.5] - 2026-08-07
 
 This release is mostly about making golive usable by people who do not read

@@ -33,6 +33,7 @@ dependencies = [
 image = ["Pillow>=9.0"]
 s3 = ["boto3>=1.26"]
 oidc = ["cryptography>=41.0"]
+postgres = ["psycopg[binary]>=3.1"]
 dev = ["pytest>=7.0", "pytest-timeout>=2.1", "cryptography>=41.0"]
 
 [project.urls]

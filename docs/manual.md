@@ -135,7 +135,8 @@ That is the whole setup: the default `sqlite` backend keeps rows in
 exposes them to the page at `/api/data`. The page therefore has to be
 loaded **through the server** — `file://` gives the data layer no
 endpoint to call. Switch to Supabase when a dataset must be shared
-across machines (section 9). Full API and examples:
+across machines (section 9), or to **Postgres** when you have a
+self-hosted PG instance (section 8a). Full API and examples:
 [data-layer.md](data-layer.md).
 
 Inspect or seed rows from the CLI:
@@ -155,6 +156,32 @@ golive db init --print-sql       # paste into Supabase SQL editor
 ```
 
 Config and RLS notes: [backends.md](backends.md), [data-layer.md](data-layer.md).
+
+## 8a. Using a self-hosted Postgres
+
+When your team has a PostgreSQL instance on the intranet, you can use it
+for the **data** and **registry** layers — no Supabase account needed.
+
+```bash
+pip install 'html-golive[postgres]'
+export GOLIVE_PG_DSN='host=localhost dbname=golive user=postgres password=secret'
+golive db init                   # creates tables on first run
+```
+
+In `golive.yaml`:
+
+```yaml
+data:
+  backend: postgres
+registry:
+  backend: postgres
+```
+
+The DSN is read from the environment (never written to yaml) —
+`GOLIVE_PG_DSN` by default, configurable via
+`registry.postgres_dsn_env`. Tables auto-create on first use, same as
+SQLite. Content is stored as JSONB; the external API (dict in, dict out)
+is identical to the SQLite backend.
 
 ## 10. Doctor
 

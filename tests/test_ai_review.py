@@ -11,6 +11,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Pin the language so the note assertions below are stable regardless of
+# the host locale (dev boxes default to zh, CI to en). These tests check
+# the wording of r.note, so the language must be deterministic.
+os.environ["GOLIVE_LANG"] = "en"
+
 os.environ.setdefault("GOLIVE_HOME",
                       tempfile.mkdtemp(prefix="golive_test_ai_"))
 
@@ -95,7 +100,7 @@ class TestAIReviewPolicies(unittest.TestCase):
         r = review_hits(self._hits(), self._cfg(base_url=""))
         self.assertFalse(r.ai_used)
         self.assertEqual(len(r.kept), 2)
-        self.assertIn("未配置", r.note)
+        self.assertIn("not configured", r.note)
 
     # branch 2: strict_mode + unconfigured -> publish refused
     def test_strict_mode_gate(self):
@@ -146,7 +151,7 @@ class TestAIReviewPolicies(unittest.TestCase):
                                   timeout=1))
         self.assertFalse(r.ai_used)
         self.assertEqual(len(r.kept), 2)
-        self.assertIn("失败", r.note)
+        self.assertIn("failed", r.note)
         _MockLLMHandler.mode = "all_false"
 
     def test_http500_degrades_to_rules(self):

@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-08-14
+
 ### Added
 - **Self-hosted Postgres backend** for the data and registry layers. Users
   with an intranet PostgreSQL instance can now skip Supabase and use a real
@@ -15,6 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   SQLite); `content` is stored as JSONB; all public method signatures and
   return types are identical to the SQLite stores. `golive db init` now
   detects the postgres backend and connects accordingly.
+
+### Fixed
+- **CI reliability**: the test job could hang for the full GitHub timeout
+  because the test OIDC server ran single-threaded with HTTP keep-alive; a
+  lingering client connection would block the accept loop on a background
+  thread. The fake IdP now serves threaded over HTTP/1.0, and CI runs pytest
+  with a per-test timeout (`--timeout=45 --timeout-method=signal`) plus job
+  timeouts so a stuck test fails fast instead of holding the runner.
+- Two `ai_review` tests asserted Chinese wording and broke under CI's
+  English default locale; they now pin `GOLIVE_LANG=en` so note assertions
+  are locale-independent.
 
 ## [0.7.5] - 2026-08-07
 

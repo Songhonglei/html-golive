@@ -38,10 +38,12 @@ jobs:
         run: python -m compileall -q golive/
 
       - name: Run tests
-        # --timeout kills any single test that hangs (e.g. a socket that
-        # blocks on reverse DNS) so a stuck test fails loudly in ~1min
-        # instead of holding the whole job to the 6h GitHub ceiling.
-        run: python -m pytest tests/ -q --timeout=60 --timeout-method=thread
+        # --timeout-method=signal (not thread) can interrupt a test blocked
+        # in a C-level syscall (e.g. a socket waiting on reverse DNS), which
+        # is exactly the class of hang that shows up only on CI runners.
+        # On timeout pytest dumps the stack so we see which test hung, and
+        # the job fails in ~45s instead of holding the runner for hours.
+        run: python -m pytest tests/ -q --timeout=45 --timeout-method=signal --durations=10
 
   build:
     runs-on: ubuntu-latest

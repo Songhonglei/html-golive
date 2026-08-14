@@ -200,13 +200,9 @@ def _apply_data_layers(html: str, args) -> str:
     if not uses_tpl and not uses_sb:
         return html
 
-    if cfg.data.backend == "sqlite":
-        backend_ready, backend_label = True, "sqlite"
-    elif cfg.data.backend == "supabase":
-        backend_ready = cfg.supabase.configured
-        backend_label = "supabase"
-    else:
-        backend_ready, backend_label = False, cfg.data.backend or "none"
+    from golive.backends.factory import data_backend_ready, \
+        is_server_proxied_data
+    backend_ready, backend_label = data_backend_ready(cfg)
 
     if uses_tpl:
         model_code = data_model \
@@ -214,7 +210,7 @@ def _apply_data_layers(html: str, args) -> str:
         html = template_api.inject_into_html(html, model_code, cfg=cfg)
         if backend_ready:
             print(t("publish.tpl_injected", model=model_code, backend=backend_label))
-            if backend_label == "sqlite":
+            if is_server_proxied_data(cfg):
                 print(t("publish.tpl_sqlite_hint"))
         elif cfg.data.backend == "supabase":
             print(t("publish.tpl_supabase_unconfigured"), file=sys.stderr)
@@ -695,6 +691,16 @@ def _doctor_registry_info(cfg) -> dict:
             out["backend"] = "sqlite"
             out["location"] = str(get_registry_db())
             reg = SqliteRegistry()
+        elif backend == "postgres":
+            # Postgres creates a plain `sites` table; golive_sites is the
+            # Supabase name and reporting it here misleads operators.
+            # Set location before connecting so a connection error still
+            # tells the operator which table/env var was being used.
+            dsn_env = getattr(cfg.registry, "postgres_dsn_env",
+                              "") or "GOLIVE_PG_DSN"
+            out["location"] = f"sites (via ${dsn_env})"
+            from golive.backends.factory import get_registry
+            reg = get_registry(cfg)
         else:
             from golive.backends.factory import get_registry
             reg = get_registry(cfg)
@@ -745,6 +751,32 @@ def _doctor_data_info(cfg) -> dict:
             out["detail"] = t("doctor.data.tables_rows",
                               tables=len(names), rows=rows,
                               size=_fmt_bytes(db.stat().st_size))
+        elif backend == "postgres":
+            # Report what an operator can act on: which env var holds the DSN,
+            # whether we can actually connect, the server version and the real
+            # row count. The DSN itself is never echoed (it carries a password).
+            import os as _os
+            table = getattr(cfg.data, "templates_table", "") \
+                or "golive_templates"
+            dsn_env = getattr(cfg.registry, "postgres_dsn_env",
+                              "") or "GOLIVE_PG_DSN"
+            out["location"] = f"{table} (via ${dsn_env})"
+            if not _os.environ.get(dsn_env, "").strip():
+                out["error"] = f"${dsn_env} is not set"
+                return out
+            from golive.backends._pg import pg_connect
+            with pg_connect(dsn_env) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SHOW server_version")
+                    row = cur.fetchone()
+                    server = (row[0] if isinstance(row, tuple)
+                              else list(row.values())[0]) if row else "?"
+                    cur.execute(f'SELECT COUNT(*) AS n FROM "{table}"')
+                    row = cur.fetchone()
+                    rows = (row[0] if isinstance(row, tuple)
+                            else row.get("n", 0)) if row else 0
+            out["tables"], out["rows"] = 1, rows
+            out["detail"] = f"connected, PostgreSQL {server}, {rows} rows"
         elif backend == "supabase":
             out["location"] = (getattr(cfg.data, "templates_table", "")
                                or "golive_templates")

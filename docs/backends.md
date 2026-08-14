@@ -34,7 +34,7 @@ Site metadata: id, name, slug, timestamps, owner.
 |---|---|---|
 | `sqlite` | ✅ v0.1 | `$GOLIVE_HOME/registry.db` |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_sites` |
-| `postgres` | 🚧 | direct DSN; use `supabase` (PostgREST) meanwhile |
+| `postgres` | ✅ v0.7.6 | direct DSN from `$GOLIVE_PG_DSN`; table `sites` |
 
 Required methods (see `golive/backends/registry/sqlite_store.py`):
 `create`, `update`, `touch`, `delete`, `get`, `get_by_slug`, `resolve`,
@@ -50,13 +50,23 @@ against them run unchanged across implementations. Full guide:
 | Impl | Status | Notes |
 |---|---|---|
 | `sqlite` | ✅ v0.7 | **default** — table `golive_templates` in `$GOLIVE_HOME/data.db`, created on first use |
+| `postgres` | ✅ v0.7.6 | self-hosted PostgreSQL via `$GOLIVE_PG_DSN`; table `golive_templates`, `content` as JSONB |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_templates` in your Supabase project |
 | `none` | ✅ | data layer disabled — pages using the APIs get a stub with clear errors |
 
-Both implementations expose the identical `TemplateStore` interface
+All implementations expose the identical `TemplateStore` interface
 (`list` / `get` / `count` / `list_models` / `search` / `create` /
 `update` / `upsert` / `delete`), so `golive data ...`, the admin portal
 and the injected JS behave the same either way.
+
+Data backends come in two shapes, and this is the distinction that matters
+when you pick one:
+
+* **server-proxied** (`sqlite`, `postgres`) — the server owns the connection
+  and published pages call the local `/api/data` endpoint. No credentials
+  (and no Postgres DSN) ever reach the browser.
+* **page-direct** (`supabase`) — the page talks to your Supabase project
+  directly, using the URL and anon key embedded in the HTML.
 
 **sqlite** — zero configuration. Browsers cannot open a local database
 file, so `golive serve` exposes a PostgREST-shaped adapter at

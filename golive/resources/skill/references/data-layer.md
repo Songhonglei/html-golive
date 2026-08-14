@@ -121,6 +121,36 @@ Override the location with `data.sqlite.path`. If the site is served
 from a different origin than the golive server, set `data.api_base` to
 the absolute endpoint URL.
 
+### postgres
+
+Rows live in your own PostgreSQL. Architecturally identical to sqlite: the
+server owns the connection and the page still calls
+`golive serve`'s `/api/data/<table>`, so **the DSN never reaches the
+browser** and the page JS is byte-for-byte the same as in sqlite mode.
+
+```yaml
+data:
+  backend: postgres
+registry:
+  backend: postgres    # optional — site metadata in Postgres as well
+```
+
+```bash
+pip install 'html-golive[postgres]'
+export GOLIVE_PG_DSN='postgresql://user:pass@host:5432/dbname'
+```
+
+Consequences:
+
+- the page **must** be loaded through `golive serve` (same as sqlite)
+- no API key and no DSN in the HTML
+- tables are created on first use; `content` is stored as JSONB
+- the DSN lives in the environment, never in `golive.yaml`
+- multiple golive instances can share one database — unlike sqlite
+- without the `[postgres]` extra, startup fails with the exact install
+  command instead of degrading silently
+
+
 ### supabase
 
 Rows live in your Supabase project; the page calls PostgREST directly

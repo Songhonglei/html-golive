@@ -43,7 +43,11 @@ _MIGRATIONS = [
 
 
 def _now() -> str:
-    return datetime.datetime.now().isoformat(timespec="seconds")
+    # Microseconds, not seconds: touch() promises the timestamp moves, and a
+    # create()+touch() inside the same second must still produce a new value.
+    # ISO-8601 strings stay lexicographically sortable either way, so existing
+    # second-precision rows keep ordering correctly against new ones.
+    return datetime.datetime.now().isoformat(timespec="microseconds")
 
 
 class SqliteRegistry:

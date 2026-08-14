@@ -191,11 +191,32 @@ golive data delete --id <row-id>
 | Backend | When | Setup |
 |---|---|---|
 | `sqlite` | **default** | none — rows go to `$GOLIVE_HOME/data.db`, table auto-created |
+| `postgres` | the user already has a PostgreSQL they want to use | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
 | `supabase` | shared across machines, or the page is served elsewhere | Supabase project + schema + keys |
 | `none` | disable the data layer entirely | opt-in only |
 
-Stay on `sqlite` unless the user has a concrete reason to leave it. To
-switch to Supabase:
+Stay on `sqlite` unless the user has a concrete reason to leave it.
+
+To use an existing PostgreSQL (same shape as sqlite — the server keeps the
+connection, so the DSN never reaches the browser):
+
+```yaml
+# golive.yaml
+data:
+  backend: postgres
+registry:
+  backend: postgres    # optional: site metadata in Postgres too
+```
+
+```bash
+pip install 'html-golive[postgres]'
+export GOLIVE_PG_DSN='postgresql://user:pass@host:5432/dbname'
+```
+
+Tables are created on first use; `content` is stored as JSONB. Never put the
+DSN in `golive.yaml` — it carries a password; keep it in the environment.
+
+To switch to Supabase:
 
 ```yaml
 # golive.yaml

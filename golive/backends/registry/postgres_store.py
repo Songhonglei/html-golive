@@ -49,7 +49,9 @@ _MIGRATIONS = [
 
 
 def _now() -> str:
-    return datetime.datetime.now().isoformat(timespec="seconds")
+    # Microseconds — same contract as the SQLite registry (see the note
+    # there): touch() must always advance updated_at, even within one second.
+    return datetime.datetime.now().isoformat(timespec="microseconds")
 
 
 class PostgresRegistry:

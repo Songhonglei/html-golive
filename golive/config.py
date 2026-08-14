@@ -97,12 +97,16 @@ class DataConfig:
       sqlite   — default; rows live in ``$GOLIVE_HOME/data.db`` and pages
                  reach them through ``golive serve``'s /api/data endpoint.
                  Zero configuration, no external service.
+      postgres — rows live in a self-hosted PostgreSQL database; DSN read
+                 from ``$GOLIVE_PG_DSN`` (or the env name in
+                 ``registry.postgres_dsn_env``). Requires
+                 ``pip install 'html-golive[postgres]'``.
       supabase — rows live in your Supabase project; pages call PostgREST
                  directly with the anon key (configure RLS).
       none     — data layer disabled; TemplateAPI is injected as a stub
                  that errors with a configuration hint.
     """
-    backend: str = "sqlite"          # sqlite | supabase | none
+    backend: str = "sqlite"          # sqlite | postgres | supabase | none
     templates_table: str = "golive_templates"
     user_id: str = ""                # identity stamped on rows ('' = anonymous)
     sqlite_path: str = ""            # override the data.db location

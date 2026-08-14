@@ -309,12 +309,28 @@ class TestInjectionMode(unittest.TestCase):
         from golive.config import get_config
         from golive.inject import template_api
         js = template_api.generate_js_from_config("kb", cfg=get_config())
-        self.assertIn('mode       : "sqlite"', js)
+        self.assertIn('mode       : "local"', js)
         self.assertIn('baseUrl    : "/api/data"', js)
-        # the runtime block guard must exempt sqlite mode (no API key there)
-        self.assertIn("(CFG.mode !== 'sqlite' && !CFG.apiKey)", js)
+        # the runtime block guard must only demand a key from supabase
+        self.assertIn("(CFG.mode === 'supabase' && !CFG.apiKey)", js)
         # ...and the request headers must not send an empty apikey
-        self.assertIn("if (CFG.mode !== 'sqlite') {", js)
+        self.assertIn("if (CFG.mode === 'supabase') {", js)
+
+    def test_postgres_injects_the_same_local_endpoint(self):
+        """Postgres is server-proxied too: same /api/data, no credentials."""
+        _write_yaml("data:\n  backend: postgres\n")
+        from golive.config import get_config
+        from golive.inject import template_api
+        js = template_api.generate_js_from_config("kb", cfg=get_config())
+        self.assertIn('mode       : "local"', js)
+        self.assertIn('baseUrl    : "/api/data"', js)
+        self.assertIn('apiKey     : ""', js)
+        # the guard must only demand a key from supabase, so a postgres page
+        # can never be blocked for lacking one
+        self.assertIn("(CFG.mode === 'supabase' && !CFG.apiKey)", js)
+        # ...and the DSN must never reach the browser
+        self.assertNotIn("GOLIVE_PG_DSN", js)
+        self.assertNotIn("postgresql://", js)
 
     def test_api_base_override(self):
         _write_yaml("data:\n  api_base: https://pages.example.com/api/data\n")

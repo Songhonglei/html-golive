@@ -135,6 +135,16 @@ def collect(cfg=None, port: int = 8787) -> dict:
                        "tables": tables, "rows": rows,
                        "source": "from golive.yaml" if cfg.source_path
                                  else "default"}
+    elif data_backend == "postgres":
+        # Never echo the DSN itself — it carries a password. Report the env
+        # var name and whether it is set, which is what an operator needs.
+        dsn_env = cfg.registry.postgres_dsn_env or "GOLIVE_PG_DSN"
+        out["data"] = {"backend": "postgres",
+                       "path": f"${dsn_env}",
+                       "exists": bool(os.environ.get(dsn_env, "").strip()),
+                       "tables": None, "rows": None,
+                       "source": "from golive.yaml" if cfg.source_path
+                                 else "default"}
     elif data_backend == "supabase":
         out["data"] = {"backend": "supabase", "path": cfg.supabase.url,
                        "exists": bool(cfg.supabase.configured),
@@ -263,6 +273,11 @@ def render(info: dict) -> str:
         else:
             detail = "(missing — created on first write)"
         L.append(_line("data backend", f"sqlite → {_fmt(d['path'], detail)}",
+                       d["source"]))
+    elif d["backend"] == "postgres":
+        L.append(_line("data backend",
+                       f"postgres → {d['path']}"
+                       f" {'(DSN set)' if d['exists'] else '(DSN NOT set)'}",
                        d["source"]))
     elif d["backend"] == "supabase":
         L.append(_line("data backend",

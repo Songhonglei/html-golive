@@ -165,6 +165,7 @@ TRANSLATIONS = {
     # ── publish: data layers ───────────────────────────────────────────
     "publish.tpl_injected": "🧩 Injected TemplateAPI data layer (modelCode: {model}, backend: {backend})",
     "publish.tpl_sqlite_hint": "   Data is stored in $GOLIVE_HOME/data.db; the page reads/writes via golive serve's /api/data.",
+    "publish.tpl_postgres_hint": "   Data is stored in your PostgreSQL (${env}); the page reads/writes via golive serve's /api/data. The DSN stays server-side.",
     "publish.tpl_supabase_unconfigured": "⚠️  Page uses TemplateAPI but Supabase is not configured — injected a stub (calls will error with guidance).\n   Configure: supabase.url in golive.yaml, GOLIVE_SUPABASE_ANON_KEY in env;\n   or switch back to data.backend: sqlite (zero-config, default).",
     "publish.tpl_backend_none": "⚠️  Page uses TemplateAPI but data.backend is none — injected a stub (calls will error with guidance).\n   Configure: data.backend: sqlite (zero-config, default) or supabase in golive.yaml.",
     "publish.sb_injected": "🧩 Injected SupabaseAPI data layer",

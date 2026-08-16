@@ -605,5 +605,78 @@ class TestCLICommands(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+class TestTruncatedExportIsRefused(unittest.TestCase):
+    """A short archive must abort, not ship.
+
+    The count check originally re-ran the same pager and compared it to
+    itself, so it agreed with itself even when the pager was the broken
+    part — the export happily wrote an archive missing 50 sites and
+    reported success. The witness has to come from somewhere else.
+    """
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="golive_trunc_")
+        os.environ["GOLIVE_HOME"] = self.home
+        _reset_config()
+        from golive.core import paths
+        paths.reset_cache()
+        from golive.config import get_config
+        from golive.backends.factory import get_registry, get_storage
+        self.cfg = get_config()
+        reg = get_registry(self.cfg)
+        sto = get_storage(self.cfg)
+        # More than list_all()'s default cap of 200.
+        for i in range(210):
+            site = reg.create(name=f"s{i:04d}", slug=f"trunc{i:04d}")
+            sto.publish(f"<html><body>{i}</body></html>", site["site_id"])
+
+    def tearDown(self):
+        os.environ.pop("GOLIVE_HOME", None)
+        _reset_config()
+        from golive.core import paths
+        paths.reset_cache()
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def test_independent_count_sees_past_the_default_cap(self):
+        from golive.backends.factory import get_registry
+        from golive.core.portability import _registry_total
+        reg = get_registry(self.cfg)
+        self.assertEqual(len(reg.list_all()), 200, "cap assumption changed")
+        self.assertEqual(_registry_total(reg), 210,
+                         "_registry_total must bypass the pager")
+
+    def test_export_aborts_when_the_pager_truncates(self):
+        from unittest import mock
+        from golive.core import portability
+        out = Path(self.home, "short.tar.gz")
+
+        # Simulate the dangerous bug: pager silently returns one page.
+        def _truncated(registry, *a, **kw):
+            return registry.list_all(limit=200)
+
+        with mock.patch.object(portability, "_paginated_registry_list",
+                               _truncated):
+            with self.assertRaises(RuntimeError) as ctx:
+                portability.export_archive(str(out), cfg=self.cfg)
+        msg = str(ctx.exception)
+        self.assertIn("200", msg)
+        self.assertIn("210", msg)
+        self.assertFalse(out.exists(),
+                         "a truncated archive must never be written")
+
+    def test_full_export_still_succeeds(self):
+        from golive.core import portability
+        out = Path(self.home, "full.tar.gz")
+        portability.export_archive(str(out), cfg=self.cfg)
+        self.assertTrue(out.exists())
+        with tarfile.open(out) as t:
+            man = json.loads(
+                t.extractfile("manifest.json").read().decode("utf-8"))
+            lines = t.extractfile("registry.jsonl").read().decode(
+                "utf-8").strip().split("\n")
+        self.assertEqual(man["counts"]["sites"], 210)
+        self.assertEqual(len(lines), 210)
+
+
 if __name__ == "__main__":
     unittest.main()

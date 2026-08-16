@@ -178,14 +178,17 @@ def export_archive(
     # Verify that we actually got everything by counting from the backend.
     # For registry: re-list and count.
     if not data_only and not site_filter:
-        # Cross-check: re-list and compare length
-        recheck = _paginated_registry_list(registry)
-        if len(recheck) != len(registry_rows):
+        # The check must come from a *different* source than the pager.
+        # Re-running _paginated_registry_list() and comparing it to itself
+        # always agrees — including when the pager is the thing that is
+        # broken, which is the only failure this check exists to catch.
+        actual = _registry_total(registry)
+        if actual is not None and actual != len(registry_rows):
             raise RuntimeError(
-                f"Registry count mismatch during export: got {len(registry_rows)} "
-                f"but re-list returned {len(recheck)}. Aborting to avoid "
-                f"writing a silently incomplete archive."
-            )
+                f"Registry count mismatch during export: collected "
+                f"{len(registry_rows)} sites but the backend holds {actual}. "
+                f"Aborting rather than writing a silently incomplete archive "
+                f"— a backup missing sites is worse than no backup.")
 
     # For data: sum count() across all models.
     if data_store is not None and not sites_only:
@@ -273,6 +276,36 @@ def export_archive(
 #  IMPORT
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _registry_total(registry):
+    """How many sites the backend really holds, bypassing the pager.
+
+    Deliberately a `COUNT(*)`, not another `list_all()` walk: this number is
+    the independent witness the export's count check compares against. If it
+    went through the same pagination code, a broken pager would agree with
+    itself and the check would pass while the archive was short.
+
+    Returns ``None`` when the backend offers no way to count cheaply — the
+    caller then skips the check rather than blocking the export.
+    """
+    try:
+        if hasattr(registry, "db_path"):
+            import sqlite3
+            with sqlite3.connect(registry.db_path, timeout=10) as c:
+                return int(c.execute(
+                    "SELECT COUNT(*) FROM sites").fetchone()[0])
+        if hasattr(registry, "dsn_env"):
+            with registry._conn() as c:
+                cur = c.execute("SELECT COUNT(*) FROM sites")
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                return int(row[0] if not isinstance(row, dict)
+                           else list(row.values())[0])
+    except Exception:  # noqa: BLE001 — the check is a safety net, not a gate
+        return None
+    return None
+
+
 def _registry_create_with_id(registry, site_id: str, name: str, slug: str,
                              owner: str, notes: str) -> dict:
     """Create a registry entry with a specific site_id.
@@ -308,8 +341,16 @@ def _registry_create_with_id(registry, site_id: str, name: str, slug: str,
             c.commit()
         return registry.get(site_id)
     else:
-        # Fallback: use standard create (new ID) and return
-        return registry.create(name=name, slug=slug, owner=owner, notes=notes)
+        # Do NOT fall back to create(): it mints a fresh site_id, and the
+        # archive's HTML is filed under the original one. The import would
+        # "succeed" while every restored page pointed at storage that does
+        # not exist — silent data loss is worse than refusing to import.
+        raise RuntimeError(
+            f"cannot preserve site_id on a "
+            f"{type(registry).__name__} registry: import needs to write an "
+            f"explicit site_id and this backend exposes no way to do it. "
+            f"Export/import is supported for the sqlite and postgres "
+            f"registries; migrate to one of those first.")
 
 
 def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:

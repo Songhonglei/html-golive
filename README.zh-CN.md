@@ -331,11 +331,12 @@ CDN（可用 `GOLIVE_FONT_CDN_BASE` 替换）；以及你自己配置的图床�
 
 ## 数据层：给静态页面一个数据库
 
-接上你自己的 Supabase 项目即可，无需写服务端：
+无需写任何服务端代码。默认用 SQLite，开箱即用；不够用时再换成你自己的
+PostgreSQL 或 Supabase 项目：
 
 ```bash
-golive db init --print-sql              # 建表 SQL 粘到 Supabase SQL Editor
-golive publish app.html --data-model myapp_v1
+golive publish app.html --data-model myapp_v1   # sqlite：零配置
+golive serve
 ```
 
 页面里直接调用：
@@ -348,6 +349,18 @@ const { total, list } = await TemplateAPI.listAll();
 // 或直连表操作
 const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
 ```
+
+三种后端，两种形态：
+
+| 后端 | 形态 | 配置 |
+|---|---|---|
+| `sqlite` | 服务端代理 | 无需配置——默认 |
+| `postgres` | 服务端代理 | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
+| `supabase` | 页面直连 | Supabase 项目 + anon key |
+
+**服务端代理**型（sqlite、postgres）由服务端持有数据库连接，页面调用
+golive 自己的 `/api/data`，凭据和 Postgres DSN 都不会进入浏览器。
+**页面直连**型（supabase）把 anon key 嵌进 HTML，因此必须配置 RLS。
 
 API 签名是**稳定契约**——在任何 golive 部署上开发的页面，换个部署零改
 动可跑。完整指南（含 RLS 安全须知）：[docs/data-layer.md](docs/data-layer.md)。

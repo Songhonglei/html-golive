@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.8.0] - 2026-08-16
 
 ### Added — data portability (export / import / migrate)
 
@@ -61,6 +61,44 @@ backup, restore, and cross-backend migration first-class operations.
   `golive verify` and the issue tracker.
 - README quickstart condensed to a 30-second minimal example (EN + zh-CN).
 - Bug report template now asks for `golive verify --json` output.
+- Backup/restore now documented as working across all three backend
+  families (sqlite / postgres / supabase), in any registry+data
+  combination.
+
+### Fixed
+- **Export could write a short archive and call it a success.** The
+  registry count check re-ran the same paginated helper and compared the
+  result to itself, so it agreed even when pagination was the broken
+  part. A simulated one-page truncation produced a 200-of-250 archive,
+  printed "Exported" and exited 0 — with a manifest that also said 200,
+  making the loss invisible from inside the archive. The check now
+  compares against a `COUNT(*)` that bypasses pagination, and refuses to
+  write the archive on mismatch. Verified with 250 sites / 137 rows:
+  complete export, faithful round-trip, and an injected truncation aborts
+  with exit 1 and no file on disk.
+- **Re-importing on Supabase duplicated every data row.** The import's
+  duplicate check was a raw SQL probe branching on `._conn` / `.dsn_env`;
+  the Supabase store speaks PostgREST and has neither, so the check was
+  dead code there and `skip` inserted the same rows again on every run
+  while reporting them as successful imports (4 rows → 8 on the first
+  re-import, compounding after that). It now goes through `list()`,
+  which every data backend implements. Names are compared exactly,
+  because `list(name_prefix=)` is a prefix match — importing `r1` no
+  longer collides with an existing `r10`.
+- Import no longer falls back to `create()` when preserving a site_id on
+  an unrecognised registry backend. `create()` mints a fresh site_id
+  while the archive stores HTML under the original, so the import would
+  "succeed" with every restored page pointing at storage that does not
+  exist. It now fails loudly.
+- `golive verify`'s data round-trip goes over real HTTP instead of
+  calling the request handler directly. The 0.7.6 outage broke the route
+  guard *in front of* the handler, so a direct call would have reported
+  green while every published page stayed broken.
+
+### Removed
+- `_safe_extract()`, which was never called — import reads archive
+  members via `extractfile` and never writes to disk. Leaving it in
+  implied a protection layer that no code path used.
 
 ## [0.7.7] - 2026-08-16
 

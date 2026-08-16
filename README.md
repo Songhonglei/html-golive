@@ -411,12 +411,15 @@ docker compose --profile minio up -d        # + local S3 stack for images
   for OIDC, trusted reverse-proxy auth, four admin pages (identity / data
   backend / security / settings), settings & scan rules in the database,
   English-by-default CLI, shareable LAN URLs~~ ✅ v0.7.5
+- ~~**M8 — data portability & self-check**: `golive export` / `import` /
+  `migrate` across sqlite, postgres and supabase, and `golive verify` for a
+  real end-to-end test of the data path~~ ✅ v0.8
 
-**Beyond v0.7.5** — the groundwork is complete, so what comes next is driven
+**Beyond v0.8** — the groundwork is complete, so what comes next is driven
 by what people actually run into. Candidates, roughly in order of likely
-demand: bulk data import/export, aggregation for very large tables, a shared
-session store (redis) for multi-instance setups, multi-user editing conflict
-UX, and group-based ACLs. If you hit a wall or want one of these sooner,
+demand: more storage channels (WebDAV), aggregation for very large tables, a
+shared session store (redis) for multi-instance setups, multi-user editing
+conflict UX, and group-based ACLs. If you hit a wall or want one of these sooner,
 [open an issue](https://github.com/Songhonglei/html-golive/issues) — real
 use cases decide the order.
 

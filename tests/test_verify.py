@@ -315,5 +315,61 @@ class TestVerifyBilingual(unittest.TestCase):
         self.assertIn("verify", en_msg.lower())
 
 
+class TestVerifyGoesOverRealHttp(unittest.TestCase):
+    """verify must hit the socket, not call the handler in-process.
+
+    The 0.7.6 outage was a routing guard that answered 404 for Postgres
+    *before* control ever reached ``data_api.handle``. An in-process call to
+    that handler would have reported success while every published page was
+    broken — so verify checking the handler directly would miss exactly the
+    class of failure it exists to catch.
+    """
+
+    def test_verify_does_not_call_the_handler_in_process(self):
+        import inspect
+        from golive import cli
+        src = inspect.getsource(cli.cmd_verify)
+        self.assertNotIn(
+            "data_api.handle", src,
+            "cmd_verify calls data_api.handle() directly; it must go through "
+            "HTTP so routing-layer failures (the 0.7.6 bug) are caught")
+
+    def test_the_http_helper_uses_urllib(self):
+        import inspect
+        from golive import cli
+        src = inspect.getsource(cli._verify_http)
+        self.assertIn("urlopen", src,
+                      "_verify_http must perform a real request")
+
+    def test_helper_returns_status_for_error_responses(self):
+        """A 404 must come back as a status, not raise — verify reports it."""
+        import json as _j
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from golive.cli import _verify_http
+
+        class _H(BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                body = _j.dumps({"message": "nope"}).encode()
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):  # silence
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), _H)
+        port = srv.server_address[1]
+        threading.Thread(target=srv.handle_request, daemon=True).start()
+        try:
+            status, payload = _verify_http(port, "GET", "/api/data/x")
+        finally:
+            srv.server_close()
+        self.assertEqual(status, 404)
+        self.assertEqual(payload.get("message"), "nope")
+
+
 if __name__ == "__main__":
     unittest.main()

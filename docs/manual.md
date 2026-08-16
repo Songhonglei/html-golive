@@ -302,6 +302,12 @@ Supabase, and S3. Configuration matrix and examples:
 golive's data is yours — you can back it up, restore it on another
 machine, and migrate between backends without losing anything.
 
+Works with all three backend families: `sqlite`, `postgres` and
+`supabase`, in any combination for registry and data. Export always
+verifies its own counts against the database and **refuses to write a
+short archive** — a backup silently missing sites is worse than no
+backup at all.
+
 **Export** the full instance state (sites, HTML, and data rows) into a
 single tar.gz archive:
 

@@ -605,6 +605,110 @@ class TestCLICommands(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+class TestSupabasePortability(unittest.TestCase):
+    """Export/import against the in-process fake PostgREST server.
+
+    The Supabase store speaks PostgREST and has no ``._conn``, so the
+    import's duplicate check — written as a raw SQL probe — was dead code
+    there: every re-import inserted the same rows again and reported them
+    as successful imports. No real Supabase account is needed to catch
+    that; the fake server the other backend tests already use is enough.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from tests.fake_postgrest import FakePostgrest
+        cls.fake = FakePostgrest()
+        cls.url = cls.fake.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fake.stop()
+
+    def setUp(self):
+        self.fake.tables.clear()
+        self.fake.requests.clear()
+        self.home = tempfile.mkdtemp(prefix="golive_sb_port_")
+        self._env = {}
+        for k, v in (("GOLIVE_HOME", self.home),
+                     ("GOLIVE_SUPABASE_URL", self.url),
+                     ("GOLIVE_SUPABASE_ANON_KEY", "test-key"),
+                     ("GOLIVE_SUPABASE_SERVICE_KEY", "test-key")):
+            self._env[k] = os.environ.get(k)
+            os.environ[k] = v
+        Path(self.home, "golive.yaml").write_text(
+            "data:\n  backend: supabase\nregistry:\n  backend: supabase\n",
+            encoding="utf-8")
+        _reset_config()
+        from golive.core import paths
+        paths.reset_cache()
+        from golive.config import get_config
+        self.cfg = get_config()
+
+    def tearDown(self):
+        for k, v in self._env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        _reset_config()
+        from golive.core import paths
+        paths.reset_cache()
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def _seed(self, sites=3, rows=4):
+        from golive.backends.factory import (get_registry, get_storage,
+                                             get_template_store)
+        reg = get_registry(self.cfg)
+        sto = get_storage(self.cfg)
+        store = get_template_store(self.cfg)
+        for i in range(sites):
+            site = reg.create(name=f"sb-{i}", slug=f"sbslug{i}")
+            sto.publish(f"<html><body>sb {i}</body></html>",
+                        site["site_id"])
+        for i in range(rows):
+            store.create(model_code="m", name=f"r{i}", content={"i": i})
+        return reg, sto, store
+
+    def test_export_collects_sites_and_rows(self):
+        from golive.core import portability
+        self._seed()
+        out = Path(self.home, "sb.tar.gz")
+        portability.export_archive(str(out), cfg=self.cfg)
+        with tarfile.open(out) as t:
+            man = json.loads(
+                t.extractfile("manifest.json").read().decode("utf-8"))
+        self.assertEqual(man["counts"]["sites"], 3)
+        self.assertEqual(man["counts"]["data_rows"], 4)
+        self.assertEqual(man["registry_backend"], "supabase")
+
+    def test_reimport_with_skip_does_not_duplicate_rows(self):
+        from golive.core import portability
+        _reg, _sto, store = self._seed()
+        out = Path(self.home, "sb.tar.gz")
+        portability.export_archive(str(out), cfg=self.cfg)
+        before = store.count("m")
+        portability.import_archive(str(out), cfg=self.cfg,
+                                   on_conflict="skip", yes=True)
+        self.assertEqual(store.count("m"), before,
+                         "re-import with skip duplicated data rows")
+        # Twice, because a bug here compounds on every run.
+        portability.import_archive(str(out), cfg=self.cfg,
+                                   on_conflict="skip", yes=True)
+        self.assertEqual(store.count("m"), before)
+
+    def test_existing_row_lookup_matches_exact_name(self):
+        """list(name_prefix=) is a prefix match; r1 must not match r10."""
+        from golive.core.portability import _find_existing_row
+        _reg, _sto, store = self._seed(sites=0, rows=0)
+        store.create(model_code="m", name="r1", content={"a": 1})
+        store.create(model_code="m", name="r10", content={"a": 10})
+        hit = _find_existing_row(store, "m", "r1")
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit.get("name"), "r1")
+        self.assertIsNone(_find_existing_row(store, "m", "r-absent"))
+
+
 class TestTruncatedExportIsRefused(unittest.TestCase):
     """A short archive must abort, not ship.
 

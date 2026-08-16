@@ -276,6 +276,31 @@ def export_archive(
 #  IMPORT
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _find_existing_row(data_store, model_code: str, name: str,
+                       user_id: str = ""):
+    """Return an existing row matching model_code+name+user_id, or None.
+
+    Goes through ``list()``, which every data backend implements, instead of
+    a raw SQL probe. ``list(name_prefix=...)`` is a *prefix* match, so the
+    candidate names are compared exactly here — otherwise importing "row-1"
+    would be treated as a conflict with an existing "row-10".
+    """
+    try:
+        page = data_store.list(model_code, name_prefix=name,
+                               user_id=user_id, page_no=1, page_size=50)
+    except Exception:  # noqa: BLE001 — treated as "cannot tell", see below
+        return None
+    rows = page.get("list", []) if isinstance(page, dict) else []
+    for row in rows:
+        if row.get("name") != name:
+            continue
+        # user_id="" means "any" for stores that do not stamp identity.
+        if user_id and (row.get("user_id") or "") != user_id:
+            continue
+        return row
+    return None
+
+
 def _registry_total(registry):
     """How many sites the backend really holds, bypassing the pager.
 
@@ -352,33 +377,6 @@ def _registry_create_with_id(registry, site_id: str, name: str, slug: str,
             f"Export/import is supported for the sqlite and postgres "
             f"registries; migrate to one of those first.")
 
-
-def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
-    """Extract a tar archive, rejecting path-traversal members.
-
-    Python 3.12+ supports ``filter='data'`` natively.  For older versions
-    we manually validate each member: the resolved path must stay inside
-    *dest*.
-    """
-    try:
-        # Python 3.12+ (and backports in some 3.11 builds)
-        tar.extractall(path=str(dest), filter="data")
-        return
-    except TypeError:
-        pass
-
-    # Manual validation for Python < 3.12
-    dest_resolved = dest.resolve()
-    for member in tar.getmembers():
-        member_path = (dest / member.name).resolve()
-        # Check the member is inside dest
-        try:
-            member_path.relative_to(dest_resolved)
-        except ValueError:
-            raise ValueError(
-                f"Refusing to extract path-traversal member: {member.name!r}"
-            )
-    tar.extractall(path=str(dest))
 
 
 def _read_archive(path: str) -> tuple:
@@ -657,24 +655,14 @@ def import_archive(
                 version = row.get("version", "1.0.0")
                 user_id = row.get("user_id", "")
 
-                # Check for existing row (by model_code + name + user_id)
-                existing_check = None
-                if hasattr(data_store, "_conn"):
-                    # sqlite path
-                    with data_store._conn() as c:
-                        existing_check = c.execute(
-                            f"SELECT id FROM {data_store.table} "
-                            "WHERE model_code = ? AND name = ? AND user_id = ? LIMIT 1",
-                            (model_code, name, user_id)
-                        ).fetchone()
-                elif hasattr(data_store, "dsn_env"):
-                    # postgres path
-                    with data_store._conn() as c:
-                        existing_check = c.execute(
-                            f"SELECT id FROM {data_store.table} "
-                            "WHERE model_code = %s AND name = %s AND user_id = %s LIMIT 1",
-                            (model_code, name, user_id)
-                        ).fetchone()
+                # Check for existing row (by model_code + name + user_id).
+                # Uses the public store interface rather than a raw SQL
+                # probe: the Supabase store speaks PostgREST and has no
+                # ._conn, so a backend-specific query left existing_check
+                # permanently None there — "skip" silently imported
+                # duplicates on every run and reported them as successes.
+                existing_check = _find_existing_row(
+                    data_store, model_code, name, user_id)
 
                 if existing_check:
                     if on_conflict == "skip":

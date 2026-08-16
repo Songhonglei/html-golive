@@ -317,7 +317,7 @@ Set the client secret via `GOLIVE_OIDC_CLIENT_SECRET` and a stable
 `GOLIVE_COOKIE_SECRET` in production (otherwise golive persists one under
 `GOLIVE_HOME`). Presets fill the issuer/scopes; explicit fields override.
 
-**Token verification.** Since v0.8.0 every `id_token` is checked against the
+**Token verification.** Since v0.7.5 every `id_token` is checked against the
 IdP's published signing keys before a session is created: the signature must
 verify, `iss` / `aud` / `exp` / `nonce` must all match, and `alg: none` is
 refused outright. This needs the optional crypto dependency:
@@ -453,9 +453,9 @@ The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are
 available as a JSON API under `/api/admin/*` for scripting.
 
-### v0.8.0 admin pages: identity, data backend, security, settings
+### Admin pages: identity, data backend, security, settings
 
-Four new superadmin-only pages were added in v0.8.0, completing the
+Four new superadmin-only pages were added in v0.7.5, completing the
 management surface so operators never need to hand-edit `golive.yaml`
 for day-to-day configuration.
 
@@ -497,8 +497,8 @@ override, can be deleted to fall back), or **default**. Settings with
 overrides can be removed individually, reverting to the file or
 default value.
 
-All four pages degrade gracefully when the v0.8.0 API endpoints are
-not available (older server): they show a "requires 0.8.0+" notice
+All four pages degrade gracefully when the API endpoints they need are
+not available (older server): they show a "requires 0.7.5+" notice
 instead of a blank page or broken UI.
 
 New API endpoints (superadmin-only, all audited):

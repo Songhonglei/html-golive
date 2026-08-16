@@ -211,7 +211,15 @@ def _apply_data_layers(html: str, args) -> str:
         if backend_ready:
             print(t("publish.tpl_injected", model=model_code, backend=backend_label))
             if is_server_proxied_data(cfg):
-                print(t("publish.tpl_sqlite_hint"))
+                # Same wire shape for every server-proxied backend, but the
+                # rows land somewhere different — say where, or people go
+                # looking for their data in the wrong database.
+                if cfg.data.backend == "postgres":
+                    print(t("publish.tpl_postgres_hint",
+                            env=cfg.registry.postgres_dsn_env
+                            or "GOLIVE_PG_DSN"))
+                else:
+                    print(t("publish.tpl_sqlite_hint"))
         elif cfg.data.backend == "supabase":
             print(t("publish.tpl_supabase_unconfigured"), file=sys.stderr)
         else:

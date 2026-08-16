@@ -16,12 +16,16 @@ psycopg is installed); otherwise those cases skip rather than pretend.
 
 from __future__ import annotations
 
+import argparse
+import contextlib
+import io
 import json
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -216,6 +220,71 @@ class TestSupabaseStaysPageDirect(unittest.TestCase):
         st, _payload, _h = data_api.handle(
             "GET", f"/api/data/{TABLE}", {}, b"", cfg=get_config())
         self.assertEqual(st, 404)
+
+
+class TestPublishHintNamesTheRealStore(unittest.TestCase):
+    """publish must not tell postgres users their rows are in data.db.
+
+    Both sqlite and postgres are server-proxied, so they shared one hint that
+    hardcoded ``$GOLIVE_HOME/data.db`` — postgres users were told to look for
+    their data in a SQLite file that stays empty.
+    """
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="golive_e2e_hint_")
+        os.environ["GOLIVE_HOME"] = self.home
+        os.environ["GOLIVE_LANG"] = "en"
+        self._page = Path(self.home, "page.html")
+        self._page.write_text(
+            "<html><head></head><body>"
+            "<script>TemplateAPI.listAll()</script></body></html>",
+            encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.home, ignore_errors=True)
+        os.environ.pop("GOLIVE_LANG", None)
+        from golive import config as cfg_mod
+        cfg_mod._current = None
+
+    def _hint_for(self, backend):
+        Path(self.home, "golive.yaml").write_text(
+            f"data:\n  backend: {backend}\n", encoding="utf-8")
+        from golive import config as cfg_mod
+        cfg_mod._current = None
+        from golive import cli
+        from golive.i18n import set_language
+        set_language("en")  # assertions below are English
+        args = argparse.Namespace(data_model="")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cli._apply_data_layers(
+                self._page.read_text(encoding="utf-8"), args)
+        return buf.getvalue()
+
+    def test_sqlite_hint_points_at_the_db_file(self):
+        out = self._hint_for("sqlite")
+        self.assertIn("data.db", out)
+
+    def test_postgres_hint_does_not_point_at_data_db(self):
+        with mock.patch.dict(
+                os.environ,
+                {"GOLIVE_PG_DSN": "postgresql://u:p@h:5432/db"},
+                clear=False):
+            out = self._hint_for("postgres")
+        self.assertNotIn("data.db", out)
+        self.assertIn("PostgreSQL", out)
+        self.assertIn("GOLIVE_PG_DSN", out)
+
+    def test_postgres_hint_never_prints_the_dsn(self):
+        with mock.patch.dict(
+                os.environ,
+                {"GOLIVE_PG_DSN":
+                 "postgresql://secretuser:secretpw@dbhost:5432/dbname"},
+                clear=False):
+            out = self._hint_for("postgres")
+        for leak in ("secretuser", "secretpw", "dbhost", "dbname",
+                     "postgresql://"):
+            self.assertNotIn(leak, out, f"publish leaked {leak!r}")
 
 
 if __name__ == "__main__":

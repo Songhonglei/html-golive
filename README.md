@@ -346,11 +346,12 @@ configured backends.
 
 ## Data layer: give static pages a database
 
-Backed by your own Supabase project — no server code:
+No server code to write. SQLite by default, so this works out of the box;
+point it at your own PostgreSQL or a Supabase project when you outgrow that:
 
 ```bash
-golive db init --print-sql              # paste into Supabase SQL editor
-golive publish app.html --data-model myapp_v1
+golive publish app.html --data-model myapp_v1   # sqlite: nothing to set up
+golive serve
 ```
 
 Your page then simply calls:
@@ -364,8 +365,21 @@ const { total, list } = await TemplateAPI.listAll();
 const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
 ```
 
+Three backends, two shapes:
+
+| Backend | Shape | Setup |
+|---|---|---|
+| `sqlite` | server-proxied | none — the default |
+| `postgres` | server-proxied | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
+| `supabase` | page-direct | Supabase project + anon key |
+
+**Server-proxied** backends keep the database connection on the server; the
+page calls golive's `/api/data` and no credentials (no Postgres DSN) ever
+reach the browser. **Page-direct** (Supabase) embeds the anon key in the
+HTML, so RLS is mandatory there.
+
 API signatures are **stable contracts** — pages built on any golive
-deployment run unchanged on yours. Guide with RLS security notes:
+deployment run unchanged on yours. Full guide, including the RLS notes:
 [docs/data-layer.md](docs/data-layer.md).
 
 > **Note**: if no data backend is configured, `--data-model` publishes

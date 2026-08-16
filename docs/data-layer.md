@@ -5,8 +5,22 @@ static HTML full read/write persistence. Pages built against the same
 API on other golive deployments run **unchanged** — the API signatures
 are stable contracts.
 
-Two backends provide it. `sqlite` is the default and needs no setup;
-`supabase` is opt-in for shared or externally hosted deployments.
+Three backends provide it, and they come in two shapes:
+
+| Backend | Shape | Setup |
+|---|---|---|
+| `sqlite` | server-proxied | none — the default |
+| `postgres` | server-proxied | your own PostgreSQL via `$GOLIVE_PG_DSN` |
+| `supabase` | page-direct | Supabase project + anon key |
+
+**Server-proxied** (`sqlite`, `postgres`): the server owns the database
+connection and the page calls golive's own `/api/data`. No credentials —
+and no Postgres DSN — reach the browser. The injected JS is identical
+between the two, so switching is a config change.
+
+**Page-direct** (`supabase`): the page talks to your Supabase project
+itself, using the URL and anon key embedded in the HTML. Row Level
+Security is mandatory there.
 
 ## Setup — sqlite (default, zero config)
 
@@ -42,6 +56,51 @@ data:
     path: /var/lib/golive/data.db   # override the default location
   api_base: https://pages.example.com/api/data   # cross-origin serving
 ```
+
+## Setup — postgres (self-hosted, shared across machines)
+
+Use this when you already run PostgreSQL and want the rows there instead of
+in a local file. Architecturally it is the same as sqlite — the server keeps
+the connection, the page still calls `/api/data` — so **the DSN never
+reaches the browser** and page JS is byte-for-byte identical to sqlite mode.
+
+```bash
+pip install 'html-golive[postgres]'
+export GOLIVE_PG_DSN='postgresql://user:pass@host:5432/dbname'
+```
+
+```yaml
+# golive.yaml
+data:
+  backend: postgres
+registry:
+  backend: postgres    # optional — site metadata in Postgres as well
+```
+
+```bash
+golive db init          # creates golive_templates (and sites, if registry too)
+golive publish page.html --name my-page
+golive serve
+```
+
+The table is created on first use and `content` is stored as JSONB, so you
+can query it directly:
+
+```sql
+select id, model_code, name, content from golive_templates
+order by created_at desc limit 5;
+```
+
+Notes:
+
+- keep the DSN in the environment, never in `golive.yaml` — it carries a
+  password, and `golive.yaml` is the file people paste into issues
+- several golive instances can share one database, which sqlite cannot do
+- without the `[postgres]` extra, startup fails with the exact install
+  command rather than silently degrading
+- pages **must** be served through `golive serve`; `file://` has no
+  `/api/data` to reach
+
 
 ## Setup — supabase (shared / externally hosted)
 

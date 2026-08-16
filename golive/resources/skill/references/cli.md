@@ -74,7 +74,7 @@ Serves every published site plus `/admin`. Defaults to loopback.
 proxy for TLS or load.
 
 Routes: `/` index · `/<slug>` · `/s/<site_id>` · `/health` ·
-`/admin` · `/api/admin/*` · `/api/data/<table>` (sqlite data backend).
+`/admin` · `/api/admin/*` · `/api/data/<table>` (server-proxied data backends: sqlite, postgres).
 
 ## preview
 

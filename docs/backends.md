@@ -34,7 +34,7 @@ Site metadata: id, name, slug, timestamps, owner.
 |---|---|---|
 | `sqlite` | ✅ v0.1 | `$GOLIVE_HOME/registry.db` |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_sites` |
-| `postgres` | ✅ v0.7.6 | direct DSN from `$GOLIVE_PG_DSN`; table `sites` |
+| `postgres` | ✅ v0.7.7 | direct DSN from `$GOLIVE_PG_DSN`; table `sites` |
 
 Required methods (see `golive/backends/registry/sqlite_store.py`):
 `create`, `update`, `touch`, `delete`, `get`, `get_by_slug`, `resolve`,
@@ -50,7 +50,7 @@ against them run unchanged across implementations. Full guide:
 | Impl | Status | Notes |
 |---|---|---|
 | `sqlite` | ✅ v0.7 | **default** — table `golive_templates` in `$GOLIVE_HOME/data.db`, created on first use |
-| `postgres` | ✅ v0.7.6 | self-hosted PostgreSQL via `$GOLIVE_PG_DSN`; table `golive_templates`, `content` as JSONB |
+| `postgres` | ✅ v0.7.7 | self-hosted PostgreSQL via `$GOLIVE_PG_DSN`; table `golive_templates`, `content` as JSONB |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_templates` in your Supabase project |
 | `none` | ✅ | data layer disabled — pages using the APIs get a stub with clear errors |
 
@@ -58,6 +58,11 @@ All implementations expose the identical `TemplateStore` interface
 (`list` / `get` / `count` / `list_models` / `search` / `create` /
 `update` / `upsert` / `delete`), so `golive data ...`, the admin portal
 and the injected JS behave the same either way.
+
+> Postgres stores landed in 0.7.6, but published pages could not reach them
+> until **0.7.7** (publish, injection and `/api/data` only recognised
+> sqlite). Treat 0.7.7 as the first usable Postgres release; do not use
+> 0.7.6 for a Postgres deployment.
 
 Data backends come in two shapes, and this is the distinction that matters
 when you pick one:

@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-08-16
+
+The Postgres backend from 0.7.6 worked in the CLI but not in the browser.
+If you configured `data.backend: postgres` on 0.7.6, published pages could
+not read or write — **upgrade before using Postgres**.
+
+Verified end to end against PostgreSQL 16 in a real browser: page →
+injected `TemplateAPI` → `/api/data` → JSONB row in the database.
+
 ### Fixed
 - **Postgres now actually works for published pages.** 0.7.6 shipped working
   Postgres stores but the page path still refused them: `publish` reported
@@ -45,6 +54,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `$GOLIVE_HOME/backups/skills/` instead of leaving
   `html-golive.bak-<stamp>/` inside the agent's skills root, where a valid
   SKILL.md made agents list html-golive twice (once stale).
+- **`publish` told Postgres users their data was in `$GOLIVE_HOME/data.db`.**
+  Both server-proxied backends shared one hint that named the SQLite file, so
+  people went looking for their rows in a database that stays empty. The hint
+  now names the actual store and, for Postgres, the DSN environment variable
+  (never the DSN itself).
+- The data-layer guide, both READMEs and two bundled skill references still
+  described only sqlite and supabase. `docs/data-layer.md` now has a Postgres
+  setup section, and every `/api/data` reference covers both server-proxied
+  backends. `docs/backends.md` marks Postgres as usable from 0.7.7, with a
+  note that 0.7.6 must not be used for Postgres.
+
+### Tests
+- `tests/test_docs_mention_backends.py` — fails when a data-layer doc stops
+  naming a shipped backend, or ties `/api/data` to sqlite alone. Docs drifted
+  silently for a whole release; this makes it a test failure.
+- `tests/test_version_consistency.py` — the package version, `pyproject.toml`,
+  the bundled skill frontmatter, `/health` and the changelog must agree.
+- Publish-hint regression tests assert the sqlite and postgres wording
+  separately, and that no DSN component ever reaches stdout.
 
 ## [0.7.6] - 2026-08-14
 

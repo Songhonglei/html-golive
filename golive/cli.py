@@ -1365,6 +1365,41 @@ def cmd_demo(args) -> int:
 
 # ═════════════════════════════════ verify ═══════════════════════════════════
 
+def _verify_http(port: int, method: str, path: str, body=None,
+                 headers=None, timeout: float = 8.0):
+    """Call the running server over a real socket and return (status, payload).
+
+    Deliberately *not* a direct ``data_api.handle()`` call. The 0.7.6 outage
+    was a routing guard that rejected Postgres with a 404 *before* reaching
+    that handler, so an in-process call would have reported success while
+    real pages were broken. This is the layer the browser actually talks to.
+    """
+    import urllib.error
+    import urllib.request
+    url = f"http://127.0.0.1:{port}{path}"
+    data = body if isinstance(body, bytes) else (
+        body.encode("utf-8") if body else None)
+    req = urllib.request.Request(url, data=data, method=method)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", "replace")
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")
+        status = e.code
+    if not raw:
+        return status, None
+    try:
+        import json as _j
+        return status, _j.loads(raw)
+    except Exception:  # noqa: BLE001 — non-JSON body is still diagnostic
+        return status, raw
+
+
 def cmd_verify(args) -> int:
     """golive verify — end-to-end self-check.
 
@@ -1552,18 +1587,17 @@ def cmd_verify(args) -> int:
             _record("data", True, t("verify.supabase_skip"))
         elif proxied:
             # sqlite / postgres: real write → read → delete via /api/data
-            from golive.server import data_api
             table = cfg.data.templates_table or "golive_templates"
             test_content = {"verify": True, "ts": time.time()}
 
             try:
-                # Write
+                # Write — over a real socket, exactly like a published page
                 row = {"model_code": "verify_test", "name": "verify-row",
                        "content": test_content}
-                st, payload, _h = data_api.handle(
-                    "POST", f"/api/data/{table}", {},
-                    _json.dumps([row]).encode(),
-                    headers={"Prefer": "return=representation"}, cfg=cfg)
+                st, payload = _verify_http(
+                    port, "POST", f"/api/data/{table}",
+                    body=_json.dumps([row]),
+                    headers={"Prefer": "return=representation"})
                 if st not in (200, 201):
                     detail = payload.get("message", "") if isinstance(payload, dict) else str(payload)
                     _record("data", False,
@@ -1580,9 +1614,9 @@ def cmd_verify(args) -> int:
 
             try:
                 # Read back
-                st, payload, _h = data_api.handle(
-                    "GET", f"/api/data/{table}",
-                    {"id": [f"eq.{test_row_id}"]}, b"", cfg=cfg)
+                st, payload = _verify_http(
+                    port, "GET",
+                    f"/api/data/{table}?id=eq.{test_row_id}")
                 if st != 200:
                     detail = payload.get("message", "") if isinstance(payload, dict) else str(payload)
                     _record("data", False,
@@ -1617,9 +1651,9 @@ def cmd_verify(args) -> int:
 
             try:
                 # Delete
-                st, _payload, _h = data_api.handle(
-                    "DELETE", f"/api/data/{table}",
-                    {"id": [f"eq.{test_row_id}"]}, b"", cfg=cfg)
+                st, _payload = _verify_http(
+                    port, "DELETE",
+                    f"/api/data/{table}?id=eq.{test_row_id}")
                 if st not in (200, 204):
                     _record("data", False,
                             t("verify.data_delete_failed",
@@ -1655,11 +1689,9 @@ def cmd_verify(args) -> int:
             # Delete test data row if still present
             if test_row_id is not None and proxied:
                 try:
-                    from golive.server import data_api
                     table = cfg.data.templates_table or "golive_templates"
-                    data_api.handle("DELETE", f"/api/data/{table}",
-                                    {"id": [f"eq.{test_row_id}"]},
-                                    b"", cfg=cfg)
+                    _verify_http(port, "DELETE",
+                                 f"/api/data/{table}?id=eq.{test_row_id}")
                 except Exception as e:
                     cleanup_errors.append(f"data row: {e}")
             # Delete test site

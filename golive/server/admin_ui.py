@@ -710,6 +710,10 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
           <div class="warn-box" id="db-migrate-warn">
             <b data-i18n="databackend.migrate.warn.title"></b>
             <span data-i18n="databackend.migrate.warn.body"></span>
+            <div class="migrate-cmd-hint" style="margin-top:8px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:13px;">
+              <span data-i18n="databackend.migrate.hint"></span>
+              <code id="migrate-cmd-preview" style="display:block;margin-top:4px;color:#333;"></code>
+            </div>
           </div>
           <div class="form-row">
             <label data-i18n="databackend.newtype"></label>
@@ -1157,7 +1161,8 @@ en: {
   "databackend.test": "Test connection",
   "databackend.switch": "Switch & restart",
   "databackend.migrate.warn.title": "Data will not be migrated.",
-  "databackend.migrate.warn.body": "Switching backends does not copy existing data. Export your data first if you need it on the new backend.",
+  "databackend.migrate.warn.body": "Switching backends does not copy existing data. Use the command below to migrate data to the new backend. Source data is not deleted.",
+  "databackend.migrate.hint": "Run this command to migrate:",
   "databackend.restart.hint": "Backend changes require a server restart to take effect.",
   "databackend.test.ok": "Connection successful. Backend is reachable.",
   "databackend.test.ok.tables": "Tables found: {n}",
@@ -1408,7 +1413,8 @@ zh: {
   "databackend.test": "测试连接",
   "databackend.switch": "切换并重启",
   "databackend.migrate.warn.title": "数据不会自动迁移。",
-  "databackend.migrate.warn.body": "切换后端不会复制已有数据。如需在新后端保留数据，请先导出。",
+  "databackend.migrate.warn.body": "切换后端不会复制已有数据。使用下方命令将数据迁移到新后端。源数据不会被删除。",
+  "databackend.migrate.hint": "运行此命令进行迁移：",
   "databackend.restart.hint": "后端变更需要重启服务才能生效。",
   "databackend.test.ok": "连接成功。后端可达。",
   "databackend.test.ok.tables": "发现表：{n} 个",

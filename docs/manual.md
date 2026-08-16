@@ -297,6 +297,65 @@ Images — plus an S3-compatible image uploader. Mix and match local,
 Supabase, and S3. Configuration matrix and examples:
 [backends.md](backends.md).
 
+### Backup, restore, and backend migration
+
+golive's data is yours — you can back it up, restore it on another
+machine, and migrate between backends without losing anything.
+
+**Export** the full instance state (sites, HTML, and data rows) into a
+single tar.gz archive:
+
+```bash
+golive export                          # → golive-export-<ts>.tar.gz
+golive export -o /backups/prod.tar.gz  # specify output path
+golive export --sites-only             # sites + HTML, no data rows
+golive export --data-only              # data rows only
+golive export --site my-page           # single site (by slug or site_id)
+```
+
+The archive contains `manifest.json` (version, timestamps, backend
+labels, row counts), `registry.jsonl` (one site per line), `data.jsonl`
+(one data row per line), and `sites/<site_id>.html` for each site's
+content. The manifest lets you inspect what's inside without unpacking.
+
+Pagination is handled transparently: the export paginates through every
+site and every data row, cross-checks the final counts against the
+backend, and aborts if anything is missing — a silently incomplete backup
+is worse than no backup.
+
+**Import** an archive to restore or clone an instance:
+
+```bash
+golive import prod.tar.gz              # restore (asks for confirmation)
+golive import prod.tar.gz --dry-run    # report what would happen, write nothing
+golive import prod.tar.gz --on-conflict skip|overwrite|rename
+golive import prod.tar.gz --yes        # skip confirmation
+```
+
+When a site with the same slug already exists, three strategies are
+available: `skip` (default — leave the existing site untouched),
+`overwrite` (replace it), or `rename` (create with a modified slug).
+Importing the same archive twice with `skip` is idempotent — no
+duplicate sites or data rows. Archives are validated against path
+traversal attacks before extraction.
+
+**Migrate** data or registry between backends (e.g. sqlite → postgres):
+
+```bash
+golive migrate data --to postgres      # copy data rows to postgres
+golive migrate registry --to postgres  # copy site metadata to postgres
+golive migrate data --to postgres --dry-run
+```
+
+Migration copies data — it never deletes from the source. After
+migration, update `golive.yaml` to point at the new backend and restart
+`golive serve`. The old database remains in place until you're confident
+everything works and choose to remove it. Row counts are verified
+before and after migration; a mismatch aborts with a clear message. If
+the target backend is unavailable (e.g. psycopg not installed or DSN
+not set), migration fails before touching anything, with the exact
+command to fix it.
+
 ## 16. Identity & login
 
 Serve mode supports three auth providers: `none` (default), `token`

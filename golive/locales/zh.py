@@ -168,6 +168,7 @@ TRANSLATIONS = {
     # ── publish: data layers ───────────────────────────────────────────
     "publish.tpl_injected": "🧩 已注入 TemplateAPI 数据层（modelCode: {model}，backend: {backend}）",
     "publish.tpl_sqlite_hint": "   数据存放在 $GOLIVE_HOME/data.db，页面通过 golive serve 的 /api/data 读写。",
+    "publish.tpl_postgres_hint": "   数据存放在你自己的 PostgreSQL（${env}），页面通过 golive serve 的 /api/data 读写。DSN 只留在服务端。",
     "publish.tpl_supabase_unconfigured": "⚠️  页面使用了 TemplateAPI，但 Supabase 未配置 —— 已注入 stub（调用会报错并提示配置方法）。\n   配置：golive.yaml 里 supabase.url，env 里 GOLIVE_SUPABASE_ANON_KEY；\n   或改回默认的 data.backend: sqlite（零配置）。",
     "publish.tpl_backend_none": "⚠️  页面使用了 TemplateAPI，但 data.backend 为 none —— 已注入 stub（调用会报错并提示配置方法）。\n   配置：golive.yaml 里 data.backend: sqlite（零配置，默认值）或 supabase。",
     "publish.sb_injected": "🧩 已注入 SupabaseAPI 数据层",

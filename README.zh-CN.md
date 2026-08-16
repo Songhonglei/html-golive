@@ -10,34 +10,20 @@
 一条命令把 HTML 文件、项目文件夹或压缩包变成可分享的 URL，跑在你自己的
 电脑、NAS、VPS 或内网服务器上。
 
-```bash
-### 60 秒看到一个真实页面
+### 30 秒快速开始
 
 ```bash
-pip install html-golive
-golive init
+pip install html-golive && golive init
 ```
 
-`init` 会建好数据目录、启动服务、生成两个示例页。跑完后它会打印出网址——
-打开任意一个，你看到的就是 golive 托管的页面：
-
-```
-🎉 All set! Open these URLs:
-   Static demo: http://localhost:8787/demo-static
-   CRUD demo:   http://localhost:8787/demo-crud
-   Admin panel: http://localhost:8787/admin
-```
-
-然后发布你自己的页面：
+一键搞定，直接打印出可访问的网址 —— 打开就能看到页面。然后发布你自己的：
 
 ```bash
 golive publish report.html --name "季度报告" --slug q3
-# ✅ 发布成功「季度报告」
-#    本机:   http://localhost:8787/q3
-#    局域网: http://192.168.1.23:8787/q3   ← 分享给同事用这个
+# → http://localhost:8787/q3
 ```
 
-**零配置起步** —— 本地存储 + SQLite + 内置服务。
+遇到问题？运行 `golive verify`，把输出贴到 issue 里。
 **随需生长** —— 一个 yaml 即可切换 Supabase 或任意 S3 兼容后端
 （MinIO / 腾讯 COS / 阿里 OSS / 火山 TOS）。
 

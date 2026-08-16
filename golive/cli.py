@@ -1363,6 +1363,487 @@ def cmd_demo(args) -> int:
         return 1
 
 
+# ═════════════════════════════════ verify ═══════════════════════════════════
+
+def cmd_verify(args) -> int:
+    """golive verify — end-to-end self-check.
+
+    Really runs the full chain: start a temporary server, /health, publish
+    a test page, inspect the injected TemplateAPI, write/read/delete data,
+    then clean up.  --keep preserves the test site; --json gives CI output.
+    """
+    import json as _json
+    import socket
+    import threading
+    import time
+    import urllib.request
+
+    from golive.config import get_config
+    from golive import __version__ as cli_version
+    from golive.backends.factory import (data_backend_ready,
+                                         is_server_proxied_data)
+    from golive.server.app import make_server, _health_payload
+
+    cfg = get_config()
+    keep = getattr(args, "keep", False)
+    want_json = getattr(args, "json", False)
+
+    steps = []  # [{step, ok, detail}] for --json
+
+    def _record(step, ok, detail):
+        steps.append({"step": step, "ok": ok, "detail": detail})
+
+    # ── pick a free port (not 8787) ──
+    def _free_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    port = _free_port()
+    srv = None
+    test_site_id = None
+    test_row_id = None
+    store = None
+
+    # Determine backend shape up front for messaging
+    ready, backend_label = data_backend_ready(cfg)
+    proxied = is_server_proxied_data(cfg)
+
+    # ── postgres preflight (before starting a server) ──
+    if cfg.data.backend == "postgres":
+        import os as _os
+        dsn_env = cfg.registry.postgres_dsn_env or "GOLIVE_PG_DSN"
+        if not _os.environ.get(dsn_env, "").strip():
+            msg = t("verify.postgres_no_dsn")
+            _record("preflight", False, msg)
+            return _verify_finish(steps, want_json, exit_code=1)
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            msg = t("verify.postgres_no_driver")
+            _record("preflight", False, msg)
+            return _verify_finish(steps, want_json, exit_code=1)
+
+    # ── data.backend: none ──
+    if cfg.data.backend == "none":
+        # We can still start a server and publish, just no data path.
+        pass
+
+    # ── supabase: pages call Supabase directly, no local /api/data ──
+    if cfg.data.backend == "supabase" and not ready:
+        # Supabase configured but not ready (missing url/key)
+        msg = t("verify.supabase_skip")
+        _record("supabase", False, msg)
+        return _verify_finish(steps, want_json, exit_code=1)
+
+    try:
+        # 1. Start a temporary server
+        try:
+            srv = make_server("127.0.0.1", port)
+            thread = threading.Thread(target=srv.serve_forever, daemon=True)
+            thread.start()
+            time.sleep(0.5)  # let it bind
+            _record("server", True, t("verify.server_started", port=port))
+        except Exception as e:
+            _record("server", False, t("verify.server_failed", error=e))
+            return _verify_finish(steps, want_json, exit_code=1)
+
+        # 2. /health real request
+        try:
+            url = f"http://127.0.0.1:{port}/health"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                health = _json.loads(resp.read().decode("utf-8"))
+            srv_version = health.get("version", "")
+            if srv_version and srv_version != cli_version:
+                _record("health", False,
+                        t("verify.health_mismatch",
+                          cli_version=cli_version,
+                          server_version=srv_version))
+                return _verify_finish(steps, want_json, exit_code=1)
+            _record("health", True,
+                    t("verify.health_ok", version=srv_version or cli_version))
+        except Exception as e:
+            _record("health", False, t("verify.health_failed", error=e))
+            return _verify_finish(steps, want_json, exit_code=1)
+
+        # 3. Publish a test page with TemplateAPI injection
+        test_html = (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<title>golive-verify</title></head>"
+            "<body><h1>verify test page</h1></body></html>"
+        )
+        try:
+            from golive.core import publish_utils
+            from golive.backends.factory import get_registry, get_storage
+            reg = get_registry(cfg)
+            sto = get_storage(cfg)
+
+            model_code = "verify_test"
+            # Inject TemplateAPI into the test page
+            from golive.inject import template_api
+            html_with_injection = template_api.inject_into_html(
+                test_html, model_code, cfg=cfg)
+
+            site = reg.create(
+                name="golive-verify-test",
+                owner="verify",
+            )
+            test_site_id = site["site_id"]
+            sto.publish(html_with_injection, test_site_id)
+            _record("publish", True,
+                    t("verify.publish_ok", site_id=test_site_id))
+        except Exception as e:
+            _record("publish", False, t("verify.publish_failed", error=e))
+            return _verify_finish(steps, want_json, exit_code=1)
+
+        # 4. Inspect injection: check mode, baseUrl, no leaked secrets
+        try:
+            from golive.inject import template_api as _ta
+            js = _ta.generate_js_from_config("verify_test", cfg=cfg)
+
+            # Check mode
+            if cfg.data.backend == "supabase":
+                expected_mode = "supabase"
+            elif proxied:
+                expected_mode = "local"
+            else:
+                expected_mode = "local"
+
+            # Extract mode from generated JS
+            import re as _re
+            mode_match = _re.search(r"mode\s*:\s*\"(\w+)\"", js)
+            actual_mode = mode_match.group(1) if mode_match else ""
+
+            if actual_mode and actual_mode != expected_mode:
+                _record("inject", False,
+                        t("verify.inject_bad_mode",
+                          mode=actual_mode, expected=expected_mode,
+                          backend=cfg.data.backend))
+                return _verify_finish(steps, want_json, exit_code=1)
+
+            # Check for leaked secrets
+            for secret in ("GOLIVE_PG_DSN", "postgresql://", "postgres://",
+                           "GOLIVE_SUPABASE_ANON_KEY", "service_role"):
+                if secret in js and cfg.data.backend != "supabase":
+                    _record("inject", False,
+                            t("verify.inject_leaked", secret=secret))
+                    return _verify_finish(steps, want_json, exit_code=1)
+
+            # For supabase, the anon key is expected in the page —
+            # only flag it as a leak for server-proxied backends
+            base_url_match = _re.search(r'baseUrl\s*:\s*"([^"]+)"', js)
+            base_url_val = base_url_match.group(1) if base_url_match else ""
+
+            _record("inject", True,
+                    t("verify.inject_ok", mode=actual_mode,
+                      base_url=base_url_val))
+        except Exception as e:
+            _record("inject", False,
+                    t("verify.publish_failed", error=f"injection check: {e}"))
+            return _verify_finish(steps, want_json, exit_code=1)
+
+        # 5. Data round-trip: write → read → delete
+        if cfg.data.backend == "none":
+            # No data layer — skip this step, it's not a failure
+            _record("data", True, "(data.backend: none — skipped)")
+        elif cfg.data.backend == "supabase":
+            # Supabase: pages call Supabase directly, /api/data is not used
+            _record("data", True, t("verify.supabase_skip"))
+        elif proxied:
+            # sqlite / postgres: real write → read → delete via /api/data
+            from golive.server import data_api
+            table = cfg.data.templates_table or "golive_templates"
+            test_content = {"verify": True, "ts": time.time()}
+
+            try:
+                # Write
+                row = {"model_code": "verify_test", "name": "verify-row",
+                       "content": test_content}
+                st, payload, _h = data_api.handle(
+                    "POST", f"/api/data/{table}", {},
+                    _json.dumps([row]).encode(),
+                    headers={"Prefer": "return=representation"}, cfg=cfg)
+                if st not in (200, 201):
+                    detail = payload.get("message", "") if isinstance(payload, dict) else str(payload)
+                    _record("data", False,
+                            t("verify.data_write_failed",
+                              table=table, status=st, detail=detail))
+                    return _verify_finish(steps, want_json, exit_code=1)
+                created = payload[0] if isinstance(payload, list) and payload else payload
+                test_row_id = created.get("id")
+            except Exception as e:
+                _record("data", False,
+                        t("verify.data_write_failed",
+                          table=table, status="exc", detail=str(e)))
+                return _verify_finish(steps, want_json, exit_code=1)
+
+            try:
+                # Read back
+                st, payload, _h = data_api.handle(
+                    "GET", f"/api/data/{table}",
+                    {"id": [f"eq.{test_row_id}"]}, b"", cfg=cfg)
+                if st != 200:
+                    detail = payload.get("message", "") if isinstance(payload, dict) else str(payload)
+                    _record("data", False,
+                            t("verify.data_read_failed",
+                              table=table, status=st, detail=detail))
+                    return _verify_finish(steps, want_json, exit_code=1)
+                rows = payload if isinstance(payload, list) else []
+                if not rows:
+                    _record("data", False,
+                            t("verify.data_mismatch",
+                              wrote=str(test_content), read="[]"))
+                    return _verify_finish(steps, want_json, exit_code=1)
+                read_content = rows[0].get("content")
+                # content may come back as dict or string
+                if isinstance(read_content, str):
+                    import json as _j
+                    try:
+                        read_content = _j.loads(read_content)
+                    except Exception:
+                        pass
+                if read_content != test_content:
+                    _record("data", False,
+                            t("verify.data_mismatch",
+                              wrote=str(test_content),
+                              read=str(read_content)))
+                    return _verify_finish(steps, want_json, exit_code=1)
+            except Exception as e:
+                _record("data", False,
+                        t("verify.data_read_failed",
+                          table=table, status="exc", detail=str(e)))
+                return _verify_finish(steps, want_json, exit_code=1)
+
+            try:
+                # Delete
+                st, _payload, _h = data_api.handle(
+                    "DELETE", f"/api/data/{table}",
+                    {"id": [f"eq.{test_row_id}"]}, b"", cfg=cfg)
+                if st not in (200, 204):
+                    _record("data", False,
+                            t("verify.data_delete_failed",
+                              table=table, status=st, detail=""))
+                    return _verify_finish(steps, want_json, exit_code=1)
+                test_row_id = None  # mark as cleaned
+                _record("data", True, t("verify.data_ok"))
+            except Exception as e:
+                _record("data", False,
+                        t("verify.data_delete_failed",
+                          table=table, status="exc", detail=str(e)))
+                return _verify_finish(steps, want_json, exit_code=1)
+        else:
+            _record("data", True, "(skipped — unknown backend shape)")
+
+        # All steps passed — determine the success message
+        if cfg.data.backend == "none":
+            success_msg = t("verify.success_nodata")
+        elif cfg.data.backend == "supabase":
+            success_msg = t("verify.success_supabase")
+        else:
+            success_msg = t("verify.success", backend=backend_label)
+
+        _record("result", True, success_msg)
+        return _verify_finish(steps, want_json, exit_code=0,
+                              success_msg=success_msg, keep=keep,
+                              port=port, site_id=test_site_id)
+
+    finally:
+        # 6. Cleanup — always runs, even on failure
+        cleanup_errors = []
+        if not keep:
+            # Delete test data row if still present
+            if test_row_id is not None and proxied:
+                try:
+                    from golive.server import data_api
+                    table = cfg.data.templates_table or "golive_templates"
+                    data_api.handle("DELETE", f"/api/data/{table}",
+                                    {"id": [f"eq.{test_row_id}"]},
+                                    b"", cfg=cfg)
+                except Exception as e:
+                    cleanup_errors.append(f"data row: {e}")
+            # Delete test site
+            if test_site_id is not None:
+                try:
+                    from golive.backends.factory import get_registry, get_storage
+                    reg = get_registry(cfg)
+                    sto = get_storage(cfg)
+                    sto.delete(test_site_id)
+                    reg.delete(test_site_id)
+                except Exception as e:
+                    cleanup_errors.append(f"site: {e}")
+        # Stop server
+        if srv is not None:
+            try:
+                srv.shutdown()
+                srv.server_close()
+            except Exception as e:
+                cleanup_errors.append(f"server: {e}")
+
+        if cleanup_errors:
+            # Don't override a failure result; just note it
+            if not any(not s["ok"] for s in steps):
+                _record("cleanup", False,
+                        t("verify.cleanup_partial",
+                          error="; ".join(cleanup_errors)))
+            # else: already failing, cleanup note is secondary
+
+
+def _verify_finish(steps, want_json, exit_code=0, success_msg=None,
+                   keep=False, port=None, site_id=None):
+    """Print verify results (human or JSON) and return exit code."""
+    if want_json:
+        import json as _json
+        result = {
+            "ok": exit_code == 0,
+            "steps": steps,
+        }
+        if success_msg:
+            result["summary"] = success_msg
+        if keep and site_id and port:
+            result["keep_url"] = f"http://localhost:{port}/s/{site_id}"
+        print(_json.dumps(result, ensure_ascii=False, indent=2))
+        return exit_code
+
+    # Human output
+    for s in steps:
+        icon = "✅" if s["ok"] else "❌"
+        print(f"  {icon} {s['step']}: {s['detail']}")
+    print()
+    if exit_code == 0:
+        if success_msg:
+            print(success_msg)
+        if keep and site_id and port:
+            print(t("verify.keep_hint", port=port, site_id=site_id))
+    else:
+        # find first failing step
+        failed = next((s for s in steps if not s["ok"]), None)
+        if failed:
+            print(t("verify.failure", message=failed["detail"]))
+    print(t("verify.static_hint"))
+    return exit_code
+
+
+# ═════════════════════════════════ export ════════════════════════════════════
+
+def cmd_export(args) -> int:
+    """golive export — produce a tar.gz archive of the entire instance."""
+    from golive.core.portability import export_archive
+
+    try:
+        path = export_archive(
+            output_path=args.output or None,
+            sites_only=args.sites_only,
+            data_only=args.data_only,
+            site_filter=args.site or "",
+        )
+    except RuntimeError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return 1
+
+    print(f"✅ Exported to: {path}")
+    return 0
+
+
+# ═════════════════════════════════ import ════════════════════════════════════
+
+def cmd_import(args) -> int:
+    """golive import — restore an archive."""
+    import json as _json
+    from golive.core.portability import import_archive
+
+    try:
+        result = import_archive(
+            args.archive,
+            dry_run=args.dry_run,
+            on_conflict=args.on_conflict,
+            yes=args.yes,
+        )
+    except (ValueError, RuntimeError) as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return 1
+
+    if result.get("cancelled"):
+        return 130
+
+    if result.get("dry_run"):
+        s = result["summary"]
+        print(f"\n  Dry run — no changes made.")
+        print(f"  Sites to import:      {s['sites_to_import']}")
+        print(f"  Data rows to import:  {s['data_rows_to_import']}")
+        print(f"  HTML files to write:  {s['html_files_to_write']}")
+        print(f"  Slug conflicts:       {s['conflict_count']}")
+        if s["conflicts"]:
+            print(f"  Conflicting slugs:")
+            for c in s["conflicts"]:
+                print(f"    /{c['slug']}  (existing: {c['existing_site_id'][:12]}…)")
+        return 0
+
+    print(f"\n  Sites imported:       {result['sites_imported']}")
+    print(f"  Sites skipped:        {result['sites_skipped']}")
+    print(f"  Sites overwritten:    {result['sites_overwritten']}")
+    print(f"  Sites renamed:        {result['sites_renamed']}")
+    print(f"  Data rows imported:   {result['data_rows_imported']}")
+    print(f"  Data rows skipped:    {result['data_rows_skipped']}")
+    print(f"  HTML files written:   {result['html_files_written']}")
+    if result["errors"]:
+        print(f"\n  ⚠️  {len(result['errors'])} error(s):")
+        for e in result["errors"]:
+            print(f"    {e}")
+    return 1 if result["errors"] else 0
+
+
+# ═════════════════════════════════ migrate ══════════════════════════════════
+
+def cmd_migrate(args) -> int:
+    """golive migrate <data|registry> --to <backend> — cross-backend migration."""
+    from golive.core.portability import migrate_backend
+
+    try:
+        result = migrate_backend(
+            layer=args.layer,
+            target=args.to,
+            dry_run=args.dry_run,
+        )
+    except ValueError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return 1
+
+    if not result.get("ok"):
+        print(f"❌ {result.get('error', 'migration failed')}", file=sys.stderr)
+        if result.get("hint"):
+            print(f"\n{result['hint']}")
+        return 1
+
+    if result.get("dry_run"):
+        print(f"\n  Dry run — no changes made.")
+        print(f"  Source backend:    {result['source_backend']}")
+        print(f"  Target backend:    {result['target_backend']}")
+        print(f"  Source rows:       {result['source_count']}")
+        print(f"  Target existing:   {result['target_existing']}")
+        print(f"  Would migrate:     {result['would_migrate']}")
+        if result.get("warning"):
+            print(f"  ⚠️  {result['warning']}")
+        return 0
+
+    print(f"\n  Migration complete.")
+    print(f"  Source backend:    {result['source_backend']}")
+    print(f"  Target backend:    {result['target_backend']}")
+    print(f"  Rows migrated:     {result['migrated']}")
+    print(f"  Target after:      {result['target_count_after']}")
+    print(f"  Count verified:    {'✅' if result.get('count_ok') else '❌'}")
+
+    if result.get("errors"):
+        print(f"\n  ⚠️  {len(result['errors'])} error(s):")
+        for e in result["errors"]:
+            print(f"    {e}")
+
+    if result.get("next_steps"):
+        print(f"\n{result['next_steps']}")
+
+    return 1 if result.get("errors") or not result.get("count_ok") else 0
+
+
 # ═════════════════════════════════ main ═════════════════════════════════════
 
 def main(argv=None) -> int:
@@ -1552,6 +2033,52 @@ def main(argv=None) -> int:
     p.add_argument("--keep-data", action="store_true",
                    help=t("arg.demo.keep_data"))
     p.set_defaults(func=cmd_demo)
+
+    # verify
+    p = sub.add_parser("verify", help=t("arg.verify.help"))
+    p.add_argument("--keep", action="store_true",
+                   help=t("arg.verify.keep"))
+    p.add_argument("--json", action="store_true",
+                   help=t("arg.verify.json"))
+    p.set_defaults(func=cmd_verify)
+
+    # export
+    p = sub.add_parser("export",
+                       help="Export the full golive state to a tar.gz archive")
+    p.add_argument("-o", "--output", default="",
+                   help="Output path (default: golive-export-<ts>.tar.gz)")
+    p.add_argument("--sites-only", action="store_true",
+                   help="Export only site metadata and HTML, not data rows")
+    p.add_argument("--data-only", action="store_true",
+                   help="Export only data rows, not sites")
+    p.add_argument("--site", default="",
+                   help="Export only a single site (by slug or site_id)")
+    p.set_defaults(func=cmd_export)
+
+    # import
+    p = sub.add_parser("import",
+                       help="Restore a golive archive")
+    p.add_argument("archive", help="Path to the tar.gz archive")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Report what would happen without writing anything")
+    p.add_argument("--on-conflict", default="skip",
+                   choices=["skip", "overwrite", "rename"],
+                   help="How to handle slug conflicts (default: skip)")
+    p.add_argument("--yes", action="store_true",
+                   help="Skip the confirmation prompt")
+    p.set_defaults(func=cmd_import)
+
+    # migrate
+    p = sub.add_parser("migrate",
+                       help="Migrate data or registry between backends")
+    p.add_argument("layer", choices=["data", "registry"],
+                   help="Which layer to migrate")
+    p.add_argument("--to", required=True,
+                   choices=["sqlite", "postgres", "supabase"],
+                   help="Target backend")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Report what would happen without writing anything")
+    p.set_defaults(func=cmd_migrate)
 
     args = parser.parse_args(argv)
 

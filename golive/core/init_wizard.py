@@ -389,3 +389,4 @@ def _print_entrypoints(opts: InitOptions, out, verified: bool) -> None:
     print(t("init.static_demo", url=u['demo-static']), file=out)
     print(t("init.crud_demo", url=u['demo-crud']), file=out)
     print(t("init.admin_url", url=u['admin']), file=out)
+    print(t("init.feedback_hint"), file=out)

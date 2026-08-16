@@ -868,4 +868,51 @@ TRANSLATIONS = {
 
     # ── supabase_store ────────────────────────────────────────────────
     "supabase.snapshot_skip": "ℹ️  {site_id} 快照清理被其他发布进程占用，本次跳过",
+
+    # ── verify（端到端自检）────────────────────────────────────────────
+    "verify.banner": "🔍 golive verify — 端到端检查\n",
+    "verify.step_server": "启动临时服务",
+    "verify.step_health": "健康检查",
+    "verify.step_publish": "发布测试页面",
+    "verify.step_inject": "检查注入",
+    "verify.step_data": "数据读写",
+    "verify.step_cleanup": "清理",
+    "verify.server_started": "已启动，端口 {port}",
+    "verify.server_failed": "❌ 无法启动临时服务：{error}",
+    "verify.health_ok": "服务正常，版本 {version}",
+    "verify.health_mismatch": "❌ 版本不匹配：CLI 是 {cli_version}，服务端是 {server_version}",
+    "verify.health_failed": "❌ /health 无响应：{error}",
+    "verify.publish_ok": "已发布测试页面（site_id: {site_id}）",
+    "verify.publish_failed": "❌ 发布测试页面失败：{error}",
+    "verify.inject_ok": "注入正确（mode: {mode}, baseUrl: {base_url}）",
+    "verify.inject_bad_mode": "❌ 注入的 mode 是 '{mode}'，但 data.backend: {backend} 应为 '{expected}'",
+    "verify.inject_leaked": "❌ 注入的 HTML 中发现敏感数据：{secret}",
+    "verify.inject_missing": "❌ 发布的页面中未找到 TemplateAPI 脚本",
+    "verify.data_ok": "写入 → 读取 → 删除成功，数据一致",
+    "verify.data_write_failed": "❌ 写入失败：POST /api/data/{table} → {status} {detail}",
+    "verify.data_read_failed": "❌ 读取失败：GET /api/data/{table} → {status} {detail}",
+    "verify.data_mismatch": "❌ 读取内容不一致：写入 {wrote}，读取 {read}",
+    "verify.data_delete_failed": "❌ 删除失败：DELETE /api/data/{table} → {status} {detail}",
+    "verify.supabase_skip": "ℹ️  data.backend 为 'supabase' —— 页面直连 Supabase，不使用本地 /api/data 端点。这是预期行为，不是故障。",
+    "verify.postgres_no_dsn": "❌ 选择了 Postgres 后端但未设置 $GOLIVE_PG_DSN。\n   设置：export GOLIVE_PG_DSN='host=localhost dbname=golive user=postgres'\n   安装驱动：pip install 'html-golive[postgres]'",
+    "verify.postgres_no_driver": "❌ 选择了 Postgres 后端但未安装 psycopg。\n   安装：pip install 'html-golive[postgres]'",
+    "verify.cleanup_done": "已清理：删除测试站点、测试数据，停止服务",
+    "verify.cleanup_partial": "⚠️  清理未完成：{error}",
+    "verify.success": "✅ 端到端验证通过。  {backend} · publish → /api/data → database",
+    "verify.success_supabase": "✅ 端到端验证通过。  supabase · publish → page → Supabase（直连）",
+    "verify.success_nodata": "✅ 服务正常，页面可发布。  （data.backend: none —— 无数据层可测）",
+    "verify.failure": "❌ {message}",
+    "verify.static_hint": "   静态检查：golive doctor",
+    "verify.keep_hint": "   测试站点已保留（--keep）：http://localhost:{port}/s/{site_id}",
+
+    # ── argparse: verify ──────────────────────────────────────────────
+    "arg.verify.help": "端到端自检：启动服务、发布页面、写数据、清理",
+    "arg.verify.keep": "保留临时测试站点供人工查看",
+    "arg.verify.json": "输出机器可读 JSON（供 CI / issue 模板使用）",
+
+    # ── doctor: 更新健康提示 ──────────────────────────────────────────
+    "doctor.healthy": "✅ 静态检查通过。  运行 `golive verify` 测试数据链路端到端。",
+
+    # ── init: 反馈引导 ───────────────────────────────────────────────
+    "init.feedback_hint": "\n💬 卡住了？运行 `golive verify` 并附上输出：https://github.com/Songhonglei/html-golive/issues",
 }

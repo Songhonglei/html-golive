@@ -865,4 +865,51 @@ TRANSLATIONS = {
 
     # ── supabase_store ────────────────────────────────────────────────
     "supabase.snapshot_skip": "ℹ️  {site_id} snapshot cleanup is being used by another publish process, skipping",
+
+    # ── verify (end-to-end self-check) ────────────────────────────────
+    "verify.banner": "🔍 golive verify — end-to-end check\n",
+    "verify.step_server": "Start temporary server",
+    "verify.step_health": "Health check",
+    "verify.step_publish": "Publish test page",
+    "verify.step_inject": "Inspect injection",
+    "verify.step_data": "Data round-trip",
+    "verify.step_cleanup": "Cleanup",
+    "verify.server_started": "Started on port {port}",
+    "verify.server_failed": "❌ Could not start a temporary server: {error}",
+    "verify.health_ok": "Server is up, version {version}",
+    "verify.health_mismatch": "❌ Server version mismatch: CLI is {cli_version}, server is {server_version}",
+    "verify.health_failed": "❌ /health did not answer: {error}",
+    "verify.publish_ok": "Published test page (site_id: {site_id})",
+    "verify.publish_failed": "❌ Failed to publish test page: {error}",
+    "verify.inject_ok": "Injection looks correct (mode: {mode}, baseUrl: {base_url})",
+    "verify.inject_bad_mode": "❌ Injected mode is '{mode}', expected '{expected}' for data.backend: {backend}",
+    "verify.inject_leaked": "❌ Sensitive data leaked into injected HTML: {secret}",
+    "verify.inject_missing": "❌ TemplateAPI script not found in published page",
+    "verify.data_ok": "Write → read → delete succeeded, content matched",
+    "verify.data_write_failed": "❌ Write failed: POST /api/data/{table} → {status} {detail}",
+    "verify.data_read_failed": "❌ Read-back failed: GET /api/data/{table} → {status} {detail}",
+    "verify.data_mismatch": "❌ Read-back content does not match: wrote {wrote}, read {read}",
+    "verify.data_delete_failed": "❌ Delete failed: DELETE /api/data/{table} → {status} {detail}",
+    "verify.supabase_skip": "ℹ️  data.backend is 'supabase' — pages call Supabase directly, the local /api/data endpoint is not used. This is expected, not a failure.",
+    "verify.postgres_no_dsn": "❌ Postgres backend selected but $GOLIVE_PG_DSN is not set.\n   Set it: export GOLIVE_PG_DSN='host=localhost dbname=golive user=postgres'\n   Install driver: pip install 'html-golive[postgres]'",
+    "verify.postgres_no_driver": "❌ Postgres backend selected but psycopg is not installed.\n   Install it: pip install 'html-golive[postgres]'",
+    "verify.cleanup_done": "Cleaned up: removed test site, test data, stopped server",
+    "verify.cleanup_partial": "⚠️  Cleanup was incomplete: {error}",
+    "verify.success": "✅ Your setup works end to end.  {backend} · publish → /api/data → database",
+    "verify.success_supabase": "✅ Your setup works end to end.  supabase · publish → page → Supabase (direct)",
+    "verify.success_nodata": "✅ Server is up and pages publish.  (data.backend: none — no data layer to test)",
+    "verify.failure": "❌ {message}",
+    "verify.static_hint": "   Static checks: golive doctor",
+    "verify.keep_hint": "   Test site kept (--keep): http://localhost:{port}/s/{site_id}",
+
+    # ── argparse: verify ──────────────────────────────────────────────
+    "arg.verify.help": "End-to-end self-check: start a server, publish, write data, clean up",
+    "arg.verify.keep": "Keep the temporary test site for manual inspection",
+    "arg.verify.json": "Output machine-readable JSON (for CI / issue templates)",
+
+    # ── doctor: updated healthy message ────────────────────────────────
+    "doctor.healthy": "✅ Static checks passed.  Run `golive verify` to test the data path end to end.",
+
+    # ── init: feedback hint ───────────────────────────────────────────
+    "init.feedback_hint": "\n💬 Stuck? Run `golive verify` and share the output: https://github.com/Songhonglei/html-golive/issues",
 }

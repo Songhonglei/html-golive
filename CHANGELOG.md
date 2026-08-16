@@ -5,6 +5,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — data portability (export / import / migrate)
+
+golive is a self-hosted tool, and "your data is yours" means data should
+go in *and* come out. This release adds three commands that make full
+backup, restore, and cross-backend migration first-class operations.
+
+- **`golive export`** — produces a single tar.gz archive of the entire
+  instance (sites, HTML, data rows). Archive structure: `manifest.json`
+  (version, timestamps, backend labels, row counts), `registry.jsonl`
+  (one site per line), `data.jsonl` (one data row per line),
+  `sites/<site_id>.html`. Supports `--sites-only`, `--data-only`,
+  `--site <ref>` for partial exports, and `-o` for a custom output path.
+  Pagination is handled transparently: the export iterates through every
+  site and every data row past `list_all`'s default 200-row cap and
+  `list()`'s 20-row page, cross-checks final counts against the backend,
+  and aborts rather than writing a silently incomplete archive.
+- **`golive import`** — restores an archive produced by `golive export`.
+  Three slug-conflict strategies (`skip` / `overwrite` / `rename`), all
+  genuinely implemented. Idempotent: importing the same archive twice
+  with `skip` produces no duplicates. `--dry-run` reports without
+  writing. Path traversal in malicious archives is rejected (Python 3.12+
+  `filter="data"` and manual validation for 3.9–3.11). Original site_ids
+  are preserved so HTML files and cross-references stay intact.
+- **`golive migrate <data|registry> --to <backend>`** — copies rows from
+  the current backend to a target (sqlite / postgres / supabase). Source
+  data is never deleted. Row counts verified before and after; mismatch
+  aborts with "source X rows, target Y rows". Target backend
+  unavailable (e.g. psycopg not installed) fails before touching anything
+  with the exact fix command. `--dry-run` reports without connecting to
+  the target.
+- Admin portal data-backend page now shows the actual `golive migrate`
+  command to run instead of a generic "data will not be migrated" message.
+
+### Added — end-to-end self-check (`golive verify`)
+- **`golive verify`**: really runs the full chain — starts a temporary server
+  on a random port, requests `/health`, publishes a test page with TemplateAPI
+  injection, inspects the injected script for correct mode and leaked secrets,
+  writes → reads → deletes a data row, then cleans up. Designed so that
+  "broken but doctor-green" (the 0.7.6 failure) is impossible to miss.
+- `--keep` keeps the temporary test site for manual inspection.
+- `--json` outputs machine-readable JSON for CI and issue templates.
+- Supabase mode is handled correctly: verify explains that pages call
+  Supabase directly and the local `/api/data` endpoint is not used —
+  not a failure.
+- Postgres mode without `GOLIVE_PG_DSN` or `psycopg` gives an actionable
+  fix command instead of a cryptic error.
+- Failed verify exits non-zero (CI-ready).
+
+### Changed
+- `golive doctor` success message now reads "Static checks passed. Run
+  `golive verify` to test the data path end to end." — honest about what
+  it actually checks.
+- `golive init` ends with a one-line feedback hint pointing users to
+  `golive verify` and the issue tracker.
+- README quickstart condensed to a 30-second minimal example (EN + zh-CN).
+- Bug report template now asks for `golive verify --json` output.
+
 ## [0.7.7] - 2026-08-16
 
 The Postgres backend from 0.7.6 worked in the CLI but not in the browser.

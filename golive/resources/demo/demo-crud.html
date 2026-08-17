@@ -84,7 +84,7 @@
 
   <span class="badge">DEMO · CRUD</span>
   <h1>待办清单</h1>
-  <p class="lede">每一次勾选、改名、删除都真的写进了本机 SQLite。
+  <p class="lede">每一次勾选、改名、删除都真的写进了数据库。
      加几条，然后<b>刷新浏览器</b>——数据还在。</p>
 
   <div class="panel">
@@ -106,12 +106,38 @@
 
   <div class="note">
     <b>这里发生了什么：</b>页面调用 <code>window.TemplateAPI</code>，
-    golive 在发布时注入了数据层 JS；它请求
-    <code>/api/data/golive_templates</code>，由
-    <code>golive serve</code> 读写 <code>$GOLIVE_HOME/data.db</code>。
-    没有云服务，没有 API key。命令行也能看到同一批数据：
+    golive 在发布时注入了数据层 JS。这一份页面实际连的是：
+    <span id="backend-note">正在检测…</span>
+    命令行也能看到同一批数据：
     <code>golive data list --model-code golive_demo_todo</code>。
   </div>
+
+  <script>
+    // Describe the backend this page was actually published against, rather
+    // than assuming SQLite. Saying "no cloud, no API key" on a page that
+    // ships an anon key would be worse than vague — it invites the reader to
+    // skip exactly the RLS setup that Supabase mode depends on.
+    (function () {
+      var el = document.getElementById('backend-note');
+      function describe() {
+        var cfg = (window.TemplateAPI && window.TemplateAPI._config) || {};
+        if (cfg.mode === 'supabase') {
+          el.innerHTML = '<b>你的 Supabase 项目</b>（页面直连 PostgREST，' +
+            '匿名 key 就在这份 HTML 里，所以表上的 RLS 策略是唯一的' +
+            '数据保护层）。';
+        } else if (cfg.baseUrl) {
+          el.innerHTML = '<code>' + cfg.baseUrl + '</code>' +
+            '，由 <code>golive serve</code> 代理到本机数据库' +
+            '（凭据留在服务端，不进浏览器）。';
+        } else {
+          el.textContent = '未配置数据后端 —— 见 golive doctor。';
+        }
+      }
+      if (window.TemplateAPI) { describe(); }
+      else { window.addEventListener('templateapi:ready', describe); }
+      setTimeout(describe, 1200);
+    })();
+  </script>
 
   <footer><a href="/demo-static">← 回到介绍页</a> · <a href="/admin">管理后台</a></footer>
 </div>

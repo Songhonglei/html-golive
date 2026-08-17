@@ -26,6 +26,13 @@ snapshots per site, rollback itself snapshots the current version.
 Remote backends (`s3` / `supabase`) add a 60 s in-memory read cache for
 serve mode.
 
+That cache lives inside each process, so publishing from a *separate*
+shell while `golive serve` is already running can take up to 60 s to show
+up — the object in the bucket is already the new one, the running server
+just has not re-read it yet. Nothing is wrong and nothing is lost; wait it
+out, or restart `golive serve` if you want it immediately. Publishing
+through the same process (or on a local-storage setup) is not affected.
+
 ## RegistryBackend
 
 Site metadata: id, name, slug, timestamps, owner.

@@ -10,36 +10,21 @@
 Turn any HTML file, project folder or zip archive into a shareable URL on
 your own machine, NAS, VPS or intranet server.
 
-### 60 seconds to a live page
+### 30-second quickstart
 
 ```bash
-pip install html-golive
-golive init
+pip install html-golive && golive init
 ```
 
-`init` sets up a data directory, starts the server, and creates two demo
-pages. When it finishes it prints the URLs — open one and you're looking at
-a page served by golive:
-
-```
-🎉 All set! Open these URLs:
-   Static demo: http://localhost:8787/demo-static
-   CRUD demo:   http://localhost:8787/demo-crud
-   Admin panel: http://localhost:8787/admin
-```
-
-Now publish your own:
+That sets up everything and prints live URLs — open one and you're done.
+Then publish your own page:
 
 ```bash
 golive publish report.html --name "Q3 Report" --slug q3
-# ✅ Published "Q3 Report"
-#    Local:   http://localhost:8787/q3
-#    Network: http://192.168.1.23:8787/q3   ← share this one
+# → http://localhost:8787/q3
 ```
 
-**Zero config to start** — local storage + SQLite + built-in server.
-**Grows with you** — swap in Supabase or any S3-compatible backend
-(MinIO / Tencent COS / Aliyun OSS / Volcengine TOS) with one yaml file.
+Something not working? Run `golive verify` and paste the output into an issue.
 
 ---
 
@@ -426,12 +411,15 @@ docker compose --profile minio up -d        # + local S3 stack for images
   for OIDC, trusted reverse-proxy auth, four admin pages (identity / data
   backend / security / settings), settings & scan rules in the database,
   English-by-default CLI, shareable LAN URLs~~ ✅ v0.7.5
+- ~~**M8 — data portability & self-check**: `golive export` / `import` /
+  `migrate` across sqlite, postgres and supabase, and `golive verify` for a
+  real end-to-end test of the data path~~ ✅ v0.8
 
-**Beyond v0.7.5** — the groundwork is complete, so what comes next is driven
+**Beyond v0.8** — the groundwork is complete, so what comes next is driven
 by what people actually run into. Candidates, roughly in order of likely
-demand: bulk data import/export, aggregation for very large tables, a shared
-session store (redis) for multi-instance setups, multi-user editing conflict
-UX, and group-based ACLs. If you hit a wall or want one of these sooner,
+demand: more storage channels (WebDAV), aggregation for very large tables, a
+shared session store (redis) for multi-instance setups, multi-user editing
+conflict UX, and group-based ACLs. If you hit a wall or want one of these sooner,
 [open an issue](https://github.com/Songhonglei/html-golive/issues) — real
 use cases decide the order.
 

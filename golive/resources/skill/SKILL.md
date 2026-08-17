@@ -11,7 +11,7 @@ description: >-
   `window.TemplateAPI`, or administer sites, owners and maintainers.
   Trigger phrases include "publish this page", "deploy this HTML",
   "put this on golive", "update the site", "roll it back", "golive".
-version: 0.8.0
+version: 0.8.1
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---

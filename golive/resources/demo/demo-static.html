@@ -115,7 +115,9 @@ golive publish hello.html --slug hello
   <h2>数据层：页面可以存数据</h2>
   <p>页面里直接调 <code>window.TemplateAPI</code> 就能读写数据，
      golive 默认用本机 SQLite（<code>$GOLIVE_HOME/data.db</code>）接住它——
-     不用注册任何云服务，也不用配 API key。</p>
+     开箱不用注册任何云服务，也不用配 API key。需要多机共享时可以切到
+     自建 PostgreSQL 或 Supabase，页面代码不用改
+     （Supabase 是页面直连，匿名 key 会进 HTML，须配好 RLS）。</p>
   <pre><code>TemplateAPI.create({ name: 'note-1', content: { text: '记一笔' } });
 TemplateAPI.listAll({ pageSize: 50 }).then(r =&gt; console.log(r.list));</code></pre>
   <p>想看它是真的能用？去隔壁 <a href="/demo-crud">demo-crud</a>

@@ -3,6 +3,71 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] - 2026-08-17
+
+### Fixed — Supabase, verified against a real project
+
+v0.8.0's Supabase support had only ever run against an in-process fake
+PostgREST server. A verification pass on an actual Supabase project found
+six issues the fake could not surface.
+
+- **Storage downloads mangled every non-ASCII byte.** The authenticated
+  object endpoint answers `text/plain` with no charset, so `requests`
+  assumed ISO-8859-1 and `resp.text` undid what upload had written as
+  UTF-8. Pages served through golive showed mojibake while the public
+  object URL looked fine — and `golive export` baked the damage into the
+  archive, quietly corrupting the backup. Now decodes bytes as UTF-8
+  explicitly, and names the object path if the content really is not UTF-8.
+  Re-verified on a real project: browser, public URL, served page and
+  archived HTML all hash identically.
+- **Whole-archive import into an empty Supabase instance failed, and failed
+  halfway.** The registry could not write an explicit `site_id`, and the
+  error surfaced *after* data rows and HTML had been written — leaving
+  orphan objects with no metadata pointing at them. Supabase needed no new
+  machinery for this: its own `create()` already sets `site_id` explicitly.
+  HTML is now written only for sites whose registry row actually landed.
+- **`--on-conflict skip` overwrote HTML anyway**, letting an old archive
+  clobber a newer live page. Skipped sites keep their HTML, and the summary
+  reports how many were left alone.
+- **`migrate --dry-run` reported a target row count it never measured.** It
+  skipped opening a non-sqlite target and printed the initial `0`, so a
+  Supabase table holding rows previewed as empty — which reads as "safe to
+  migrate into". It now counts for real, reports `unknown` when the target
+  cannot be reached, and refuses same-backend migrations outright instead of
+  previewing a no-op.
+- **The demo page claimed "no cloud, no API key" regardless of backend.**
+  Published against Supabase that same page ships an anon key, so the claim
+  was both wrong and an invitation to skip the RLS setup the mode depends
+  on. It now describes the backend it was actually published against.
+- **Generated SQL only mentioned RLS.** `GRANT` and RLS are separate gates,
+  and newer Supabase projects no longer expose new tables to the Data API
+  automatically, so policies alone still yield `401` / `42501`. Both tables
+  now print the grant alongside the policies, and note that a missing
+  SELECT policy shows up as an HTTP 200 empty array rather than an error.
+
+### Documentation
+- The Supabase chapter walks the four steps (config, keys, tables, verify)
+  and says plainly why RLS is mandatory there and optional for the other
+  two backends. Adds a GRANT-vs-RLS troubleshooting section.
+- Notes that an archive carries no backend configuration: importing into a
+  fresh `GOLIVE_HOME` restores to the defaults unless you put a
+  `golive.yaml` there first.
+- Notes that the remote-storage read cache is per-process, so publishing
+  from another shell can take up to 60 s to appear in a running server.
+- The self-hosted Postgres chapter was numbered `8a` while sitting after
+  chapter 9, and was missing from the table of contents.
+
+### Known limitations
+- `golive import` is not atomic and does not retry. A transient network
+  failure mid-import can leave data rows written without their registry
+  entries; re-running the import after clearing the partial rows is safe.
+  Retries are deliberately not added here until the write paths are
+  measured for idempotency.
+
+### Tests
+- 13 regressions covering each fix above, every one confirmed to fail with
+  its fix reverted. 859 total.
+
 ## [0.8.0] - 2026-08-16
 
 ### Added — data portability (export / import / migrate)

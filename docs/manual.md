@@ -18,6 +18,7 @@ the [Quickstart](quickstart.md), then come back for the details.
 7. [Access control: owners & maintainers](#7-access-control)
 8. [Built-in data storage (TemplateAPI)](#8-built-in-data-storage)
 9. [Using Supabase](#9-using-supabase)
+9a. [Using a self-hosted Postgres](#9a-using-a-self-hosted-postgres)
 10. [Doctor: the one command to verify everything](#10-doctor)
 11. [Running as a background service](#11-running-as-a-background-service)
 12. [Logs & audit](#12-logs--audit)
@@ -149,15 +150,77 @@ golive data create --model-code app_v1 --name seed --content '{"n":1}'
 ## 9. Using Supabase
 
 Point golive at your own Supabase project to get remote storage, a shared
-registry, and the data layer — all three from one project:
+registry, and the data layer — all three from one project. Four steps:
 
-```bash
-golive db init --print-sql       # paste into Supabase SQL editor
+**1. Point golive at the project** (`golive.yaml`):
+
+```yaml
+supabase:
+  url: https://YOURPROJECT.supabase.co
+storage:
+  backend: supabase        # HTML in Storage bucket golive-sites
+registry:
+  backend: supabase        # site metadata in table golive_sites
+data:
+  backend: supabase        # TemplateAPI rows in table golive_templates
 ```
 
-Config and RLS notes: [backends.md](backends.md), [data-layer.md](data-layer.md).
+You can adopt one layer at a time — keeping `storage: local` while moving
+only the data layer to Supabase is a perfectly normal setup.
 
-## 8a. Using a self-hosted Postgres
+**2. Provide the keys** via the environment, never in yaml:
+
+```bash
+export GOLIVE_SUPABASE_SERVICE_KEY=eyJ...   # server-side (CLI and serve)
+export GOLIVE_SUPABASE_ANON_KEY=eyJ...      # embedded in the injected JS
+```
+
+**3. Create the tables.** PostgREST cannot run DDL, so this one step
+happens in the dashboard — but you do not have to write the SQL:
+
+```bash
+golive db init --print-sql       # paste the output into the SQL Editor
+```
+
+The printed SQL covers both tables, the `alter table` statements for
+upgrading from v0.2, and commented RLS policies to start from. If you
+also use `storage: supabase`, create the `golive-sites` bucket under
+Dashboard → Storage.
+
+**4. Verify it end to end:**
+
+```bash
+golive verify
+golive demo install        # publishes a CRUD page you can click through
+```
+
+If the page loads but reads come back empty, or writes fail with
+`42501 permission denied`, it is almost always one of these two — they are
+separate gates and you need both:
+
+* **GRANT** — may the `anon` role touch the table at all? Newer Supabase
+  projects no longer expose new tables to the Data API automatically:
+  `grant select, insert, update, delete on golive_templates to anon;`
+* **RLS** — which rows may it touch? With RLS enabled and *no* select
+  policy, reads return `200` with an empty array rather than an error. An
+  empty list is the normal look of a missing policy, not a broken
+  connection.
+
+Both are covered by the SQL that `golive db init --print-sql` prints.
+
+**RLS is not optional here.** Supabase is the one *page-direct* backend:
+the browser talks to PostgREST itself using the anon key, so table
+policies are the only thing standing between your data and the public.
+With `sqlite` or `postgres` the page calls golive's own `/api/data` and
+the credentials never leave the server — a difference worth keeping in
+mind when choosing. For the same reason `golive verify` reports that the
+local `/api/data` endpoint is *not used* in Supabase mode: that is the
+architecture, not a failure.
+
+Config matrix and policy examples: [backends.md](backends.md),
+[data-layer.md](data-layer.md).
+
+## 9a. Using a self-hosted Postgres
 
 When your team has a PostgreSQL instance on the intranet, you can use it
 for the **data** and **registry** layers — no Supabase account needed.
@@ -307,6 +370,12 @@ Works with all three backend families: `sqlite`, `postgres` and
 verifies its own counts against the database and **refuses to write a
 short archive** — a backup silently missing sites is worse than no
 backup at all.
+
+One thing to know before restoring: an archive does not carry backend
+configuration. Pointing `GOLIVE_HOME` at a fresh directory and importing
+gives you the defaults (local storage, sqlite registry and data) no matter
+what the source used. To restore *into* Supabase or Postgres, put a
+`golive.yaml` and the credentials in the new home first.
 
 **Export** the full instance state (sites, HTML, and data rows) into a
 single tar.gz archive:

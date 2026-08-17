@@ -297,6 +297,71 @@ Images — plus an S3-compatible image uploader. Mix and match local,
 Supabase, and S3. Configuration matrix and examples:
 [backends.md](backends.md).
 
+### Backup, restore, and backend migration
+
+golive's data is yours — you can back it up, restore it on another
+machine, and migrate between backends without losing anything.
+
+Works with all three backend families: `sqlite`, `postgres` and
+`supabase`, in any combination for registry and data. Export always
+verifies its own counts against the database and **refuses to write a
+short archive** — a backup silently missing sites is worse than no
+backup at all.
+
+**Export** the full instance state (sites, HTML, and data rows) into a
+single tar.gz archive:
+
+```bash
+golive export                          # → golive-export-<ts>.tar.gz
+golive export -o /backups/prod.tar.gz  # specify output path
+golive export --sites-only             # sites + HTML, no data rows
+golive export --data-only              # data rows only
+golive export --site my-page           # single site (by slug or site_id)
+```
+
+The archive contains `manifest.json` (version, timestamps, backend
+labels, row counts), `registry.jsonl` (one site per line), `data.jsonl`
+(one data row per line), and `sites/<site_id>.html` for each site's
+content. The manifest lets you inspect what's inside without unpacking.
+
+Pagination is handled transparently: the export paginates through every
+site and every data row, cross-checks the final counts against the
+backend, and aborts if anything is missing — a silently incomplete backup
+is worse than no backup.
+
+**Import** an archive to restore or clone an instance:
+
+```bash
+golive import prod.tar.gz              # restore (asks for confirmation)
+golive import prod.tar.gz --dry-run    # report what would happen, write nothing
+golive import prod.tar.gz --on-conflict skip|overwrite|rename
+golive import prod.tar.gz --yes        # skip confirmation
+```
+
+When a site with the same slug already exists, three strategies are
+available: `skip` (default — leave the existing site untouched),
+`overwrite` (replace it), or `rename` (create with a modified slug).
+Importing the same archive twice with `skip` is idempotent — no
+duplicate sites or data rows. Archives are validated against path
+traversal attacks before extraction.
+
+**Migrate** data or registry between backends (e.g. sqlite → postgres):
+
+```bash
+golive migrate data --to postgres      # copy data rows to postgres
+golive migrate registry --to postgres  # copy site metadata to postgres
+golive migrate data --to postgres --dry-run
+```
+
+Migration copies data — it never deletes from the source. After
+migration, update `golive.yaml` to point at the new backend and restart
+`golive serve`. The old database remains in place until you're confident
+everything works and choose to remove it. Row counts are verified
+before and after migration; a mismatch aborts with a clear message. If
+the target backend is unavailable (e.g. psycopg not installed or DSN
+not set), migration fails before touching anything, with the exact
+command to fix it.
+
 ## 16. Identity & login
 
 Serve mode supports three auth providers: `none` (default), `token`
@@ -317,7 +382,7 @@ Set the client secret via `GOLIVE_OIDC_CLIENT_SECRET` and a stable
 `GOLIVE_COOKIE_SECRET` in production (otherwise golive persists one under
 `GOLIVE_HOME`). Presets fill the issuer/scopes; explicit fields override.
 
-**Token verification.** Since v0.8.0 every `id_token` is checked against the
+**Token verification.** Since v0.7.5 every `id_token` is checked against the
 IdP's published signing keys before a session is created: the signature must
 verify, `iss` / `aud` / `exp` / `nonce` must all match, and `alg: none` is
 refused outright. This needs the optional crypto dependency:
@@ -453,9 +518,9 @@ The portal is a single self-contained page: no external CDN, no
 framework, works on airgapped intranets. The same operations are
 available as a JSON API under `/api/admin/*` for scripting.
 
-### v0.8.0 admin pages: identity, data backend, security, settings
+### Admin pages: identity, data backend, security, settings
 
-Four new superadmin-only pages were added in v0.8.0, completing the
+Four new superadmin-only pages were added in v0.7.5, completing the
 management surface so operators never need to hand-edit `golive.yaml`
 for day-to-day configuration.
 
@@ -497,8 +562,8 @@ override, can be deleted to fall back), or **default**. Settings with
 overrides can be removed individually, reverting to the file or
 default value.
 
-All four pages degrade gracefully when the v0.8.0 API endpoints are
-not available (older server): they show a "requires 0.8.0+" notice
+All four pages degrade gracefully when the API endpoints they need are
+not available (older server): they show a "requires 0.7.5+" notice
 instead of a blank page or broken UI.
 
 New API endpoints (superadmin-only, all audited):

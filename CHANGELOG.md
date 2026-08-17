@@ -3,7 +3,102 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.8.0] - 2026-08-16
+
+### Added — data portability (export / import / migrate)
+
+golive is a self-hosted tool, and "your data is yours" means data should
+go in *and* come out. This release adds three commands that make full
+backup, restore, and cross-backend migration first-class operations.
+
+- **`golive export`** — produces a single tar.gz archive of the entire
+  instance (sites, HTML, data rows). Archive structure: `manifest.json`
+  (version, timestamps, backend labels, row counts), `registry.jsonl`
+  (one site per line), `data.jsonl` (one data row per line),
+  `sites/<site_id>.html`. Supports `--sites-only`, `--data-only`,
+  `--site <ref>` for partial exports, and `-o` for a custom output path.
+  Pagination is handled transparently: the export iterates through every
+  site and every data row past `list_all`'s default 200-row cap and
+  `list()`'s 20-row page, cross-checks final counts against the backend,
+  and aborts rather than writing a silently incomplete archive.
+- **`golive import`** — restores an archive produced by `golive export`.
+  Three slug-conflict strategies (`skip` / `overwrite` / `rename`), all
+  genuinely implemented. Idempotent: importing the same archive twice
+  with `skip` produces no duplicates. `--dry-run` reports without
+  writing. Path traversal in malicious archives is rejected (Python 3.12+
+  `filter="data"` and manual validation for 3.9–3.11). Original site_ids
+  are preserved so HTML files and cross-references stay intact.
+- **`golive migrate <data|registry> --to <backend>`** — copies rows from
+  the current backend to a target (sqlite / postgres / supabase). Source
+  data is never deleted. Row counts verified before and after; mismatch
+  aborts with "source X rows, target Y rows". Target backend
+  unavailable (e.g. psycopg not installed) fails before touching anything
+  with the exact fix command. `--dry-run` reports without connecting to
+  the target.
+- Admin portal data-backend page now shows the actual `golive migrate`
+  command to run instead of a generic "data will not be migrated" message.
+
+### Added — end-to-end self-check (`golive verify`)
+- **`golive verify`**: really runs the full chain — starts a temporary server
+  on a random port, requests `/health`, publishes a test page with TemplateAPI
+  injection, inspects the injected script for correct mode and leaked secrets,
+  writes → reads → deletes a data row, then cleans up. Designed so that
+  "broken but doctor-green" (the 0.7.6 failure) is impossible to miss.
+- `--keep` keeps the temporary test site for manual inspection.
+- `--json` outputs machine-readable JSON for CI and issue templates.
+- Supabase mode is handled correctly: verify explains that pages call
+  Supabase directly and the local `/api/data` endpoint is not used —
+  not a failure.
+- Postgres mode without `GOLIVE_PG_DSN` or `psycopg` gives an actionable
+  fix command instead of a cryptic error.
+- Failed verify exits non-zero (CI-ready).
+
+### Changed
+- `golive doctor` success message now reads "Static checks passed. Run
+  `golive verify` to test the data path end to end." — honest about what
+  it actually checks.
+- `golive init` ends with a one-line feedback hint pointing users to
+  `golive verify` and the issue tracker.
+- README quickstart condensed to a 30-second minimal example (EN + zh-CN).
+- Bug report template now asks for `golive verify --json` output.
+- Backup/restore now documented as working across all three backend
+  families (sqlite / postgres / supabase), in any registry+data
+  combination.
+
+### Fixed
+- **Export could write a short archive and call it a success.** The
+  registry count check re-ran the same paginated helper and compared the
+  result to itself, so it agreed even when pagination was the broken
+  part. A simulated one-page truncation produced a 200-of-250 archive,
+  printed "Exported" and exited 0 — with a manifest that also said 200,
+  making the loss invisible from inside the archive. The check now
+  compares against a `COUNT(*)` that bypasses pagination, and refuses to
+  write the archive on mismatch. Verified with 250 sites / 137 rows:
+  complete export, faithful round-trip, and an injected truncation aborts
+  with exit 1 and no file on disk.
+- **Re-importing on Supabase duplicated every data row.** The import's
+  duplicate check was a raw SQL probe branching on `._conn` / `.dsn_env`;
+  the Supabase store speaks PostgREST and has neither, so the check was
+  dead code there and `skip` inserted the same rows again on every run
+  while reporting them as successful imports (4 rows → 8 on the first
+  re-import, compounding after that). It now goes through `list()`,
+  which every data backend implements. Names are compared exactly,
+  because `list(name_prefix=)` is a prefix match — importing `r1` no
+  longer collides with an existing `r10`.
+- Import no longer falls back to `create()` when preserving a site_id on
+  an unrecognised registry backend. `create()` mints a fresh site_id
+  while the archive stores HTML under the original, so the import would
+  "succeed" with every restored page pointing at storage that does not
+  exist. It now fails loudly.
+- `golive verify`'s data round-trip goes over real HTTP instead of
+  calling the request handler directly. The 0.7.6 outage broke the route
+  guard *in front of* the handler, so a direct call would have reported
+  green while every published page stayed broken.
+
+### Removed
+- `_safe_extract()`, which was never called — import reads archive
+  members via `extractfile` and never writes to disk. Leaving it in
+  implied a protection layer that no code path used.
 
 ## [0.7.7] - 2026-08-16
 

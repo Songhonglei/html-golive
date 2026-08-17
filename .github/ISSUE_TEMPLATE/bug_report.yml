@@ -56,6 +56,18 @@ body:
       required: true
 
   - type: textarea
+    id: verify-output
+    attributes:
+      label: `golive verify --json` output
+      description: >
+        Run `golive verify --json` and paste the full output here. This shows
+        exactly where the data path works or breaks — it saves a round trip.
+        If verify cannot run at all, say so.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
     id: logs
     attributes:
       label: Relevant logs or config

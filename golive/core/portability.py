@@ -365,6 +365,25 @@ def _registry_create_with_id(registry, site_id: str, name: str, slug: str,
                 (site_id, name, slug_norm, now, now, owner, notes))
             c.commit()
         return registry.get(site_id)
+    elif hasattr(registry, "client") and hasattr(registry, "table"):
+        # PostgREST-backed registry (Supabase). No SQL connection needed:
+        # its own create() already builds the row and sets site_id
+        # explicitly, so preserving an incoming id is just a matter of
+        # putting ours in that field instead of a fresh uuid4.
+        import datetime
+        now = datetime.datetime.now().astimezone().isoformat(
+            timespec="microseconds")
+        row = {
+            "site_id": site_id,
+            "name": name,
+            "slug": slug.strip().lower() or None,
+            "created_at": now,
+            "updated_at": now,
+            "owner": owner,
+            "notes": notes,
+        }
+        created = registry.client.insert(registry.table, row)
+        return created[0] if created else row
     else:
         # Do NOT fall back to create(): it mints a fresh site_id, and the
         # archive's HTML is filed under the original one. The import would
@@ -547,8 +566,13 @@ def import_archive(
     errors = []
 
     # Build a mapping from original site_id → actual site_id in the target
-    # (they may differ if rename or overwrite changes the ID).
+    # (they may differ if rename or overwrite changes the ID). A site absent
+    # from this map is one whose registry row we did not write, so its HTML
+    # must not be written either.
     site_id_map = {}
+    # Sites that already existed and were left alone: their live HTML must
+    # survive the import untouched.
+    sites_skipped_ids = set()
 
     for i, site in enumerate(registry_rows):
         site_id = site.get("site_id", "")
@@ -570,6 +594,7 @@ def import_archive(
                 # Site with same site_id exists
                 if on_conflict == "skip":
                     site_id_map[site_id] = site_id
+                    sites_skipped_ids.add(site_id)
                     sites_skipped += 1
                     continue
                 elif on_conflict == "overwrite":
@@ -598,6 +623,7 @@ def import_archive(
                 # Slug taken by a different site_id
                 if on_conflict == "skip":
                     site_id_map[site_id] = site_id
+                    sites_skipped_ids.add(site_id)
                     sites_skipped += 1
                     continue
                 elif on_conflict == "overwrite":
@@ -697,10 +723,23 @@ def import_archive(
     # ── import HTML files ───────────────────────────────────────────────────
     html_files_written = 0
 
+    html_files_skipped = 0
+
     for orig_site_id, html in html_map.items():
+        # Only write HTML for sites whose registry entry we actually wrote.
+        # Two cases used to slip through because the lookup fell back to the
+        # original id:
+        #   * the registry row failed  → the HTML landed as an orphan object
+        #     with no metadata pointing at it;
+        #   * the site was skipped     → an old archive silently overwrote
+        #     newer live HTML, which is not what "skip" means to anyone.
+        target_site_id = site_id_map.get(orig_site_id)
+        if target_site_id is None:
+            continue                      # registry row failed — already logged
+        if orig_site_id in sites_skipped_ids:
+            html_files_skipped += 1
+            continue
         try:
-            # Map original site_id to the actual site_id in target
-            target_site_id = site_id_map.get(orig_site_id, orig_site_id)
             storage.publish(html, target_site_id, backup_previous=False)
             html_files_written += 1
         except Exception as e:
@@ -714,6 +753,7 @@ def import_archive(
         "sites_renamed": sites_renamed,
         "data_rows_imported": data_rows_imported,
         "data_rows_skipped": data_rows_skipped,
+        "html_files_skipped": html_files_skipped,
         "html_files_written": html_files_written,
         "conflicts": conflicts,
         "errors": errors,
@@ -809,11 +849,23 @@ def migrate_backend(
 
     # ── get target backend (skip for dry-run when target unavailable) ─────
     target_store = None
-    target_count = 0
+
+    # None means "we could not look" — distinct from a real zero. A dry run
+    # that cannot reach the target must say so rather than print "0 existing
+    # rows", which reads as "the target is empty" and invites a migration
+    # into a table that already holds data.
+    target_count = None if target != source_backend else 0
 
     if target != source_backend:
-        # Different backends — try to instantiate the target
-        if not dry_run or target == "sqlite":
+        # Different backends — try to instantiate the target. Dry runs count
+        # the target too: it is a read-only query, and the existing row count
+        # is the single most decision-relevant number in the preview.
+        # Open the target and count what it already holds. On a dry run this
+        # whole block is advisory: if the target cannot be reached (driver not
+        # installed, no DSN, network down) the preview still prints, with the
+        # count left as None → "unknown". A real migration re-raises, because
+        # then an unreachable target is a hard stop.
+        try:
             if layer == "data":
                 target_cfg = _clone_config_with(cfg, data_backend=target)
                 from golive.backends.factory import get_template_store
@@ -823,18 +875,18 @@ def migrate_backend(
                         "ok": False,
                         "error": f"Target data backend {target!r} is not available.",
                     }
+                target_models = target_store.list_models(scan_limit=100000)
+                target_count = sum(m.get("count", 0) for m in target_models)
             else:
                 target_cfg = _clone_config_with(cfg, registry_backend=target)
                 from golive.backends.factory import get_registry
                 target_store = get_registry(target_cfg)
-
-            # Check if target already has data
-            if layer == "data":
-                target_models = target_store.list_models(scan_limit=100000)
-                target_count = sum(m.get("count", 0) for m in target_models)
-            else:
-                target_sites = target_store.list_all(limit=100000)
-                target_count = len(target_sites)
+                target_count = len(target_store.list_all(limit=100000))
+        except Exception:
+            if not dry_run:
+                raise
+            target_store = None
+            target_count = None
     else:
         # Same backend type (e.g. sqlite→sqlite) — source IS target
         target_store = source_store
@@ -852,10 +904,10 @@ def migrate_backend(
             "source_count": source_count,
             "target_existing": target_count if target != source_backend else 0,
             "would_migrate": source_count,
-            "target_has_data": (target_count > 0) if target != source_backend else False,
+            "target_has_data": bool(target_count) if target != source_backend else False,
             "warning": ("Target already has data — migration will mix "
                         "source and existing rows."
-                        if target_count > 0 and target != source_backend else ""),
+                        if target_count and target != source_backend else ""),
         }
 
     # ── migrate ─────────────────────────────────────────────────────────────

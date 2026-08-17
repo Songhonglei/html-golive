@@ -45,9 +45,21 @@ create table if not exists {table} (
 -- Upgrading from v0.2? Run instead:
 --   alter table {table} add column if not exists editable boolean not null default false;
 --   alter table {table} add column if not exists maintainers jsonb not null default '[]'::jsonb;
--- Optional: enable RLS and restrict writes to service_role
+-- This table is written by the CLI and the server, never by the browser.
+-- The recommended setup is a service_role key on the server (it bypasses
+-- RLS), leaving the anon role read-only or with no access at all:
+-- grant select on {table} to anon;
 -- alter table {table} enable row level security;
--- create policy "public read" on {table} for select using (true);
+-- create policy "public read" on {table} for select to anon using (true);
+--
+-- If you have no service_role key and the CLI must run on the anon key,
+-- it also needs write access — publish, rename and delete all touch this
+-- table:
+-- grant select, insert, update, delete on {table} to anon;
+-- create policy "anon write" on {table} for all to anon using (true)
+--   with check (true);
+-- That leaves site metadata publicly writable, so prefer the service_role
+-- key whenever you can.
 """
 
 

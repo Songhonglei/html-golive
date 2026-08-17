@@ -1818,6 +1818,9 @@ def cmd_import(args) -> int:
     print(f"  Data rows imported:   {result['data_rows_imported']}")
     print(f"  Data rows skipped:    {result['data_rows_skipped']}")
     print(f"  HTML files written:   {result['html_files_written']}")
+    if result.get("html_files_skipped"):
+        print(f"  HTML files kept:      {result['html_files_skipped']}"
+              f"  (skipped sites keep their live HTML)")
     if result["errors"]:
         print(f"\n  ⚠️  {len(result['errors'])} error(s):")
         for e in result["errors"]:
@@ -1852,7 +1855,9 @@ def cmd_migrate(args) -> int:
         print(f"  Source backend:    {result['source_backend']}")
         print(f"  Target backend:    {result['target_backend']}")
         print(f"  Source rows:       {result['source_count']}")
-        print(f"  Target existing:   {result['target_existing']}")
+        _existing = result.get("target_existing")
+        print(f"  Target existing:   "
+              f"{'unknown (target not reachable)' if _existing is None else _existing}")
         print(f"  Would migrate:     {result['would_migrate']}")
         if result.get("warning"):
             print(f"  ⚠️  {result['warning']}")

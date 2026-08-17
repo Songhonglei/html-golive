@@ -10,34 +10,20 @@
 一条命令把 HTML 文件、项目文件夹或压缩包变成可分享的 URL，跑在你自己的
 电脑、NAS、VPS 或内网服务器上。
 
-```bash
-### 60 秒看到一个真实页面
+### 30 秒快速开始
 
 ```bash
-pip install html-golive
-golive init
+pip install html-golive && golive init
 ```
 
-`init` 会建好数据目录、启动服务、生成两个示例页。跑完后它会打印出网址——
-打开任意一个，你看到的就是 golive 托管的页面：
-
-```
-🎉 All set! Open these URLs:
-   Static demo: http://localhost:8787/demo-static
-   CRUD demo:   http://localhost:8787/demo-crud
-   Admin panel: http://localhost:8787/admin
-```
-
-然后发布你自己的页面：
+一键搞定，直接打印出可访问的网址 —— 打开就能看到页面。然后发布你自己的：
 
 ```bash
 golive publish report.html --name "季度报告" --slug q3
-# ✅ 发布成功「季度报告」
-#    本机:   http://localhost:8787/q3
-#    局域网: http://192.168.1.23:8787/q3   ← 分享给同事用这个
+# → http://localhost:8787/q3
 ```
 
-**零配置起步** —— 本地存储 + SQLite + 内置服务。
+遇到问题？运行 `golive verify`，把输出贴到 issue 里。
 **随需生长** —— 一个 yaml 即可切换 Supabase 或任意 S3 兼容后端
 （MinIO / 腾讯 COS / 阿里 OSS / 火山 TOS）。
 
@@ -403,10 +389,13 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 - ~~**M7 — 生产级身份与配置**：OIDC 的 id_token 签名验证、受信任反代认证、
   四个管理页（身份 / 数据后端 / 安全 / 全局参数）、配置与安全规则入库、
   CLI 默认英文、可分享的局域网链接~~ ✅ v0.7.5
+- ~~**M8 — 数据可携带与端到端自检**：`golive export` / `import` / `migrate`
+  覆盖 sqlite、postgres、supabase 三种后端，以及真正跑完整链路的
+  `golive verify`~~ ✅ v0.8
 
-**v0.7.5 之后** —— 基础能力已经完整，接下来做什么由真实需求驱动。候选项
-（大致按需求可能性排序）：数据批量导入导出、超大表聚合优化、多实例场景的共享
-会话存储（redis）、多人编辑冲突体验、基于组的权限。如果你撞上了某个问题、
+**v0.8 之后** —— 基础能力已经完整，接下来做什么由真实需求驱动。候选项
+（大致按需求可能性排序）：更多存储渠道（WebDAV）、超大表聚合优化、多实例场景的
+共享会话存储（redis）、多人编辑冲突体验、基于组的权限。如果你撞上了某个问题、
 或希望某项提前，[提个 issue](https://github.com/Songhonglei/html-golive/issues)
 —— 真实用例决定优先级。
 

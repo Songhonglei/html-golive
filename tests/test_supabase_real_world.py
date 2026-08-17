@@ -226,6 +226,30 @@ class TestDryRunNeverInventsATargetCount(unittest.TestCase):
         paths.reset_cache()
         shutil.rmtree(self.home, ignore_errors=True)
 
+    def test_same_backend_is_refused_not_previewed_as_empty(self):
+        """R2-NEW-01: sqlite→sqlite used to preview "Target existing: 0".
+
+        Source and target are the same table there, so the 0 described a
+        table that plainly held rows. Migrating a backend onto itself is a
+        no-op that rewrites every row in place, so it is refused outright.
+        """
+        from golive.backends.data.sqlite_store import TemplateStore
+        from golive.core.portability import migrate_backend
+
+        store = TemplateStore()
+        for i in range(2):
+            store.create(model_code="m", name=f"same{i}", content={"i": i})
+
+        for dry in (True, False):
+            res = migrate_backend("data", "sqlite", dry_run=dry)
+            self.assertFalse(res.get("ok"), f"dry_run={dry} was allowed")
+            self.assertIn("already uses", res.get("error", ""))
+            self.assertNotEqual(res.get("target_existing"), 0,
+                                "must not report a fabricated zero")
+        # Nothing was touched.
+        self.assertEqual(sum(m.get("count", 0)
+                             for m in store.list_models()), 2)
+
     def test_unreachable_target_reports_none_not_zero(self):
         from golive.backends.data.sqlite_store import TemplateStore
         from golive.core.portability import migrate_backend

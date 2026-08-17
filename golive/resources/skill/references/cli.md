@@ -197,7 +197,55 @@ version; `path` prints the bundled source directory.
 | `GOLIVE_S3_*` | S3 storage / uploader credentials |
 | `GOLIVE_LLM_BASE_URL` | OpenAI-compatible endpoint for AI review |
 
-## Data directory layout
+## export
+
+```bash
+golive export [-o PATH] [--sites-only] [--data-only] [--site REF]
+```
+
+Exports the full instance state (sites, HTML, data rows) to a single
+tar.gz archive. The archive contains `manifest.json`, `registry.jsonl`,
+`data.jsonl`, and `sites/<site_id>.html` files. Pagination is handled
+transparently — every site and every data row is included, and counts
+are cross-checked against the backend before writing.
+
+| Flag | Effect |
+|---|---|
+| `-o, --output PATH` | output path (default: `golive-export-<ts>.tar.gz`) |
+| `--sites-only` | export site metadata and HTML, not data rows |
+| `--data-only` | export data rows, not sites |
+| `--site REF` | export only a single site (by slug or site_id) |
+
+## import
+
+```bash
+golive import <archive> [--dry-run] [--on-conflict skip|overwrite|rename] [--yes]
+```
+
+Restores an archive produced by `golive export`. Slug conflicts (a site
+with the same slug already exists) are handled by the `--on-conflict`
+strategy: `skip` (default — leave existing untouched), `overwrite`
+(replace), or `rename` (create with a modified slug). Importing the
+same archive twice with `skip` is idempotent. Archives are validated
+against path traversal before extraction.
+
+`--dry-run` reports what would happen without writing anything.
+
+## migrate
+
+```bash
+golive migrate <data|registry> --to sqlite|postgres|supabase [--dry-run]
+```
+
+Copies data or registry rows from the current backend to a target
+backend. The source is never modified — migration copies, it does not
+move. After migration, update `golive.yaml` to point at the new backend
+and restart `golive serve`. Row counts are verified before and after; a
+mismatch aborts with a clear message. If the target backend is
+unavailable (e.g. psycopg not installed), migration fails before
+touching anything with the exact fix command.
+
+## data directory layout
 
 ```
 $GOLIVE_HOME/

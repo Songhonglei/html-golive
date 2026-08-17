@@ -464,7 +464,12 @@ class TestMigrate(unittest.TestCase):
 
         self.assertTrue(result.get("dry_run"))
         self.assertEqual(result["source_count"], 10)
-        self.assertEqual(result["target_existing"], 0)
+        # There is no psycopg here, so the target was never opened. It must
+        # report None ("unknown") rather than 0: a real Supabase target with
+        # rows in it used to be previewed as "Target existing: 0", which
+        # reads as "the target is empty — safe to migrate into".
+        self.assertIsNone(result["target_existing"])
+        self.assertFalse(result["target_has_data"])
 
     def test_migrate_data_postgres_unavailable(self):
         """When postgres is not available, fail early with a fix command."""

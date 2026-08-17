@@ -838,6 +838,21 @@ def migrate_backend(
         from golive.backends.factory import get_registry
         source_store = get_registry(cfg)
 
+    # Migrating a backend onto itself is a no-op that only looks like work:
+    # every row gets rewritten in place, refreshing timestamps for nothing.
+    # Refuse it outright rather than previewing it — the dry run used to
+    # report "Target existing: 0" for a table that plainly held rows,
+    # because source and target are the same table.
+    if target == source_backend:
+        return {
+            "ok": False,
+            "error": (
+                f"The {layer} layer already uses {target!r} — nothing to "
+                f"migrate. Name a different target backend, or check "
+                f"`golive doctor` if you expected another one to be active."
+            ),
+        }
+
     # ── read all source data FIRST (before instantiating target) ────────────
     if layer == "data":
         source_rows = _paginated_data_list(source_store)
@@ -854,46 +869,37 @@ def migrate_backend(
     # that cannot reach the target must say so rather than print "0 existing
     # rows", which reads as "the target is empty" and invites a migration
     # into a table that already holds data.
-    target_count = None if target != source_backend else 0
+    target_count = None
 
-    if target != source_backend:
-        # Different backends — try to instantiate the target. Dry runs count
-        # the target too: it is a read-only query, and the existing row count
-        # is the single most decision-relevant number in the preview.
-        # Open the target and count what it already holds. On a dry run this
-        # whole block is advisory: if the target cannot be reached (driver not
-        # installed, no DSN, network down) the preview still prints, with the
-        # count left as None → "unknown". A real migration re-raises, because
-        # then an unreachable target is a hard stop.
-        try:
-            if layer == "data":
-                target_cfg = _clone_config_with(cfg, data_backend=target)
-                from golive.backends.factory import get_template_store
-                target_store = get_template_store(target_cfg)
-                if target_store is None:
-                    return {
-                        "ok": False,
-                        "error": f"Target data backend {target!r} is not available.",
-                    }
-                target_models = target_store.list_models(scan_limit=100000)
-                target_count = sum(m.get("count", 0) for m in target_models)
-            else:
-                target_cfg = _clone_config_with(cfg, registry_backend=target)
-                from golive.backends.factory import get_registry
-                target_store = get_registry(target_cfg)
-                target_count = len(target_store.list_all(limit=100000))
-        except Exception:
-            if not dry_run:
-                raise
-            target_store = None
-            target_count = None
-    else:
-        # Same backend type (e.g. sqlite→sqlite) — source IS target
-        target_store = source_store
+    # Open the target and count what it already holds — dry runs included,
+    # since it is a read-only query and the existing row count is the single
+    # most decision-relevant number in the preview. On a dry run the whole
+    # block is advisory: an unreachable target (driver missing, no DSN,
+    # network down) leaves the count as None → "unknown" and the preview
+    # still prints. A real migration re-raises, because then an unreachable
+    # target is a hard stop.
+    try:
         if layer == "data":
-            target_count = source_count
+            target_cfg = _clone_config_with(cfg, data_backend=target)
+            from golive.backends.factory import get_template_store
+            target_store = get_template_store(target_cfg)
+            if target_store is None:
+                return {
+                    "ok": False,
+                    "error": f"Target data backend {target!r} is not available.",
+                }
+            target_models = target_store.list_models(scan_limit=100000)
+            target_count = sum(m.get("count", 0) for m in target_models)
         else:
-            target_count = source_count
+            target_cfg = _clone_config_with(cfg, registry_backend=target)
+            from golive.backends.factory import get_registry
+            target_store = get_registry(target_cfg)
+            target_count = len(target_store.list_all(limit=100000))
+    except Exception:
+        if not dry_run:
+            raise
+        target_store = None
+        target_count = None
 
     if dry_run:
         return {
@@ -902,12 +908,11 @@ def migrate_backend(
             "source_backend": source_backend,
             "target_backend": target,
             "source_count": source_count,
-            "target_existing": target_count if target != source_backend else 0,
+            "target_existing": target_count,
             "would_migrate": source_count,
-            "target_has_data": bool(target_count) if target != source_backend else False,
+            "target_has_data": bool(target_count),
             "warning": ("Target already has data — migration will mix "
-                        "source and existing rows."
-                        if target_count and target != source_backend else ""),
+                        "source and existing rows." if target_count else ""),
         }
 
     # ── migrate ─────────────────────────────────────────────────────────────

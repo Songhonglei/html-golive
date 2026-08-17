@@ -191,7 +191,22 @@ Dashboard → Storage.
 
 ```bash
 golive verify
+golive demo install        # publishes a CRUD page you can click through
 ```
+
+If the page loads but reads come back empty, or writes fail with
+`42501 permission denied`, it is almost always one of these two — they are
+separate gates and you need both:
+
+* **GRANT** — may the `anon` role touch the table at all? Newer Supabase
+  projects no longer expose new tables to the Data API automatically:
+  `grant select, insert, update, delete on golive_templates to anon;`
+* **RLS** — which rows may it touch? With RLS enabled and *no* select
+  policy, reads return `200` with an empty array rather than an error. An
+  empty list is the normal look of a missing policy, not a broken
+  connection.
+
+Both are covered by the SQL that `golive db init --print-sql` prints.
 
 **RLS is not optional here.** Supabase is the one *page-direct* backend:
 the browser talks to PostgREST itself using the anon key, so table
@@ -355,6 +370,12 @@ Works with all three backend families: `sqlite`, `postgres` and
 verifies its own counts against the database and **refuses to write a
 short archive** — a backup silently missing sites is worse than no
 backup at all.
+
+One thing to know before restoring: an archive does not carry backend
+configuration. Pointing `GOLIVE_HOME` at a fresh directory and importing
+gives you the defaults (local storage, sqlite registry and data) no matter
+what the source used. To restore *into* Supabase or Postgres, put a
+`golive.yaml` and the credentials in the new home first.
 
 **Export** the full instance state (sites, HTML, and data rows) into a
 single tar.gz archive:

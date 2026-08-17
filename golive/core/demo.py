@@ -60,7 +60,7 @@ DEMOS = (
     DemoSpec("demo-static", "demo-static.html", "golive 示例 · 介绍页",
              "golive 是什么 + 常用命令"),
     DemoSpec("demo-crud", "demo-crud.html", "golive 示例 · 待办清单",
-             "TemplateAPI + SQLite 的真实读写", DEMO_MODEL_CODE),
+             "TemplateAPI 的真实读写", DEMO_MODEL_CODE),
 )
 
 

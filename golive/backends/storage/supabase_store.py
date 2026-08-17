@@ -77,7 +77,19 @@ class SupabaseStorage:
         resp = requests.get(self._obj_url(path), headers=self._headers(),
                             timeout=DEFAULT_TIMEOUT)
         if resp.status_code == 200:
-            return resp.text
+            # Decode explicitly as UTF-8 — never resp.text. The authenticated
+            # object endpoint answers with "text/plain" and no charset, and
+            # per RFC 2616 requests then assumes ISO-8859-1, silently
+            # mangling every non-ASCII byte of a document that _upload()
+            # wrote as UTF-8. The damage is invisible until someone reads
+            # the page, and `golive export` bakes it into the archive.
+            try:
+                return resp.content.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise SupabaseStorageError(
+                    f"{path} is not valid UTF-8 (byte {exc.start}): "
+                    f"{exc.reason}. Stored objects must be UTF-8 encoded."
+                ) from exc
         if resp.status_code in (400, 404):
             return None
         raise SupabaseStorageError(

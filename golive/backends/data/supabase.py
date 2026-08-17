@@ -45,13 +45,28 @@ create table if not exists {table} (
     updated_at  timestamptz not null default now(),
     unique (model_code, name, user_id)
 );
--- RLS example (anon key in the browser NEEDS policies like these):
+-- Two separate gates guard this table, and you need BOTH:
+--   GRANT decides whether the anon role may touch the table at all;
+--   RLS   decides which rows it may touch.
+-- Newer Supabase projects no longer expose new tables to the Data API
+-- automatically, so grant explicitly rather than relying on the default.
+-- Without the grant, PostgREST answers 401 / 42501 "permission denied"
+-- even when the policies below are in place.
+-- grant select, insert, update, delete on {table} to anon;
+--
+-- RLS example (the browser holds only the anon key, so it NEEDS policies):
 -- alter table {table} enable row level security;
--- create policy "read all"  on {table} for select using (true);
--- create policy "insert"    on {table} for insert with check (true);
--- create policy "update"    on {table} for update using (true);
--- create policy "delete"    on {table} for delete using (true);
--- Tighten the policies to your auth setup before going to production.
+-- create policy "read all"  on {table} for select to anon using (true);
+-- create policy "insert"    on {table} for insert to anon with check (true);
+-- create policy "update"    on {table} for update to anon using (true);
+-- create policy "delete"    on {table} for delete to anon using (true);
+--
+-- These four are wide open: anyone who loads the page can read and write
+-- every row. Fine for a smoke test, not for real data — narrow them to
+-- `to authenticated`, add an owner column, or check auth.uid() before
+-- putting anything you care about in here.
+-- Note: with no SELECT policy, reads return 200 with an empty array rather
+-- than an error. That is normal RLS row hiding, not a broken connection.
 """
 
 

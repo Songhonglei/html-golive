@@ -3,6 +3,76 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.3] - 2026-08-18
+
+An independent black-box audit of 0.8.2 filed reproducible counter-examples
+against both of that release's headline claims: credentials could publish,
+and blocked credentials could appear in the block message. The audit was
+right on every count that mattered. **If you are on 0.8.2, upgrade.**
+
+### Security
+
+- **Credentials written the ordinary way are now detected.** Rules matched
+  literal keywords, so common code shapes went straight through:
+  `const password = "…"` (the table had `password=`), `const Authorization =
+  "Bearer …"` (only `authorization:`), and `postgresql://` — which is what
+  SQLAlchemy and Django write, while only `postgres://` was listed. Any DSN
+  whose password contained `@ ! $` also escaped, because the character class
+  stopped at the first `@`. Replaced with shape rules covering credential
+  assignments (including variable declarations), bearer values, JWTs, cloud
+  key prefixes, 17 DSN dialects, and a generic `scheme://user:pass@host`.
+- **Secrets no longer reach the block message.** Two separate holes. A
+  finding's context is a window cut out of the page, so `password=` could
+  arrive at the masker already truncated to `word=`; because masking needed
+  the whole keyword, a *neighbouring* finding's context kept its secret in
+  the clear. Independently, long digit runs (national ID, phone, card) never
+  matched a masking rule and printed in full. Masking is one function, used
+  by the console, the stored scan history, and the LLM review path.
+- **The placeholder exemption is no longer a bypass.** `REPLACE_MEsk-…` and
+  `password=***RealSecret` published, because the exemption matched a prefix
+  instead of the whole value. It now requires the placeholder to be the
+  entire value; a known type prefix (`sk-`, `Bearer `) may precede it. Regex
+  rules consult the exemption too — shape matching had made
+  `secret_key = "REPLACE_ME"` a credential, and blocking documentation is
+  what teaches people to waive the scan.
+
+### Fixed
+
+- `migrate-check` told the editor layer "republishing does NOT replace
+  this". It does: publish re-injects the editor while the site is marked
+  editable, so the tag comes back on its own and removing it from the HTML
+  does not stick. Layers now declare `on_republish` as auto / flag / sticky
+  instead of one boolean covering two questions. The old test had pinned the
+  wrong wording.
+- `import` left a registry row behind for a page it held back on a
+  credential, producing a site that lists and resolves but serves nothing —
+  indistinguishable from a storage fault, and it makes the slug look taken.
+  Rolled back now, only for rows that run created.
+- `publish --update` reset a site's data model to `default` when the source
+  file carried no data layer, silently pointing the page at an empty table.
+  It now inherits the model the live page is using.
+- Three more registry reads were capped: the server index at 100 and the
+  `_me` permissions endpoint at 1000, where an owner past that limit stops
+  seeing their own sites.
+- `init --no-serve` help text now says the self-check still binds loopback
+  briefly, which is what it has always done.
+
+### Added
+
+- **Scan history** — every scan is recorded so `doctor` can tell a checked
+  page from an unchecked one, and an unchanged page is not re-scanned.
+  Findings are stored redacted through the same masker as the console.
+  `security.scan_keep` caps records per site (default 20, `0` keeps all,
+  env `GOLIVE_SCAN_KEEP`); pruning is per site, so a page published hundreds
+  of times cannot evict another site's only record. A cached verdict is
+  reused only when page and ruleset are both unchanged.
+- Site manifests and per-site policies (storage layer only — no command
+  reads them yet; the reporting lands in 0.9.0).
+- The scanner regression corpus grew to 22 `must_block` / 14 `must_pass`
+  samples, including every counter-example from the audit. Adding a case is
+  adding a file under `tests/corpus/`. See
+  [docs/security.md](docs/security.md#regression-corpus).
+
 ## [0.8.2] - 2026-08-18
 
 A security pass over the publish path. The scan gate now separates

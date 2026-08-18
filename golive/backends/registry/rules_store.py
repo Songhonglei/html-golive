@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS security_rules (
     id          TEXT PRIMARY KEY,
     type        TEXT NOT NULL,
     name        TEXT NOT NULL,
+    category    TEXT NOT NULL DEFAULT 'unknown',
     strength    TEXT NOT NULL DEFAULT 'weak',
     pattern     TEXT,
     keywords    TEXT,
@@ -53,6 +54,22 @@ CREATE TABLE IF NOT EXISTS security_rules (
     updated_at  TEXT
 );
 """
+
+# ``type`` and ``category`` mean different things and are easy to confuse:
+#
+#   type      — rule *shape*: "keyword" or "regex". Decides how to match.
+#   category  — what kind of secret it is: "credential", "personal_info", …
+#               Decides whether a hit may ever be skipped.
+#
+# The scanner needs ``category``: credential hits are non-skippable, content
+# hits are. Until v0.8.2 this table had no category column, so the merge back
+# into the scanner guessed it from the rule name — meaning every deployment
+# with a database silently lost the distinction. Added as a migration so
+# existing installs pick it up without a manual step.
+_MIGRATIONS = [
+    ("category", "ALTER TABLE security_rules ADD COLUMN "
+                 "category TEXT NOT NULL DEFAULT 'unknown'"),
+]
 
 _RULES_FILE = Path(__file__).parent.parent.parent / "security" / "rules.yaml"
 
@@ -67,11 +84,15 @@ def _load_builtin_rules() -> list:
         raise RuntimeError("pyyaml is required (pip install pyyaml)")
     data = yaml.safe_load(_RULES_FILE.read_text(encoding="utf-8")) or {}
     rules = []
+    # ``type`` in rules.yaml is the sensitivity *category*; in this table
+    # ``type`` is the rule *shape*. Keep both — the category is what decides
+    # whether a hit can be skipped, so losing it is a security regression.
     for r in data.get("keyword_rules") or []:
         rules.append({
             "id": f"builtin:{r.get('name', 'unnamed')}",
             "type": "keyword",
             "name": r.get("name", "unnamed"),
+            "category": r.get("type", "unknown"),
             "strength": r.get("strength", "weak"),
             "keywords": json.dumps(r.get("keywords") or [], ensure_ascii=False),
             "pattern": None,
@@ -83,6 +104,7 @@ def _load_builtin_rules() -> list:
             "id": f"builtin:{r.get('name', 'unnamed')}",
             "type": "regex",
             "name": r.get("name", "unnamed"),
+            "category": r.get("type", "unknown"),
             "strength": r.get("strength", "weak"),
             "keywords": None,
             "pattern": r.get("pattern", ""),
@@ -102,7 +124,17 @@ class RulesStore:
         self.db_path = str(db_path)
         with self._conn() as c:
             c.executescript(_SCHEMA)
+            self._migrate(c)
         self._seed_builtin()
+
+    @staticmethod
+    def _migrate(conn):
+        """Add columns missing from older databases (idempotent)."""
+        have = {r[1] for r in conn.execute(
+            "PRAGMA table_info(security_rules)").fetchall()}
+        for column, ddl in _MIGRATIONS:
+            if column not in have:
+                conn.execute(ddl)
 
     def _conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
@@ -118,24 +150,28 @@ class RulesStore:
         builtins = _load_builtin_rules()
         with self._conn() as c:
             for r in builtins:
+                # category is re-asserted on upgrade so databases written by
+                # an older version (which had no such column) get backfilled
+                # from the yaml on the next run.
                 c.execute(
                     "INSERT INTO security_rules "
-                    "(id, type, name, strength, pattern, keywords, "
+                    "(id, type, name, category, strength, pattern, keywords, "
                     "enabled, builtin, updated_by, updated_at) "
-                    "VALUES (?,?,?,?,?,?,1,1,'',?) "
+                    "VALUES (?,?,?,?,?,?,?,1,1,'',?) "
                     "ON CONFLICT(id) DO UPDATE SET "
                     "  type=excluded.type, name=excluded.name, "
+                    "  category=excluded.category, "
                     "  strength=excluded.strength, pattern=excluded.pattern, "
                     "  keywords=excluded.keywords, builtin=1",
-                    (r["id"], r["type"], r["name"], r["strength"],
-                     r["pattern"], r["keywords"], _now())
+                    (r["id"], r["type"], r["name"], r["category"],
+                     r["strength"], r["pattern"], r["keywords"], _now())
                 )
 
     def list_all(self) -> list:
         """Return all rules (built-in + custom), with enabled state."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT id, type, name, strength, pattern, keywords, "
+                "SELECT id, type, name, category, strength, pattern, keywords, "
                 "enabled, builtin, updated_by, updated_at "
                 "FROM security_rules ORDER BY builtin DESC, name"
             ).fetchall()
@@ -254,7 +290,7 @@ class RulesStore:
     def get(self, rule_id: str) -> Optional[dict]:
         with self._conn() as c:
             row = c.execute(
-                "SELECT id, type, name, strength, pattern, keywords, "
+                "SELECT id, type, name, category, strength, pattern, keywords, "
                 "enabled, builtin, updated_by, updated_at "
                 "FROM security_rules WHERE id = ?",
                 (rule_id,)
@@ -341,10 +377,15 @@ def get_merged_rules_for_scanner(extra_files=None) -> dict:
     enabled = store.list_enabled()
     keyword_rules = []
     regex_rules = []
+    # The scanner's "type" is this table's "category". Before v0.8.2 this was
+    # derived from the rule name, which silently degraded 'credential' into
+    # whatever the name happened to start with — and the scanner keys both its
+    # de-duplication and its LLM-review matching on that value.
     for r in enabled:
+        category = r.get("category") or "unknown"
         if r["type"] == "keyword":
             keyword_rules.append({
-                "type": r.get("name", "").split("(")[0].strip() or "unknown",
+                "type": category,
                 "name": r["name"],
                 "strength": r["strength"],
                 "keywords": r.get("keywords") or [],
@@ -352,7 +393,7 @@ def get_merged_rules_for_scanner(extra_files=None) -> dict:
         elif r["type"] == "regex":
             try:
                 regex_rules.append({
-                    "type": r.get("name", "").split("(")[0].strip() or "unknown",
+                    "type": category,
                     "name": r["name"],
                     "strength": r["strength"],
                     "pattern": _re.compile(r["pattern"], _re.IGNORECASE),

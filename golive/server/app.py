@@ -275,7 +275,11 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             if not self._api_read_allowed():
                 self._send_json(401, {"error": "unauthorized"})
                 return
-            sites = self.registry.list_all()
+            # Page past list_all()'s 200-row cap: this response carries a
+            # "total" that the admin portal and external scripts trust, so a
+            # truncated read reports a wrong count rather than an empty one.
+            from golive.backends.registry import paginated_registry_list
+            sites = paginated_registry_list(self.registry)
             self._send_json(200, {"sites": sites, "total": len(sites)})
             return
 

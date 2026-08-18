@@ -3,6 +3,93 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.2] - 2026-08-18
+
+A security pass over the publish path. The scan gate now separates
+credentials from content warnings, and every route that writes HTML to
+storage was traced and accounted for. Most of what follows was found by
+building the test rather than by reading the code.
+
+### Security
+
+- **`--skip-scan` could publish a live credential.** One flag waived the
+  entire scan, so a page carrying a private key, a database DSN or an API
+  token published without complaint. The gate now separates two kinds of
+  finding: credentials (private keys, DSNs, cloud keys, bearer tokens,
+  `password=`, national ID numbers) **block regardless of any flag**, while
+  content findings (salary, personal-information vocabulary) warn and
+  publish as before, with the new `--skip-content-scan` to silence the
+  warning. `--skip-scan` keeps working as
+  an alias for the content waiver and prints a deprecation notice; it is not
+  scheduled for removal.
+- **The block message printed the secret it was blocking.** Findings go to
+  stderr, CI logs and screenshots, so a blocked publish leaked the value it
+  was protecting. Redaction was only shaped for digit runs and `key=value`;
+  a DSN password (`://user:pw@host`) fell straight through, and one field
+  truncated the match instead of masking it. All output now passes through a
+  single redaction function.
+- **A strong password escaped redaction precisely because it was strong.**
+  The mask required the first two characters of a value to be alphanumeric,
+  so `password=P@ssw0rd…` — punctuation in third position — was left intact
+  while a weak all-letters password was masked correctly.
+- **Five common token formats were not detected at all**: GitHub personal
+  access tokens (`ghp_`/`gho_`/`ghs_` and fine-grained `github_pat_`), PyPI
+  tokens, Slack tokens and Google API keys. A GitHub token in a page raised
+  only a waivable content warning.
+- **Restoring an archive skipped the scan entirely.** `golive import` wrote
+  HTML straight to storage, so an archive from another machine could carry a
+  credential onto a live page. Import now scans each page and holds back
+  only the offending one — the rest of the restore proceeds, since import is
+  not atomic and aborting midway is the worse outcome. Held-back pages are
+  reported with the secret redacted, and the exit code is non-zero so a
+  scripted restore cannot report success while pages are missing.
+- **Setup documentation was blocked as if it were a leak.** `password=***`
+  and `API_KEY=<your-key-here>` in a guide were treated as credentials.
+  Blocking documentation is what teaches people to publish with the scan
+  waived, which is how a real secret gets through later. Placeholder values
+  (`***`, `$DB_PASSWORD`, `{{ token }}`, `REPLACE_ME`, entity-encoded
+  `&lt;your-key-here&gt;`, empty values) are now exempt — but the
+  placeholder must be the *entire* value: `password=xxxRealSecret` is a
+  secret, not a placeholder, and still blocks.
+
+### Fixed
+
+- **`golive list` and `golive doctor` stopped at 200 sites**, and
+  `/api/sites` reported that truncated figure as the total. `list_all(limit=N)`
+  returns the first N rows rather than page N, so anyone past 200 sites saw a
+  silently short list. All three now page through the registry.
+- **`golive export` could pack the same site twice.** The paging helper
+  accumulated each batch, but every larger request re-returned rows already
+  seen; at exactly 500 sites the archive contained 1000 registry rows. Found
+  by counting rows in a real export rather than trusting the helper.
+- **`golive migrate-check` missed the inline editor and mislabelled
+  everything else.** Detection inferred layers from hardcoded `<script>` id
+  strings, one of which (`inline-editor-layer`) never existed — the real id
+  is `golive-inline-editor`, so an editor layer went unreported. Watermark
+  and editor layers were also advised that "republishing replaces this
+  automatically", which is only true of data layers.
+- **Injected layers now identify themselves.** Every injected `<script>`
+  carries `data-golive-layer`, `data-golive-schema` and
+  `data-golive-version`, and the layer list in `golive/inject/__init__.py`
+  is the single source both injection and detection derive from. Detection
+  falls back to the attribute when an id is unrecognised, so a layer from a
+  newer or older release is still found.
+- **Security rule categories were lost on the way to the scanner.** The
+  `security_rules` table used one column for both rule shape and sensitivity
+  category, so every stored rule reached the scanner as the same category and
+  reported under the wrong label. Existing databases migrate transparently.
+
+### Added
+
+- **A scanner corpus** at `tests/corpus/`: 14 pages that must be refused and
+  11 that must publish cleanly, walked at run time so adding a case means
+  adding a file. The false-positive half matters as much as the other — a
+  scanner that cries wolf gets routed around. Three of the security fixes
+  above were found by running this corpus for the first time.
+- A test that pins the number of `storage.publish()` call sites per module,
+  so a new write path forces a deliberate decision about whether its HTML is
+  trusted.
+
 ## [0.8.1] - 2026-08-17
 
 ### Fixed — Supabase, verified against a real project

@@ -31,7 +31,7 @@ from __future__ import annotations
 import json as _json
 import re
 
-from golive.inject import TEMPLATE_SCRIPT_ID
+from golive.inject import TEMPLATE_SCRIPT_ID, layer_attrs
 
 _JS_TEMPLATE = r"""
 /* ============================================================
@@ -381,7 +381,8 @@ def generate_js(model_code: str, data_version: str = "1.0.0",
         user_id_json=_json_for_script(user_id),
         mode_json=_json_for_script(mode or "supabase"),
     )
-    return f'<script id="{TEMPLATE_SCRIPT_ID}">\n{js_code}\n</script>'
+    return (f'<script id="{TEMPLATE_SCRIPT_ID}" {layer_attrs("data")}>'
+            f'\n{js_code}\n</script>')
 
 
 # Shared escaping helpers — single source of truth in inject/_escape.py.

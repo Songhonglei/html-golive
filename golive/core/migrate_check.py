@@ -57,16 +57,71 @@ def _intranet_api_path_patterns() -> list:
             for p, label, advice in pats]
 
 
-_SCRIPT_ID_RE = re.compile(
-    r'<script[^>]+id=["\'](template-data-layer|supabase-data-layer|'
-    r'bi-data-layer|api-proxy-layer|access-data-layer|watermark-layer|'
-    r'inline-editor-layer)["\']', re.IGNORECASE)
+def _script_id_re() -> "re.Pattern":
+    """Match any golive-injected layer, current or legacy.
+
+    Built from ``golive.inject.LAYERS`` rather than a literal list. The
+    literal list drifted: it looked for ``inline-editor-layer`` while the
+    editor injects ``golive-inline-editor``, so editor leftovers were never
+    reported — and a regex that matches nothing is indistinguishable from a
+    clean page.
+    """
+    from golive.inject import all_script_ids
+    alternatives = "|".join(re.escape(sid) for sid in all_script_ids())
+    return re.compile(
+        r'<script[^>]+id=["\'](' + alternatives + r')["\']', re.IGNORECASE)
+
+
+_SCRIPT_ID_RE = _script_id_re()
+
+#: Also match the explicit attribute, so a layer is still recognised if its
+#: element id is ever renamed.
+_LAYER_ATTR_RE = re.compile(
+    r'<script[^>]*data-golive-layer=["\'](\w+)["\']', re.IGNORECASE)
+
+
+def _describe_layer(line_no: int, script_id: str) -> dict:
+    """Describe one leftover layer, with advice that fits what it actually is.
+
+    Every match used to be reported as a leftover *data* layer, advising that
+    "republishing swaps in the current data layer automatically". That is true
+    for the data layers and wrong for the others: republishing does not
+    re-inject a watermark or the editor unless the corresponding flag is set,
+    so a page could be declared fine while quietly keeping either one.
+    """
+    from golive.inject import layer_by_script_id
+
+    layer = layer_by_script_id(script_id)
+    if layer is None:
+        # A layer this version no longer injects.
+        return {"line": line_no, "text": script_id,
+                "label": _t("migrate.label_layer_legacy"),
+                "advice": _t("migrate.advice_layer_legacy")}
+    if layer.is_data:
+        return {"line": line_no, "text": script_id,
+                "label": _t("migrate.label_datalayer_residue"),
+                "advice": _t("migrate.advice_datalayer_residue")}
+    return {"line": line_no, "text": script_id,
+            "label": _t("migrate.label_layer_kept", label=layer.label),
+            "advice": _t("migrate.advice_layer_kept", label=layer.label)}
 
 _TPL_CALL_RE = re.compile(r"\bTemplateAPI\s*\.\s*(\w+)")
 _SB_CALL_RE = re.compile(r"\bSupabaseAPI\s*\.\s*(\w+)")
 
 
 # ── scan ─────────────────────────────────────────────────────────────────────
+
+def _describe_layer_by_kind(line_no: int, kind: str) -> dict:
+    """Describe a layer found by its ``data-golive-layer`` attribute."""
+    from golive.inject import LAYERS
+
+    layer = next((item for item in LAYERS if item.kind == kind), None)
+    if layer is None:
+        return {"line": line_no, "text": kind,
+                "label": _t("migrate.label_layer_legacy"),
+                "advice": _t("migrate.advice_layer_legacy")}
+    return _describe_layer(line_no, layer.script_id)
+
 
 def scan_html(html: str) -> dict:
     """Return {domain_hits, api_path_hits, layer_hits, tpl_calls, sb_calls}.
@@ -99,10 +154,15 @@ def scan_html(html: str) -> dict:
                     "label": label, "advice": advice})
         m = _SCRIPT_ID_RE.search(line)
         if m:
-            findings["layer_hits"].append({
-                "line": i, "text": m.group(1),
-                "label": _t("migrate.label_datalayer_residue"),
-                "advice": _t("migrate.advice_datalayer_residue")})
+            findings["layer_hits"].append(_describe_layer(i, m.group(1)))
+        else:
+            # No known id, but the tag declares itself a golive layer: report
+            # it anyway. This is what stops a future id rename from silently
+            # disabling detection, the way `inline-editor-layer` did.
+            attr = _LAYER_ATTR_RE.search(line)
+            if attr:
+                findings["layer_hits"].append(
+                    _describe_layer_by_kind(i, attr.group(1)))
 
     for m in _TPL_CALL_RE.finditer(html):
         meth = m.group(1)

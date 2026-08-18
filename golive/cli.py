@@ -115,8 +115,14 @@ def cmd_publish(args) -> int:
     html = publish_utils.check_html_size(html, compress=args.compress)
     publish_utils.check_title_missing(html)
 
-    # security scan
-    ok, _scan = run_scan(html, skip_scan=args.skip_scan)
+    # security scan — credential findings are never skippable
+    if getattr(args, "skip_scan", False):
+        print(t("scanner.deprecated_skip_scan"), file=sys.stderr)
+    ok, _scan = run_scan(
+        html,
+        skip_scan=getattr(args, "skip_scan", False),
+        skip_content=getattr(args, "skip_content_scan", False),
+    )
     if not ok:
         return 1
 
@@ -301,7 +307,10 @@ def _apply_editor_layer(html: str, site: dict, registry,
 
 def cmd_list(args) -> int:
     from golive.backends.factory import get_registry
-    sites = get_registry().list_all()
+    from golive.backends.registry import paginated_registry_list
+    # Every site, not just the first page: list_all() caps at 200 and gives no
+    # hint that it truncated, so a bare call quietly hides the rest.
+    sites = paginated_registry_list(get_registry())
     if not sites:
         print(t("list.empty"))
         return 0
@@ -714,7 +723,8 @@ def _doctor_registry_info(cfg) -> dict:
             reg = get_registry(cfg)
             out["location"] = (getattr(cfg.registry, "supabase_table", "")
                                or "golive_sites")
-        sites = reg.list_all()
+        from golive.backends.registry import paginated_registry_list
+        sites = paginated_registry_list(reg)
         out["sites"] = len(sites)
         out["detail"] = t("doctor.registry.site_count", count=len(sites))
         if (cfg.storage.backend if cfg else "local") in ("", "local"):
@@ -1821,11 +1831,26 @@ def cmd_import(args) -> int:
     if result.get("html_files_skipped"):
         print(f"  HTML files kept:      {result['html_files_skipped']}"
               f"  (skipped sites keep their live HTML)")
+    blocked = result.get("html_files_blocked") or []
+    if blocked:
+        # Not an error: the restore worked, these pages were held back. Say
+        # which ones and why, since the operator has to act on each.
+        print(f"\n  🚫 {len(blocked)} page(s) held back — credential found "
+              f"in the archived HTML:")
+        for item in blocked:
+            where = f"/{item['slug']}" if item.get("slug") else item["site_id"]
+            names = ", ".join(
+                f"{f['name']}: {f['keyword']}" for f in item["findings"][:2])
+            print(f"    {where}  ({names})")
+        print("    These pages were not written. Remove the secret from the "
+              "archive, or publish them individually after editing.")
     if result["errors"]:
         print(f"\n  ⚠️  {len(result['errors'])} error(s):")
         for e in result["errors"]:
             print(f"    {e}")
-    return 1 if result["errors"] else 0
+    # Non-zero when anything was held back, so a scripted restore does not
+    # report success while some pages are missing.
+    return 1 if (result["errors"] or blocked) else 0
 
 
 # ═════════════════════════════════ migrate ══════════════════════════════════
@@ -1904,6 +1929,10 @@ def main(argv=None) -> int:
     p.add_argument("--update", default="", help=t("arg.publish.update"))
     p.add_argument("--owner", default="", help=t("arg.publish.owner"))
     p.add_argument("--compress", action="store_true", help=t("arg.publish.compress"))
+    p.add_argument("--skip-content-scan", action="store_true",
+                   help=t("arg.publish.skip_content_scan"))
+    # Deprecated in v0.8.2: used to skip the whole scan, including credential
+    # findings. Now equivalent to --skip-content-scan, with a warning.
     p.add_argument("--skip-scan", action="store_true", help=t("arg.publish.skip_scan"))
     p.add_argument("--data-model", default="",
                    help=t("arg.publish.data_model"))

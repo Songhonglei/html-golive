@@ -142,6 +142,56 @@ def _contains_cjk(s: str) -> bool:
     return bool(_CJK_RE.search(s))
 
 
+#: What follows a credential keyword when it is documentation, not a secret:
+#: ``password=***``, ``API_KEY=<your-key-here>``, ``token: {{ token }}``,
+#: ``secret_key = "REPLACE_ME"``, ``pwd=$DB_PASSWORD``.
+_PLACEHOLDER_VALUE_RE = re.compile(
+    r'''\s*["'`]?\s*(
+          [*x•.]{2,}                        # ***  xxx  ...
+        | <[^>]{0,40}>                       # <your-key-here>
+        | \{\{?[^}]{0,40}\}?\}               # {{ token }} / {KEY}
+        | \$[A-Za-z_][A-Za-z0-9_]*           # $DB_PASSWORD
+        | %[A-Za-z_][A-Za-z0-9_]*%           # %TOKEN%
+        | (?:your|my|the)[\s_\-]?[a-z_\-]{0,20}(?:key|token|secret|password)
+        | (?:xxx+|yyy+|zzz+|foo|bar|baz|todo|tbd|changeme|change_me)
+        | replace[\s_\-]?me
+        | (?:placeholder|example|sample|dummy|fake|redacted)[a-z_\-]{0,12}
+        | \.\.\.
+      )''',
+    re.IGNORECASE | re.VERBOSE)
+
+
+def _is_placeholder_at(content: str, idx: int, keyword: str) -> bool:
+    """True when the keyword at ``idx`` is followed by a placeholder value.
+
+    ``password=***`` in a setup guide is not a leaked password, and blocking
+    it teaches people to publish with the scan waived — which is how a real
+    secret gets through later. Only applies to assignment-shaped keywords
+    (``password=``, ``api_key``): a bare mention was already only a weak hit.
+    """
+    tail = content[idx + len(keyword):idx + len(keyword) + 64]
+    # Decode entities first: a guide written in HTML carries the placeholder
+    # as `&lt;your-key-here&gt;`, and matching the raw text misses it.
+    import html as _html
+    tail = _html.unescape(tail)
+    # Skip an "=" or ":" that is part of the value, not the keyword.
+    tail = re.sub(r'^\s*[=:]\s*', '', tail, count=1)
+    match = _PLACEHOLDER_VALUE_RE.match(tail)
+    if match:
+        # The placeholder has to *be* the whole value, not merely start it.
+        # Matching a prefix would hand out a bypass: `password=xxxRealSecret`
+        # would read as a placeholder and publish the secret after it.
+        rest = tail[match.end():]
+        rest = rest.lstrip('"\'`')
+        # Anything that continues the value (word characters, punctuation used
+        # in secrets) means this was not a placeholder after all. A closing
+        # tag, quote, whitespace or line end is fine.
+        if not re.match(r'[A-Za-z0-9+/=@!$%^&*_\-.]', rest):
+            return True
+    # An empty value is a template too: `password=` at end of line.
+    return not tail.strip() or tail.lstrip().startswith(("\n", "<"))
+
+
 def _find_keyword_hits(content: str, keyword: str) -> list:
     """Return character offsets where keyword truly matches (boundary-aware)."""
     if not keyword:
@@ -179,6 +229,41 @@ def _find_keyword_hits(content: str, keyword: str) -> list:
     return hits
 
 
+def _mask_secret_literal(s: str) -> str:
+    """Redact the secret-bearing part of a literal, keeping it recognisable.
+
+    Single source of truth for redaction: both the context snippet and the
+    ``keyword`` field on a finding go through here. The finding is printed to
+    stderr and may end up in CI logs, terminal scrollback or a screenshot
+    attached to a bug report, so "truncate to N characters" is not enough —
+    the first 24 characters of a DSN or an API key are the secret.
+    """
+    # scheme://user:password@host  → keep scheme and user, drop the password
+    s = re.sub(
+        r'(\b[a-z][a-z0-9+.\-]*://[^\s:/@]{1,64}:)[^\s@/]{2,}(@|$)',
+        r'\1****\2', s, flags=re.IGNORECASE)
+    # key=value / token: value. The value character class has to include the
+    # punctuation people actually use in passwords (@!$%^&*…), or a strong
+    # password is precisely the one that escapes redaction.
+    # The kept prefix must accept the same characters as the redacted tail:
+    # requiring [A-Za-z0-9] for the first two meant "P@ssw0rd…" — a password
+    # with punctuation early on — skipped redaction entirely.
+    _VALUE_CHAR = r'[A-Za-z0-9+/=@!$%^&*()_\-.,;:?~|]'
+    s = re.sub(
+        r'((?:key|token|secret|password|passwd|pwd)\s*[=:]\s*["\']?)'
+        r'(' + _VALUE_CHAR + r'{2})' + _VALUE_CHAR + r'{4,}',
+        r'\1\2****', s, flags=re.IGNORECASE)
+    # Recognisable credential prefixes standing alone
+    s = re.sub(
+        r'\b(sk-|AKIA|ghp_|pypi-|eyJ)([A-Za-z0-9\-_/+=]{8,})',
+        lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s)
+    # Bearer <jwt-or-opaque>
+    s = re.sub(r'\b(Bearer\s+)([A-Za-z0-9\-_.=]{6,})',
+               lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s,
+               flags=re.IGNORECASE)
+    return s
+
+
 def _mask_context(text: str, keyword: str, window: int = 30,
                   at_idx=None) -> str:
     """Extract masked context around a hit (numbers & secrets partly hidden)."""
@@ -191,11 +276,10 @@ def _mask_context(text: str, keyword: str, window: int = 30,
     start = max(0, idx - window)
     end = min(len(text), idx + len(keyword) + window)
     snippet = text[start:end].strip()
+    # Long digit runs (ID numbers, card numbers) — context-only, since the
+    # keyword field for these rules is the pattern name, not the value.
     snippet = re.sub(r'(\d{2})\d{4,}(\d{2})', r'\1****\2', snippet)
-    snippet = re.sub(
-        r'((?:key|token|secret|password|passwd|pwd)\s*[=:]\s*["\']?)'
-        r'([A-Za-z0-9+/]{4})[A-Za-z0-9+/=]{4,}',
-        r'\1\2****', snippet, flags=re.IGNORECASE)
+    snippet = _mask_secret_literal(snippet)
     return f"...{snippet}..."
 
 
@@ -231,6 +315,13 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
         for kw in rule.get("keywords") or []:
             kw = str(kw)
             hits = _find_keyword_hits(content, kw)
+            # A strong credential keyword followed only by placeholders is
+            # documentation. Filtered here rather than in the rule so the
+            # rule stays a plain keyword list.
+            if hits and strength == "strong" \
+                    and rule.get("type") == "credential":
+                hits = [i for i in hits
+                        if not _is_placeholder_at(content, i, kw)]
             if not hits:
                 continue
             key = (rule.get("type"), kw.lower())
@@ -257,7 +348,10 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
         result.matched_details.append({
             "type": rule["type"],
             "name": rule["name"],
-            "keyword": m.group(0)[:24],
+            # Truncating at 24 chars is not redaction: a DSN password or an
+            # API key is mostly readable in its first 24 characters, and this
+            # value is printed on the BLOCK line.
+            "keyword": _mask_secret_literal(m.group(0)[:48]),
             "strength": rule["strength"],
             "context": _mask_context(content, m.group(0), at_idx=m.start()),
         })
@@ -270,16 +364,33 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
 # ── publish gate ─────────────────────────────────────────────────────────────
 
 def run_scan(html: str, skip_scan: bool = False,
-             extra_rule_files=None, cfg=None) -> tuple:
+             extra_rule_files=None, cfg=None,
+             skip_content: bool = False) -> tuple:
     """Scan before publish. Returns (ok_to_publish, ScanResult|None).
 
-    M3: when ``security.llm.base_url`` is configured, weak hits get a
-    second-pass semantic review by the LLM (see ai_review.py). Strong
-    hits always block — they are never sent to the LLM.
+    Two kinds of finding, and only one of them is ever skippable:
+
+    * **strong** — a literal secret: a private key, a database DSN, an
+      ``AKIA…`` key, an 18-digit national ID. These block the publish and
+      **no flag can wave them through**. A page carrying a live credential
+      is not a false positive worth arguing about, and skipping it puts the
+      secret on a URL someone can fetch.
+    * **weak** — nouns that merely *suggest* sensitive content ("salary",
+      "token"), which legitimately appear in documentation. These warn, and
+      ``skip_content=True`` silences them.
+
+    ``skip_scan`` is the pre-v0.8.2 flag that skipped *everything*. It is
+    accepted for compatibility and now means the same as ``skip_content``:
+    the caller is telling us about business content, not asking to publish
+    a private key. See ``cli.py`` for the deprecation notice.
+
+    When ``security.llm.base_url`` is configured, weak hits get a
+    second-pass semantic review (see ai_review.py). Strong hits are never
+    sent to the LLM — they are not a judgement call.
     """
-    if skip_scan:
-        print(_t("scanner.skip"), file=sys.stderr)
-        return True, None
+    # Legacy --skip-scan degrades to "skip the content warnings", never to
+    # "skip the credential scan".
+    skip_content = skip_content or skip_scan
 
     # strict mode: user demands AI review; none configured -> refuse
     from golive.security.ai_review import review_hits, strict_mode_gate
@@ -299,6 +410,12 @@ def run_scan(html: str, skip_scan: bool = False,
         return False, result
 
     weak = result.weak_hits
+    if weak and skip_content:
+        # Content warnings waived. The scan still ran, and the result is
+        # still returned so callers (and the audit log) see what was found.
+        print(_t("scanner.skip_content", count=len(weak)), file=sys.stderr)
+        return True, result
+
     if weak:
         review = review_hits(weak, cfg)
         if review.ai_used:

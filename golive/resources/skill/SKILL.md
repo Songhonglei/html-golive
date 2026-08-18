@@ -11,7 +11,7 @@ description: >-
   `window.TemplateAPI`, or administer sites, owners and maintainers.
   Trigger phrases include "publish this page", "deploy this HTML",
   "put this on golive", "update the site", "roll it back", "golive".
-version: 0.8.1
+version: 0.8.2
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---
@@ -291,8 +291,11 @@ Full CLI reference: `references/cli.md`. Deeper data-layer notes:
 
 1. Probe (`--version`, `doctor`, `list`) before acting.
 2. Prefer `--update <slug>` over creating near-duplicate sites.
-3. Never pass `--host 0.0.0.0` or `--skip-scan` unless the user asked;
-   flag the exposure when you do.
+3. Never pass `--host 0.0.0.0` or `--skip-content-scan` unless the user
+   asked; flag the exposure when you do. A credential finding cannot be
+   waived by any flag — do not try. Report what was found and let the user
+   remove it, or replace the value with a placeholder (`password=***`,
+   `API_KEY=<your-key-here>`), which publishes fine.
 4. `rollback` and `publish --update` overwrite live content — show the
    plan (`--dry-run` for rollback) and confirm first.
 5. Report the actual CLI output, including the real URL. Do not invent

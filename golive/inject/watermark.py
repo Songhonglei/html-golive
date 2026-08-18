@@ -24,6 +24,8 @@ Kill switch: ``GOLIVE_WATERMARK_OFF=1`` disables injection entirely.
 
 from __future__ import annotations
 
+from golive.inject import layer_attrs
+
 import os
 import re
 from datetime import datetime
@@ -188,7 +190,8 @@ def generate_js(text: str = "", slug: str = "", auth_me_url: str = "",
         rotation_json=_json_for_script(int(wm.rotation)),
         color_json=_json_for_script(str(wm.color)),
     )
-    return f'<script id="{WATERMARK_SCRIPT_ID}">\n{js_code}\n</script>'
+    return (f'<script id="{WATERMARK_SCRIPT_ID}" {layer_attrs("watermark")}>'
+            f'\n{js_code}\n</script>')
 
 
 def remove_from_html(html: str) -> str:
@@ -228,7 +231,8 @@ def inject_into_html(html: str, text: str = "", slug: str = "",
     if cfg.watermark.cdn_url:
         import html as _html_mod
         src = _html_mod.escape(cfg.watermark.cdn_url, quote=True)
-        script_tag = f'<script id="{WATERMARK_SCRIPT_ID}" src="{src}"></script>'
+        script_tag = (f'<script id="{WATERMARK_SCRIPT_ID}" '
+                      f'{layer_attrs("watermark")} src="{src}"></script>')
     else:
         script_tag = generate_js(text=text, slug=slug,
                                  auth_me_url=auth_me_url, cfg=cfg)

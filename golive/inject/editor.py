@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from golive.inject import layer_attrs
 from golive.inject._escape import _json_for_script, _safe_comment
 
 EDITOR_SCRIPT_ID = "golive-inline-editor"
@@ -406,7 +407,8 @@ def generate_js(slug: str, site_name: str = "", api_base: str = "") -> str:
         site_name_json=_json_for_script(site_name or ""),
         api_base_json=_json_for_script(api_base.rstrip("/") if api_base else ""),
     )
-    return f'<script id="{EDITOR_SCRIPT_ID}">\n{js_code}\n</script>'
+    return (f'<script id="{EDITOR_SCRIPT_ID}" {layer_attrs("editor")}>'
+            f'\n{js_code}\n</script>')
 
 
 def remove_from_html(html: str) -> str:

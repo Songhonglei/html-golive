@@ -23,7 +23,8 @@ TRANSLATIONS = {
     "arg.publish.update": "Update an existing site (id or slug)",
     "arg.publish.owner": "Site owner identifier",
     "arg.publish.compress": "Auto-compress inline images",
-    "arg.publish.skip_scan": "Skip the security scan",
+    "arg.publish.skip_content_scan": "Waive content warnings (salary, PII nouns). Credential findings still block.",
+    "arg.publish.skip_scan": "Deprecated: use --skip-content-scan (credential findings always block)",
     "arg.publish.data_model": "TemplateAPI modelCode (comma-separated for multiple); auto-injects data-layer JS when a backend is configured",
     "arg.publish.enable_editor": "Enable the online editor (injects editor JS + marks site editable)",
     "arg.publish.watermark": "Inject a page watermark; optional static text (omit → use OIDC identity / yaml watermark.text / page meta tag)",
@@ -645,6 +646,10 @@ TRANSLATIONS = {
     "migrate.advice_data_gateway": "move to the data backend (Supabase PostgREST)",
     "migrate.label_builder_api": "internal builder API path",
     "migrate.advice_builder_api": "SupabaseAPI talks to Supabase REST directly",
+    "migrate.label_layer_legacy": "layer from an older golive version",
+    "migrate.advice_layer_legacy": "this version no longer injects it; remove the script tag",
+    "migrate.label_layer_kept": "leftover {label} injection",
+    "migrate.advice_layer_kept": "republishing does NOT replace this — the {label} is re-injected only when its own flag is set, so remove the tag or pass the flag again",
     "migrate.label_datalayer_residue": "leftover data-layer injection",
     "migrate.advice_datalayer_residue": "republishing swaps in the current data layer automatically",
     "punct.colon": ": ",
@@ -801,7 +806,7 @@ TRANSLATIONS = {
     "migrate.api_item": "   {path}:{line}  {text}",
     "migrate.api_advice": "     ↳ {advice}",
     "migrate.api_more": "   ... {count} more",
-    "migrate.layer_header": "⚠️  Internal data-layer injection remnants ({count} found):",
+    "migrate.layer_header": "⚠️  golive layer injections found in this page ({count}):",
     "migrate.layer_item": "   {path}:{line}  <script id=\"{text}\">",
     "migrate.layer_advice": "     ↳ {advice}",
     "migrate.data_stats_header": "ℹ️  Data layer call statistics:",
@@ -813,11 +818,19 @@ TRANSLATIONS = {
     "migrate.summary": "{count} issue(s) to address (see list above). Migration guide: docs/data-layer.md",
 
     # ── security scanner ──────────────────────────────────────────────
-    "scanner.skip": "⏭️  Security scan skipped (--skip-scan)",
+    "scanner.skip_content": "⏭️  {count} content warning(s) waived "
+                            "(--skip-content-scan); credential scan still ran",
+    "scanner.deprecated_skip_scan": "⚠️  --skip-scan is deprecated and now "
+                                    "only waives content warnings. Credential "
+                                    "findings always block. Use "
+                                    "--skip-content-scan instead.",
     "scanner.block_title": "\n🚫 Security scan failed — suspected sensitive content, publish blocked:",
     "scanner.block_item": "   · [{name}] {keyword}",
     "scanner.block_context": "     Context: {context}",
-    "scanner.block_hint": "\n   Please remove the above content and retry; confirmed false positives can be skipped with --skip-scan.",
+    "scanner.block_hint": "\n   Remove the credential above and publish again. "
+                          "This cannot be skipped: no flag will publish a page "
+                          "carrying a live secret. If the value is already "
+                          "public or revoked, replace it with a placeholder.",
     "scanner.warn_title": "\n⚠️  Security scan notice — suspected sensitive keywords (does not block publish):",
     "scanner.warn_item": "   · [{name}] {keyword}{suffix}",
     "scanner.warn_hint": "   Please confirm the page does not contain real sensitive data.",

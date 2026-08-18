@@ -35,9 +35,14 @@ from pathlib import Path
 from typing import Optional
 
 # ── pagination constants ────────────────────────────────────────────────────
-# PAGINATION_SIZE is deliberately larger than the registry default (200) to
-# reduce round-trips, but not so large that a single page overwhelms memory.
-REGISTRY_PAGE_SIZE = 500
+# Deliberately larger than the registry default (200) to reduce round-trips,
+# but not so large that a single page overwhelms memory. Re-exported from the
+# registry package so the page size has one definition.
+from golive.backends.registry import (  # noqa: E402
+    REGISTRY_PAGE_SIZE,
+    paginated_registry_list,
+)
+
 DATA_PAGE_SIZE = 500
 
 
@@ -46,27 +51,18 @@ DATA_PAGE_SIZE = 500
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _paginated_registry_list(registry, page_size: int = REGISTRY_PAGE_SIZE):
-    """Iterate every site in the registry, paging past list_all's default cap.
+    """Deprecated alias — see ``golive.backends.registry``.
 
-    ``list_all(limit=N)`` returns at most N rows.  If it returns exactly N,
-    there may be more — we must ask again with a higher limit.  We do this
-    by exponentially increasing the limit until we get fewer rows than
-    requested.
+    Kept because the export tests and the truncation guard reference it by
+    name. The implementation moved to the registry package so that ``list``
+    and ``doctor`` share it rather than growing their own copies.
 
-    This is safe because the registry is not expected to have millions of
-    sites; even 50k sites is a few hundred KB of JSON.
+    The earlier version here accumulated every page with ``extend()``, but
+    ``list_all(limit=N)`` returns the *first* N rows, not the Nth page — so
+    once an install passed 500 sites the first page was counted twice. An
+    export of 500 sites reported 1000 and archived each of them twice.
     """
-    # First try with the given page_size, then exponentially grow if needed.
-    limit = page_size
-    all_sites = []
-    while True:
-        batch = registry.list_all(limit=limit)
-        all_sites.extend(batch)
-        if len(batch) < limit:
-            break
-        # We got exactly `limit` rows — there may be more.  Grow.
-        limit *= 2
-    return all_sites
+    return paginated_registry_list(registry, page_size)
 
 
 def _paginated_data_list(store, page_size: int = DATA_PAGE_SIZE):
@@ -299,6 +295,27 @@ def _find_existing_row(data_store, model_code: str, name: str,
             continue
         return row
     return None
+
+
+def _credential_findings(html: str) -> list:
+    """Strong (credential) findings in a page, as ``[{name, keyword}]``.
+
+    Used by import, which needs the verdict without the side effects of
+    ``run_scan``: no printing (import prints one summary at the end) and no
+    content warnings (these pages were already published once, so warning
+    about the word "salary" again is noise). A literal secret is different —
+    an archive is untrusted input, and restoring one would republish it.
+
+    Returns an empty list when the scanner is unavailable, so a missing
+    optional dependency cannot make a restore impossible.
+    """
+    try:
+        from golive.security.scanner import load_rules, scan_html
+        result = scan_html(html, load_rules())
+    except Exception:  # noqa: BLE001 — never block a restore on scanner setup
+        return []
+    return [{"name": d.get("name", ""), "keyword": d.get("keyword", "")}
+            for d in result.strong_hits]
 
 
 def _registry_total(registry):
@@ -573,6 +590,8 @@ def import_archive(
     # Sites that already existed and were left alone: their live HTML must
     # survive the import untouched.
     sites_skipped_ids = set()
+    # For reporting: original site_id → the archived registry row.
+    registry_by_id = {row.get("site_id", ""): row for row in registry_rows}
 
     for i, site in enumerate(registry_rows):
         site_id = site.get("site_id", "")
@@ -724,6 +743,7 @@ def import_archive(
     html_files_written = 0
 
     html_files_skipped = 0
+    html_files_blocked = []
 
     for orig_site_id, html in html_map.items():
         # Only write HTML for sites whose registry entry we actually wrote.
@@ -739,6 +759,24 @@ def import_archive(
         if orig_site_id in sites_skipped_ids:
             html_files_skipped += 1
             continue
+
+        # An archive can arrive from another machine, another colleague or a
+        # version-control checkout, so its pages are as untrusted as anything
+        # passed to `publish`. Scanned per page rather than up front, and a
+        # finding blocks only that page: aborting the whole restore would
+        # leave the operator unable to recover a backup because of one bad
+        # page — and since import is not atomic, mid-way is the worst place
+        # to stop. Content warnings are not consulted here; the pages were
+        # already published once.
+        blocking = _credential_findings(html)
+        if blocking:
+            html_files_blocked.append({
+                "site_id": orig_site_id,
+                "slug": (registry_by_id.get(orig_site_id) or {}).get("slug", ""),
+                "findings": blocking,
+            })
+            continue
+
         try:
             storage.publish(html, target_site_id, backup_previous=False)
             html_files_written += 1
@@ -754,6 +792,10 @@ def import_archive(
         "data_rows_imported": data_rows_imported,
         "data_rows_skipped": data_rows_skipped,
         "html_files_skipped": html_files_skipped,
+        # Pages held back because they carry a literal credential. Reported
+        # separately from `errors`: nothing malfunctioned, and the rest of the
+        # restore succeeded.
+        "html_files_blocked": html_files_blocked,
         "html_files_written": html_files_written,
         "conflicts": conflicts,
         "errors": errors,

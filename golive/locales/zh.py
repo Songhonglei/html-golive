@@ -26,7 +26,8 @@ TRANSLATIONS = {
     "arg.publish.update": "覆盖更新已有站点（id 或 slug）",
     "arg.publish.owner": "站点负责人标识",
     "arg.publish.compress": "自动压缩内联图片",
-    "arg.publish.skip_scan": "跳过安全扫描",
+    "arg.publish.skip_content_scan": "忽略内容告警（如薪酬、个人信息名词）；凭证类命中仍会拦截。",
+    "arg.publish.skip_scan": "已弃用：请改用 --skip-content-scan（凭证类命中一律拦截）",
     "arg.publish.data_model": "TemplateAPI modelCode（逗号分隔多个）；配置 data backend 后自动注入数据层 JS",
     "arg.publish.enable_editor": "开启在线编辑器（注入编辑器 JS + 标记站点可编辑）",
     "arg.publish.watermark": "注入页面水印；可选静态文本（不填则用 OIDC 身份 / yaml watermark.text / 页面 meta 标签）",
@@ -648,6 +649,10 @@ TRANSLATIONS = {
     "migrate.advice_data_gateway": "\u6539\u8d70 data backend\uff08Supabase PostgREST\uff09",
     "migrate.label_builder_api": "\u5185\u7f51 Builder API \u8def\u5f84",
     "migrate.advice_builder_api": "SupabaseAPI \u76f4\u8fde Supabase REST",
+    "migrate.label_layer_legacy": "旧版本 golive 注入的层",
+    "migrate.advice_layer_legacy": "当前版本已不再注入，可直接删除该 script 标签",
+    "migrate.label_layer_kept": "残留的{label}注入",
+    "migrate.advice_layer_kept": "重新发布不会替换它——{label}只在显式带上对应参数时才重新注入，因此请删除该标签或重新带上参数",
     "migrate.label_datalayer_residue": "\u6570\u636e\u5c42\u6ce8\u5165\u6b8b\u7559",
     "migrate.advice_datalayer_residue": "\u91cd\u65b0\u53d1\u5e03\u4f1a\u81ea\u52a8\u66ff\u6362\u4e3a\u5f53\u524d\u6570\u636e\u5c42",
     "punct.colon": "\uff1a",
@@ -804,7 +809,7 @@ TRANSLATIONS = {
     "migrate.api_item": "   {path}:{line}  {text}",
     "migrate.api_advice": "     ↳ {advice}",
     "migrate.api_more": "   ... 另有 {count} 处",
-    "migrate.layer_header": "⚠️  内网数据层注入残留（{count} 处）：",
+    "migrate.layer_header": "⚠️  页面中检出 golive 注入层（{count} 处）：",
     "migrate.layer_item": "   {path}:{line}  <script id=\"{text}\">",
     "migrate.layer_advice": "     ↳ {advice}",
     "migrate.data_stats_header": "ℹ️  数据层调用统计：",
@@ -816,11 +821,17 @@ TRANSLATIONS = {
     "migrate.summary": "共 {count} 类问题需要处理（见上方清单）。迁移指南：docs/data-layer.md",
 
     # ── security scanner ──────────────────────────────────────────────
-    "scanner.skip": "⏭️  已跳过安全扫描（--skip-scan）",
+    "scanner.skip_content": "⏭️  已忽略 {count} 条内容告警"
+                            "（--skip-content-scan）；凭证扫描仍已执行",
+    "scanner.deprecated_skip_scan": "⚠️  --skip-scan 已弃用，现在只忽略内容告警。"
+                                    "凭证类命中一律拦截。请改用 "
+                                    "--skip-content-scan。",
     "scanner.block_title": "\n🚫 安全扫描未通过 — 检测到疑似机密内容，发布已阻断：",
     "scanner.block_item": "   · [{name}] {keyword}",
     "scanner.block_context": "     上下文: {context}",
-    "scanner.block_hint": "\n   请删除上述内容后重试；确认为误报可用 --skip-scan 跳过。",
+    "scanner.block_hint": "\n   请删除上述凭证后重新发布。此项无法跳过："
+                          "没有任何参数可以发布带有真实密钥的页面。"
+                          "若该值已公开或已吊销，请替换为占位符。",
     "scanner.warn_title": "\n⚠️  安全扫描提示 — 检测到疑似敏感词（不阻断发布）：",
     "scanner.warn_item": "   · [{name}] {keyword}{suffix}",
     "scanner.warn_hint": "   请确认页面不含真实敏感数据。",

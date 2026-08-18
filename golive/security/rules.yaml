@@ -88,6 +88,27 @@ regex_rules:
     pattern: '\bsk-[A-Za-z0-9\-_]{20,}\b'
     strength: strong
   - type: credential
+    name: GitHub token
+    # ghp_ classic PAT / gho_ oauth / ghs_ server / github_pat_ fine-grained
+    pattern: '\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}\b'
+    strength: strong
+  - type: credential
+    name: GitHub 细粒度 token
+    pattern: '\bgithub_pat_[A-Za-z0-9_]{20,}\b'
+    strength: strong
+  - type: credential
+    name: PyPI token
+    pattern: '\bpypi-[A-Za-z0-9_\-]{20,}\b'
+    strength: strong
+  - type: credential
+    name: Slack token
+    pattern: '\bxox[abposr]-[A-Za-z0-9\-]{10,}\b'
+    strength: strong
+  - type: credential
+    name: Google API key
+    pattern: '\bAIza[A-Za-z0-9_\-]{35}\b'
+    strength: strong
+  - type: credential
     name: 私钥文件头
     # split on purpose so scanners don't flag this rules file itself
     pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----'

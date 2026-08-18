@@ -330,10 +330,28 @@ the site, size, and the snapshot id created.
 
 ## 13. Security
 
-- **Scanning**: every publish (and every editor save) is scanned for API
-  keys, private keys, connection strings, and PII. Strong hits **block**
-  the publish; weak hits warn. Extend with your own YAML rules or bypass a
-  false positive with `--skip-scan`.
+- **Scanning**: every publish, editor save and archive restore is scanned
+  for API keys, private keys, connection strings and PII. Findings come in
+  two kinds, and only one of them can be waived:
+
+  | finding | examples | effect |
+  |---|---|---|
+  | credential | private key, database DSN, `AKIA…`, `sk-…`, `ghp_…`, bearer token, `password=`, national ID | **blocks the publish — no flag will waive it** |
+  | content | salary, personal-information vocabulary | warns, publishes anyway; `--skip-content-scan` silences the warning |
+
+  A false positive on wording is waivable; a live secret is not. If a
+  credential is already public or revoked, replace it with a placeholder —
+  `password=***`, `API_KEY=<your-key-here>`, `$DB_PASSWORD` and
+  `{{ token }}` all publish fine, so documentation is not blocked.
+
+  `--skip-scan` still works as an alias for `--skip-content-scan` and prints
+  a deprecation notice. Extend the rules with your own YAML, or manage them
+  from the admin portal.
+
+  Restoring an archive scans each page and holds back only the pages that
+  carry a credential; the rest of the restore proceeds and the exit code is
+  non-zero, so a scripted restore cannot report success while pages are
+  missing.
 - **LLM review** *(optional)*: configure an OpenAI-compatible endpoint to
   have an LLM second-guess weak hits and cut false positives. Unset →
   skipped (rules still apply). Details: [security.md](security.md).

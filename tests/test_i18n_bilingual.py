@@ -82,7 +82,7 @@ class TestBilingualSwitching:
             ("bundle.start", {}),
             ("bundle.done", {}),
             ("migrate.clean", {}),
-            ("scanner.skip", {}),
+            ("scanner.skip_content", {"count": 1}),
         ]
 
         for key, kwargs in test_cases:

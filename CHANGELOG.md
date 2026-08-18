@@ -3,6 +3,58 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.4] - 2026-08-18
+
+0.8.3 claimed that a detected credential never reaches the block message.
+A follow-up audit disproved it the same day. **Upgrade from 0.8.3.**
+
+### Security
+
+- **A detected credential is no longer printed back.** 0.8.3 fixed this with
+  a hand-written list of shapes to redact, separate from the list of shapes
+  to detect — so `const password = "…"`, added to detection in 0.8.3, was
+  caught and then published into the block message, because redaction only
+  knew `password=` with no spaces. Redaction now runs the detection rules
+  themselves: anything recognisable as a credential is redactable by
+  construction, and a rule added to `rules.yaml` cannot be detected-but-
+  printed. Two more holes closed at the same time: a DSN password containing
+  `@` survived because the masker stopped at the first `@` (the same
+  character-class mistake that had let such a DSN past *detection* in
+  0.8.2), and secrets that the scanner lifts out of `<script>` blocks
+  appeared a second time with no `key=` around them, where every
+  shape-based pass necessarily missed them.
+- **Redaction stays useful.** Blanking the whole match satisfies "no secret
+  in the output" and fails the actual job — a DSN reduced to `post****`
+  does not say which of four database URLs to go fix. Scheme, user and host
+  are kept; only the password between them goes.
+- **Credentials in JSON and YAML config are now detected.** `{"db_password":
+  "…"}` and `api_key: "…"` published cleanly, because the rule required the
+  key name to be unquoted. Found while testing the redaction fix, not
+  reported.
+
+### Added
+
+- **Scan history is wired up.** 0.8.3 shipped the storage and the
+  `scan_keep` setting but nothing wrote to it or read from it, while the
+  release notes said `doctor` could tell a checked page from an unchecked
+  one. It can now: `golive doctor` reports records held, sites with a scan,
+  and how many sites have never been scanned. Refusals are recorded too —
+  "checked and rejected" and "never checked" are different facts.
+
+### Fixed
+
+- `init --skip-skill` help text now says that installing the agent skill
+  writes into `$HOME`, outside `GOLIVE_HOME`. The flag already existed; its
+  documentation did not mention the side effect, which matters for isolated
+  and CI runs.
+
+### Tests
+
+- `tests/test_redaction_no_leak.py` pins both halves: no secret survives
+  into a finding, and enough context survives to locate it. Verified by
+  putting each bug back and confirming the precise subtest turns red.
+- Corpus at 27 `must_block` / 16 `must_pass`.
+
 ## [0.8.3] - 2026-08-18
 
 An independent black-box audit of 0.8.2 filed reproducible counter-examples

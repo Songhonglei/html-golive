@@ -118,6 +118,30 @@ def _live_model_code(args) -> str:
         return ""
 
 
+def _record_scan(html: str, scan, site_id: str = "") -> None:
+    """File one scan in the history. Never let bookkeeping break a publish."""
+    try:
+        import hashlib
+
+        from golive import __version__
+        from golive.backends.registry.scans_store import get_scans_store
+        from golive.security.scanner import ruleset_hash
+        details = getattr(scan, "matched_details", []) or []
+        verdict = ("block" if getattr(scan, "blocked", False)
+                   else ("warn" if details else "pass"))
+        get_scans_store().record(
+            site_id=site_id,
+            content_sha256=hashlib.sha256(html.encode("utf-8")).hexdigest(),
+            ruleset_hash=ruleset_hash(),
+            scanner_version=__version__,
+            verdict=verdict,
+            categories=[d.get("type", "") for d in details if d.get("type")],
+            findings=details,
+        )
+    except Exception:  # noqa: BLE001 — history is a record, not a gate
+        pass
+
+
 def cmd_publish(args) -> int:
     from golive.backends.factory import get_registry, get_storage
     registry = get_registry()
@@ -148,6 +172,11 @@ def cmd_publish(args) -> int:
         skip_content=getattr(args, "skip_content_scan", False),
     )
     if not ok:
+        # Record the refusal too. "This page was checked and rejected" and
+        # "this page was never checked" are different facts, and only one of
+        # them means someone should go look at the page.
+        _record_scan(html, _scan,
+                     site_id=(getattr(args, "update", "") or ""))
         return 1
 
     # data-layer injection (window.TemplateAPI / window.SupabaseAPI)
@@ -190,6 +219,10 @@ def cmd_publish(args) -> int:
             html = _apply_editor_layer(html, site, registry, enable_now=True)
         storage.publish(html, site["site_id"], backup_previous=False)
         print(t("publish.published", name=site['name']))
+
+    # The site_id only exists once the site does, so the scan that cleared
+    # this publish is filed here rather than next to the scan itself.
+    _record_scan(html, _scan, site_id=site["site_id"])
 
     print(f"   site_id: {site['site_id']}")
     if site.get("slug"):
@@ -917,9 +950,36 @@ def _doctor_collect(port: int) -> dict:
         "registry": _doctor_registry_info(cfg),
         "data": _doctor_data_info(cfg),
         "skill": _doctor_skill_info(),
+        "scans": _doctor_scans_info(cfg),
         "deps": _doctor_deps_info(),
         "admin_url": admin_url,
     }
+
+
+def _doctor_scans_info(cfg) -> dict:
+    """How many sites have a scan on record, and how many do not.
+
+    The useful fact is the gap: a site with no scan record was published by
+    an older version or restored around the scanner, and nobody has checked
+    what is on it.
+    """
+    info = {"total": 0, "sites_with_scan": 0, "sites_without_scan": 0,
+            "keep": getattr(cfg.security, "scan_keep", 0), "error": ""}
+    try:
+        from golive.backends.factory import get_registry
+        from golive.backends.registry import paginated_registry_list
+        from golive.backends.registry.scans_store import get_scans_store
+        store = get_scans_store()
+        info["total"] = store.count()
+        sites = paginated_registry_list(get_registry())
+        for site in sites:
+            if store.latest_for_site(site.get("site_id", "")):
+                info["sites_with_scan"] += 1
+            else:
+                info["sites_without_scan"] += 1
+    except Exception as e:  # noqa: BLE001
+        info["error"] = str(e)
+    return info
 
 
 def _doctor_problems(rep: dict) -> list:
@@ -1034,6 +1094,19 @@ def _doctor_render(rep: dict, port: int) -> None:
             mark = t("doctor.skill_mismatch") if item["version"] != sk["packaged_version"] else \
                 t("doctor.service_version_ok")
             row("skill", f"{item['path']}  {ver}", mark)
+
+    sc = rep.get("scans") or {}
+    if sc.get("error"):
+        row("scan history", t("doctor.scans_error", error=sc["error"]))
+    else:
+        keep = sc.get("keep", 0)
+        row("scan history",
+            t("doctor.scans_summary",
+              total=sc.get("total", 0),
+              checked=sc.get("sites_with_scan", 0),
+              keep=(keep if keep > 0 else t("doctor.scans_keep_all"))),
+            t("doctor.scans_unchecked", n=sc["sites_without_scan"])
+            if sc.get("sites_without_scan") else "")
 
     row("admin portal", rep["admin_url"])
 

@@ -93,7 +93,7 @@ regex_rules:
     # Matches name → optional type/keyword noise → = or : → quoted value.
     # A quoted value of 6+ chars is required so `password = ""` and
     # `password: null` stay clean.
-    pattern: '(?:^|[^A-Za-z0-9_])(?:password|passwd|pwd|secret|api[_\-]?key|apikey|access[_\-]?key|secret[_\-]?key|client[_\-]?secret|auth[_\-]?token|access[_\-]?token|refresh[_\-]?token|private[_\-]?key|session[_\-]?token|app[_\-]?secret|db[_\-]?password|admin[_\-]?password)\s*[:=]\s*["''`][^"''`\s]{6,}["''`]'
+    pattern: '(?:^|[^A-Za-z0-9_])["'']?(?:password|passwd|pwd|secret|api[_\-]?key|apikey|access[_\-]?key|secret[_\-]?key|client[_\-]?secret|auth[_\-]?token|access[_\-]?token|refresh[_\-]?token|private[_\-]?key|session[_\-]?token|app[_\-]?secret|db[_\-]?password|admin[_\-]?password)["'']?\s*[:=]\s*["''`][^"''`\s]{6,}["''`]'
     strength: strong
   - type: credential
     name: Bearer 令牌值

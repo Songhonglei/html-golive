@@ -86,8 +86,16 @@ security:
 
 ## Scan history
 
-Every scan is recorded so the doctor can tell a page that was checked from
-one that never was, and so an unchanged page does not need re-scanning.
+Every scan is recorded, including refusals, so `golive doctor` can tell a
+page that was checked from one that never was:
+
+```
+scan history   12 scans on record, 9 sites checked (keeping 20 per site)
+               2 site(s) have never been scanned
+```
+
+A site with no record was published by an older version or restored around
+the scanner, and nobody has looked at what is on it.
 
 ```yaml
 security:

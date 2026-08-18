@@ -259,6 +259,36 @@ def _find_keyword_hits(content: str, keyword: str) -> list:
     return hits
 
 
+def ruleset_hash() -> str:
+    """Fingerprint of the active ruleset, for cache keys in scan history.
+
+    A verdict may only be reused when the rules that produced it are
+    unchanged: reusing a "clean" result after adding the rule that would now
+    catch the page is how a scanner stops catching things. Covers rule names,
+    patterns, strengths and keywords, so enabling or disabling one rule
+    changes the hash.
+    """
+    import hashlib
+    try:
+        rules = load_rules()
+    except Exception:  # noqa: BLE001
+        return ""
+    parts = []
+    for rule in rules.get("keyword_rules", []):
+        parts.append("k|%s|%s|%s|%s" % (
+            rule.get("type", ""), rule.get("name", ""),
+            rule.get("strength", ""),
+            ",".join(sorted(rule.get("keywords", []) or []))))
+    for rule in rules.get("regex_rules", []):
+        rx = rule.get("pattern")
+        pattern = rx.pattern if hasattr(rx, "pattern") else str(rx or "")
+        parts.append("r|%s|%s|%s|%s" % (
+            rule.get("type", ""), rule.get("name", ""),
+            rule.get("strength", ""), pattern))
+    blob = "\n".join(sorted(parts))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+
+
 def _mask_secret_literal(s: str) -> str:
     """Redact the secret-bearing part of a literal, keeping it recognisable.
 
@@ -268,10 +298,22 @@ def _mask_secret_literal(s: str) -> str:
     attached to a bug report, so "truncate to N characters" is not enough —
     the first 24 characters of a DSN or an API key are the secret.
     """
-    # scheme://user:password@host  → keep scheme and user, drop the password
+    # scheme://user:password@host  → keep scheme and user, drop the password.
+    #
+    # The password runs to the LAST @ before the host, not the first: a strong
+    # password contains @ itself, and stopping at the first one left
+    # "mysql://u:P@ss!w0rd$x@host" completely unredacted — the same character
+    # class mistake that had let such a DSN past detection, repeated here in
+    # the masker, so the credential was caught and then printed in full.
+    # The user part is optional, because redis://:password@host is valid.
     s = re.sub(
-        r'(\b[a-z][a-z0-9+.\-]*://[^\s:/@]{1,64}:)[^\s@/]{2,}(@|$)',
+        r'(\b[a-z][a-z0-9+.\-]*://[^\s:/@]{0,64}:)[^\s/]{2,}(@)',
         r'\1****\2', s, flags=re.IGNORECASE)
+    # …and the trailing form with no host after it (a DSN cut off by the
+    # context window, or pasted without a host).
+    s = re.sub(
+        r'(\b[a-z][a-z0-9+.\-]*://[^\s:/@]{0,64}:)[^\s/@]{2,}$',
+        r'\1****', s, flags=re.IGNORECASE)
     # key=value / token: value. The value character class has to include the
     # punctuation people actually use in passwords (@!$%^&*…), or a strong
     # password is precisely the one that escapes redaction.
@@ -315,7 +357,100 @@ def _mask_secret_literal(s: str) -> str:
     s = re.sub(r'\b(Bearer\s+)([A-Za-z0-9\-_.=]{6,})',
                lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s,
                flags=re.IGNORECASE)
+    # Finally, run the detection rules themselves over the string.
+    #
+    # The passes above are hand-written shapes, and that is exactly the
+    # problem: detection and redaction were two separate lists, so every
+    # shape added to detection had to be remembered here too. It was not —
+    # `const password = "…"` was added to detection in 0.8.3 and published
+    # a credential straight into the block message, because redaction only
+    # knew `password=` with no spaces.
+    #
+    # Anything detection can recognise is now redactable by construction.
+    # A shape can still be missed, but it can no longer be *detected and
+    # then printed*, which is the failure that matters.
+    s = _mask_by_detection_rules(s)
     return s
+
+
+def _mask_by_detection_rules(s: str) -> str:
+    """Redact using the same regexes that decide something is a credential."""
+    try:
+        rules = load_rules()
+    except Exception:  # noqa: BLE001 — redaction must never raise
+        return s
+    for rule in rules.get("regex_rules", []):
+        if rule.get("strength") != "strong":
+            continue
+        if rule.get("type") not in ("credential", "personal_info"):
+            continue
+        # load_rules() replaces "pattern" with a compiled object in place, so
+        # this accepts either — passing flags alongside a compiled pattern is
+        # an error, and assuming one form breaks whenever the loader changes.
+        rx = rule.get("pattern")
+        if rx is None:
+            continue
+        if isinstance(rx, str):
+            try:
+                rx = re.compile(rx, re.IGNORECASE)
+            except re.error:
+                continue
+        try:
+            s = rx.sub(_keep_shape_drop_value, s)
+        except (re.error, TypeError):
+            continue
+    return s
+
+
+def _secret_values_in(snippet: str, rules: dict) -> set:
+    """The literal secret values a detection rule can point at in this text.
+
+    Shape-based redaction needs the shape: `password="…"` is recognisable, a
+    bare `Xk9mQ2vLp8wRtY` is not. But the scanner deliberately appends string
+    literals lifted out of `<script>` blocks so it can match values that HTML
+    text extraction would otherwise hide — which means a secret appears a
+    second time with nothing around it. Every pattern pass missed that copy,
+    and it was printed in full next to the masked one.
+
+    Extracting the values lets them be deleted wherever else they appear.
+    """
+    values = set()
+    for rule in rules.get("regex_rules", []):
+        if rule.get("strength") != "strong":
+            continue
+        rx = rule.get("pattern")
+        if rx is None or isinstance(rx, str):
+            continue
+        for m in rx.finditer(snippet):
+            hit = m.group(0)
+            for chunk in re.findall(r'["\']([^"\']{6,})["\']', hit):
+                values.add(chunk)
+            for chunk in re.findall(r'[=:]\s*["\']?([^\s"\';,)]{6,})', hit):
+                values.add(chunk)
+    return {v for v in values if len(v) >= 6}
+
+
+def _keep_shape_drop_value(m) -> str:
+    """Keep enough of a match to locate it, drop enough to make it useless.
+
+    A reader has to find the credential in their own page. Redacting the
+    whole match satisfies "no secret in the output" and fails the actual
+    job — a DSN reduced to ``post****`` tells someone nothing about which
+    of their four database URLs to go fix.
+
+    So for connection strings the non-secret parts stay: scheme, user and
+    host are what identify it, and only the password between them goes.
+    """
+    text = m.group(0)
+    dsn = re.match(
+        r'(?P<head>[a-z][a-z0-9+.\-]*://(?:[^\s:/@]{0,64}:)?)'
+        r'(?P<secret>[^\s/@]{2,})'
+        r'(?P<tail>@.*)$', text, flags=re.IGNORECASE | re.DOTALL)
+    if dsn and dsn.group("tail"):
+        return f"{dsn.group('head')}****{dsn.group('tail')}"
+    if len(text) <= 8:
+        return "****"
+    return f"{text[:4]}****{text[-2:] if len(text) > 24 else ''}"
 
 
 def _mask_context(text: str, keyword: str, window: int = 30,
@@ -333,7 +468,19 @@ def _mask_context(text: str, keyword: str, window: int = 30,
     # Long digit runs (ID numbers, card numbers) — context-only, since the
     # keyword field for these rules is the pattern name, not the value.
     snippet = re.sub(r'(\d{2})\d{4,}(\d{2})', r'\1****\2', snippet)
+    # Order matters, and getting it wrong is silent: collect the literal
+    # values FIRST, while the assignment shapes they sit in are still intact.
+    # Masking shapes first turns `password="secret"` into `pas****`, and then
+    # nothing can tell that a bare `secret` further along the snippet — the
+    # copy the scanner lifted out of the <script> block — is the same value.
+    try:
+        rules_for_values = load_rules()
+        values = _secret_values_in(snippet, rules_for_values)
+    except Exception:  # noqa: BLE001 — redaction must never raise
+        values = set()
     snippet = _mask_secret_literal(snippet)
+    for v in sorted(values, key=len, reverse=True):
+        snippet = snippet.replace(v, f"{v[:2]}****")
     return f"...{snippet}..."
 
 

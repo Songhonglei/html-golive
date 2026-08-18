@@ -202,13 +202,27 @@ class StyleConfig:
 
 @dataclass
 class SecurityConfig:
+    """Scanner configuration.
+
+    ``scan_keep`` caps stored scan records per site (0.9.0): every publish
+    writes one, so history would otherwise grow for the life of the install.
+    Pruning is per site so a frequently-published page cannot evict the only
+    record another site has. 0 disables pruning, matching ``audit_keep``.
+    env: GOLIVE_SCAN_KEEP.
+    """
     extra_rules: list = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    scan_keep: int = 20
 
 
 @dataclass
 class ServerConfig:
-    host: str = "0.0.0.0"
+    # Loopback by default (v0.4.1): the data layer answers unauthenticated
+    # reads, so binding every interface must be an explicit choice. The
+    # loader sets the same value; this default matters for any code that
+    # constructs ServerConfig() directly, where "0.0.0.0" would have been a
+    # quiet downgrade.
+    host: str = "127.0.0.1"
     port: int = 8787
     public_base: str = ""            # printed in publish URLs when set
 
@@ -435,6 +449,14 @@ def _build(raw: dict, source_path: str) -> Config:
     cfg.style.font_cdn_base = str(_get(raw, "style", "font_cdn_base", default="") or "")
     extra = _get(raw, "security", "extra_rules", default=[])
     cfg.security.extra_rules = list(extra) if isinstance(extra, (list, tuple)) else []
+    try:
+        cfg.security.scan_keep = int(
+            _get(raw, "security", "scan_keep",
+                 default=cfg.security.scan_keep))
+    except (TypeError, ValueError):
+        raise ConfigError(
+            "security.scan_keep must be an integer (records kept per site, "
+            "0 to keep everything)")
     llm = cfg.security.llm
     llm.base_url = str(_get(raw, "security", "llm", "base_url", default="") or "").rstrip("/")
     llm.api_key_env = str(_get(raw, "security", "llm", "api_key_env",
@@ -527,6 +549,12 @@ def _apply_env_overrides(cfg: Config) -> Config:
                 setattr(cfg.admin, attr, int(v))
             except ValueError:
                 pass  # ignore malformed env — keep yaml/default
+    scan_keep_env = os.environ.get("GOLIVE_SCAN_KEEP", "").strip()
+    if scan_keep_env:
+        try:
+            cfg.security.scan_keep = int(scan_keep_env)
+        except ValueError:
+            pass  # ignore malformed env — keep yaml/default
     return cfg
 
 

@@ -115,7 +115,7 @@ TRANSLATIONS = {
     "arg.init.host": "Serve bind address (default: local only)",
     "arg.init.skip_skill": "Do not install the AI agent skill",
     "arg.init.skill_target": "Skill install directory (skip auto-detection)",
-    "arg.init.no_serve": "Exit after validation, do not keep the server running",
+    "arg.init.no_serve": "Exit after the self-check instead of leaving the server up. The self-check still starts a server on loopback briefly to verify the setup",
     "arg.init.background": "Move the server to the background after validation (survives terminal close)",
 
     # ── argparse: context ───────────────────────────────────────────────
@@ -648,6 +648,8 @@ TRANSLATIONS = {
     "migrate.advice_builder_api": "SupabaseAPI talks to Supabase REST directly",
     "migrate.label_layer_legacy": "layer from an older golive version",
     "migrate.advice_layer_legacy": "this version no longer injects it; remove the script tag",
+    "migrate.label_layer_sticky": "leftover {label} injection (comes back on republish)",
+    "migrate.advice_layer_sticky": "republishing re-injects this automatically because the site is still marked editable — turn editing off for the site (golive maintainer / admin portal) if you want the tag gone, removing it from the HTML alone will not stick",
     "migrate.label_layer_kept": "leftover {label} injection",
     "migrate.advice_layer_kept": "republishing does NOT replace this — the {label} is re-injected only when its own flag is set, so remove the tag or pass the flag again",
     "migrate.label_datalayer_residue": "leftover data-layer injection",

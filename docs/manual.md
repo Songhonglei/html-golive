@@ -351,7 +351,16 @@ the site, size, and the snapshot id created.
   Restoring an archive scans each page and holds back only the pages that
   carry a credential; the rest of the restore proceeds and the exit code is
   non-zero, so a scripted restore cannot report success while pages are
-  missing.
+  missing. A held-back page's registry row is rolled back too, so it does not
+  leave a site that lists but serves nothing.
+
+- **Scan history**: every scan is recorded (redacted) so the doctor can tell
+  a checked page from an unchecked one. `security.scan_keep` caps records per
+  site (default 20, `0` keeps everything, env `GOLIVE_SCAN_KEEP`).
+- **Rule coverage** is pinned by a corpus of sample pages under
+  `tests/corpus/` — adding a case is adding a file. To report a missed
+  credential shape or a false positive, a sample page is the most useful bug
+  report there is. Details: [security.md](security.md#regression-corpus).
 - **LLM review** *(optional)*: configure an OpenAI-compatible endpoint to
   have an LLM second-guess weak hits and cut false positives. Unset →
   skipped (rules still apply). Details: [security.md](security.md).

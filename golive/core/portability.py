@@ -577,6 +577,10 @@ def import_archive(
 
     # ── import registry rows ────────────────────────────────────────────────
     sites_imported = 0
+    # Sites this run created (as opposed to ones that already existed). Only
+    # these may be rolled back if their HTML turns out to carry a credential:
+    # deleting a pre-existing site would destroy data the archive never owned.
+    created_site_ids = set()
     sites_skipped = 0
     sites_overwritten = 0
     sites_renamed = 0
@@ -637,6 +641,7 @@ def import_archive(
                     for m in (maintainers or []):
                         registry.add_maintainer(new_site["site_id"], m)
                     site_id_map[site_id] = new_site["site_id"]
+                    created_site_ids.add(new_site["site_id"])
                     sites_renamed += 1
             elif slug_conflict:
                 # Slug taken by a different site_id
@@ -668,6 +673,7 @@ def import_archive(
                     for m in (maintainers or []):
                         registry.add_maintainer(new_site["site_id"], m)
                     site_id_map[site_id] = new_site["site_id"]
+                    created_site_ids.add(new_site["site_id"])
                     sites_renamed += 1
             else:
                 # No conflict — create with original site_id
@@ -678,6 +684,7 @@ def import_archive(
                 for m in (maintainers or []):
                     registry.add_maintainer(site_id, m)
                 site_id_map[site_id] = site_id
+                created_site_ids.add(site_id)
                 sites_imported += 1
 
         except Exception as e:
@@ -770,10 +777,29 @@ def import_archive(
         # already published once.
         blocking = _credential_findings(html)
         if blocking:
+            slug = (registry_by_id.get(orig_site_id) or {}).get("slug", "")
+            # Roll back the registry row we just created for this site.
+            # Leaving it behind produced a site that resolves and lists but
+            # serves nothing — indistinguishable from a storage failure, and
+            # a later republish would treat the slug as taken. Only rows this
+            # run created are removed; a site that already existed keeps its
+            # metadata and its live HTML untouched.
+            rolled_back = False
+            if target_site_id in created_site_ids:
+                try:
+                    registry.delete(target_site_id)
+                    rolled_back = True
+                    sites_imported = max(0, sites_imported - 1)
+                except Exception as e:
+                    errors.append(
+                        f"Site {slug or target_site_id}: held back for a "
+                        f"credential, but its registry entry could not be "
+                        f"removed: {e}")
             html_files_blocked.append({
                 "site_id": orig_site_id,
-                "slug": (registry_by_id.get(orig_site_id) or {}).get("slug", ""),
+                "slug": slug,
                 "findings": blocking,
+                "registry_rolled_back": rolled_back,
             })
             continue
 

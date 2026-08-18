@@ -118,7 +118,7 @@ TRANSLATIONS = {
     "arg.init.host": "服务监听地址（默认仅本机）",
     "arg.init.skip_skill": "不安装 AI agent skill",
     "arg.init.skill_target": "skill 安装目录（跳过自动探测）",
-    "arg.init.no_serve": "校验完就退出，不驻留服务",
+    "arg.init.no_serve": "自检完成后退出，不驻留服务（自检本身仍会在本机回环短暂起一次服务来验证环境）",
     "arg.init.background": "校验后把服务转入后台，关掉终端也保持在线",
 
     # ── argparse: context ───────────────────────────────────────────────
@@ -651,6 +651,8 @@ TRANSLATIONS = {
     "migrate.advice_builder_api": "SupabaseAPI \u76f4\u8fde Supabase REST",
     "migrate.label_layer_legacy": "旧版本 golive 注入的层",
     "migrate.advice_layer_legacy": "当前版本已不再注入，可直接删除该 script 标签",
+    "migrate.label_layer_sticky": "残留的 {label} 注入（重新发布会自动回来）",
+    "migrate.advice_layer_sticky": "站点仍标记为可编辑，重新发布会自动重新注入——要彻底去掉请先关闭该站点的编辑开关（golive maintainer / 管理门户），只删 HTML 里的标签不会生效",
     "migrate.label_layer_kept": "残留的{label}注入",
     "migrate.advice_layer_kept": "重新发布不会替换它——{label}只在显式带上对应参数时才重新注入，因此请删除该标签或重新带上参数",
     "migrate.label_datalayer_residue": "\u6570\u636e\u5c42\u6ce8\u5165\u6b8b\u7559",

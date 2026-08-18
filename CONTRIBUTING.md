@@ -71,10 +71,43 @@ html-golive`), your Python version, which backends you configured
 (local / Supabase / S3), and what you expected versus what happened.
 Redact tokens and internal hostnames before pasting logs.
 
+## Scanner rules and the corpus
+
+If the credential scanner missed something, or blocked a page it should not
+have, the most useful contribution is a **sample page**:
+
+```
+tests/corpus/must_block/<what_it_covers>.html    # must be refused
+tests/corpus/must_pass/<what_it_covers>.html     # must publish cleanly
+```
+
+`tests/test_scanner_corpus.py` walks these directories, so a new file is a
+new test case — nothing else to wire up. Run it with:
+
+```bash
+python3 -m pytest tests/test_scanner_corpus.py -v
+```
+
+Two rules for the samples:
+
+- **Assemble secrets from fragments** (`'sk-' + '0123…'`) and use obviously
+  fake values, so the repository never carries a literal credential. Never
+  paste a real key, even a revoked one.
+- **False positives count.** A scanner that cries wolf gets routed around,
+  and that habit is what lets a real secret through later. A `must_pass`
+  sample is as valuable as a `must_block` one.
+
+See [docs/security.md](docs/security.md#regression-corpus) for the full
+format.
+
 ## Security issues
 
 Please don't open a public issue for a vulnerability. Email the
 maintainer or use GitHub's private security advisory feature instead.
+
+A missed credential shape is a normal bug, not a vulnerability — open an
+issue with a `must_block` sample. Use the private channel for anything that
+lets someone reach data or run code they should not.
 
 ## License
 

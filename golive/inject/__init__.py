@@ -65,13 +65,26 @@ class Layer(NamedTuple):
     script_id: str
     is_data: bool
     label: str
+    #: What republishing without the layer's own flag actually does. A single
+    #: is_data boolean was not enough: it made the editor look like the
+    #: watermark, and the two behave differently. Values:
+    #:
+    #:   "auto"       replaced with the current data layer every publish
+    #:   "flag"       dropped unless its flag is passed again (watermark)
+    #:   "sticky"     re-injected from stored site state, no flag needed
+    #:                (editor, driven by the registry's ``editable``)
+    on_republish: str = "flag"
 
 
 LAYERS = (
-    Layer("data", TEMPLATE_SCRIPT_ID, True, "TemplateAPI data layer"),
-    Layer("supabase", SUPABASE_SCRIPT_ID, True, "Supabase data layer"),
-    Layer("watermark", WATERMARK_SCRIPT_ID, False, "watermark"),
-    Layer("editor", EDITOR_SCRIPT_ID, False, "inline editor"),
+    Layer("data", TEMPLATE_SCRIPT_ID, True, "TemplateAPI data layer", "auto"),
+    Layer("supabase", SUPABASE_SCRIPT_ID, True, "Supabase data layer",
+          "auto"),
+    Layer("watermark", WATERMARK_SCRIPT_ID, False, "watermark", "flag"),
+    # Sticky, not flag-driven: publish re-injects the editor whenever the
+    # site is marked editable, so "pass the flag again" was wrong advice —
+    # the tag comes back on its own until editing is turned off.
+    Layer("editor", EDITOR_SCRIPT_ID, False, "inline editor", "sticky"),
 )
 
 #: Layers that older golive versions injected but current versions do not.

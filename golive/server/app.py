@@ -508,7 +508,10 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
     # ── index page ──────────────────────────────────────────────────────────
 
     def _send_index(self):
-        sites = self.registry.list_all(limit=100)
+        # Not list_all(limit=100): the index is how someone finds a page they
+        # published, and a site missing from it looks like a lost site.
+        from golive.backends.registry import paginated_registry_list
+        sites = paginated_registry_list(self.registry)
         rows = []
         for s in sites:
             label = html_mod.escape(s.get("name") or s["site_id"])

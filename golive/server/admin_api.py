@@ -41,6 +41,7 @@ import re
 from typing import Optional
 
 from golive.core.audit import read_entries, record
+from golive.backends.registry import paginated_registry_list
 from golive.server import authz
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -168,7 +169,9 @@ def handle(method: str, path: str, query: dict, body: bytes,
 def _me(identity: authz.Identity, registry) -> tuple:
     owned, maintained = [], []
     if identity.email:
-        for s in registry.list_all(limit=1000):
+        # Paginated, not limit=1000: past that an owner stops seeing their
+        # own sites, which reads as lost access rather than a capped list.
+        for s in paginated_registry_list(registry):
             role = authz.site_role(identity, s)
             if role == "owner" or \
                     (identity.email == (s.get("owner") or "").strip().lower()):
@@ -193,7 +196,7 @@ def _list_sites(identity, query, registry, storage) -> tuple:
         return _err(400, "page/size must be integers")
     q = ((query.get("q") or [""])[0] or "").strip().lower()
 
-    sites = registry.list_all(limit=10000)
+    sites = paginated_registry_list(registry)
     if not identity.is_superadmin:
         sites = [s for s in sites if authz.can_view(identity, s)]
     if q:
@@ -337,7 +340,7 @@ def _site_rollback(identity, site, body, registry, storage) -> tuple:
 def _stats(identity, registry, storage) -> tuple:
     if not identity.is_superadmin:
         return _err(403, "superadmin required")
-    sites = registry.list_all(limit=100000)
+    sites = paginated_registry_list(registry)
     sized = [(s, _site_size(storage, s["site_id"])) for s in sites]
     total_bytes = sum(n for _, n in sized)
 
@@ -548,7 +551,7 @@ def _perm_overview(registry) -> tuple:
     managed_rows = _managed_store().list()
 
     sites_acl, maintainer_index = [], {}
-    for s in registry.list_all(limit=10000):
+    for s in paginated_registry_list(registry):
         owner = (s.get("owner") or "").strip().lower()
         maintainers = sorted({str(m).strip().lower()
                               for m in (s.get("maintainers") or [])

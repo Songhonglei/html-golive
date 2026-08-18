@@ -97,10 +97,18 @@ def _describe_layer(line_no: int, script_id: str) -> dict:
         return {"line": line_no, "text": script_id,
                 "label": _t("migrate.label_layer_legacy"),
                 "advice": _t("migrate.advice_layer_legacy")}
-    if layer.is_data:
+    behaviour = getattr(layer, "on_republish", "flag")
+    if behaviour == "auto":
         return {"line": line_no, "text": script_id,
                 "label": _t("migrate.label_datalayer_residue"),
                 "advice": _t("migrate.advice_datalayer_residue")}
+    if behaviour == "sticky":
+        # Driven by stored site state, so it returns on its own. Telling
+        # someone to "pass the flag again" implies the opposite.
+        return {"line": line_no, "text": script_id,
+                "label": _t("migrate.label_layer_sticky", label=layer.label),
+                "advice": _t("migrate.advice_layer_sticky",
+                             label=layer.label)}
     return {"line": line_no, "text": script_id,
             "label": _t("migrate.label_layer_kept", label=layer.label),
             "advice": _t("migrate.advice_layer_kept", label=layer.label)}

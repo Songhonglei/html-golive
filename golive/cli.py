@@ -94,6 +94,30 @@ def _load_source_html(source: str, entry: str = "") -> str:
     sys.exit(1)
 
 
+def _live_model_code(args) -> str:
+    """The data model the published page is currently using, if any.
+
+    Only consulted on ``--update``: a fresh publish has no live page to
+    inherit from. Returns "" on any problem — inheriting is a convenience,
+    and a storage hiccup must not stop the publish.
+    """
+    ref = getattr(args, "update", "") or ""
+    if not ref:
+        return ""
+    try:
+        from golive.backends.factory import get_registry, get_storage
+        from golive.inject import template_api
+        site = get_registry().resolve(ref)
+        if not site:
+            return ""
+        live = get_storage().read(site["site_id"])
+        if not live:
+            return ""
+        return template_api.extract_model_code_from_html(live) or ""
+    except Exception:
+        return ""
+
+
 def cmd_publish(args) -> int:
     from golive.backends.factory import get_registry, get_storage
     registry = get_registry()
@@ -211,8 +235,14 @@ def _apply_data_layers(html: str, args) -> str:
     backend_ready, backend_label = data_backend_ready(cfg)
 
     if uses_tpl:
-        model_code = data_model \
-            or template_api.extract_model_code_from_html(html) or "default"
+        # On --update the source file is whatever the user hands us, and it
+        # normally has no data layer in it — so extracting from it alone
+        # silently reset a site's model to "default" and pointed the page at
+        # an empty table. Fall back to what the live page is already using.
+        model_code = (data_model
+                      or template_api.extract_model_code_from_html(html)
+                      or _live_model_code(args)
+                      or "default")
         html = template_api.inject_into_html(html, model_code, cfg=cfg)
         if backend_ready:
             print(t("publish.tpl_injected", model=model_code, backend=backend_label))

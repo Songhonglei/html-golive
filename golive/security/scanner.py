@@ -152,7 +152,8 @@ _PLACEHOLDER_VALUE_RE = re.compile(
         | \{\{?[^}]{0,40}\}?\}               # {{ token }} / {KEY}
         | \$[A-Za-z_][A-Za-z0-9_]*           # $DB_PASSWORD
         | %[A-Za-z_][A-Za-z0-9_]*%           # %TOKEN%
-        | (?:your|my|the)[\s_\-]?[a-z_\-]{0,20}(?:key|token|secret|password)
+        | (?:your|my|the)[\s_\-]?[a-z_\-]{0,20}
+          (?:key|token|secret|password)(?:[\s_\-]?here)?
         | (?:xxx+|yyy+|zzz+|foo|bar|baz|todo|tbd|changeme|change_me)
         | replace[\s_\-]?me
         | (?:placeholder|example|sample|dummy|fake|redacted)[a-z_\-]{0,12}
@@ -176,6 +177,13 @@ def _is_placeholder_at(content: str, idx: int, keyword: str) -> bool:
     tail = _html.unescape(tail)
     # Skip an "=" or ":" that is part of the value, not the keyword.
     tail = re.sub(r'^\s*[=:]\s*', '', tail, count=1)
+    # Documentation often keeps the credential's *type* prefix and replaces
+    # only the secret part: `API_KEY=sk-REPLACE_ME`, `token=Bearer <yours>`.
+    # Skipping a known, short prefix lets those through. Deliberately a fixed
+    # list and anchored: an arbitrary leading run would let a real secret
+    # dress itself up as a prefix.
+    tail = re.sub(r'^(?:sk-|pk-|Bearer\s+|Basic\s+|token\s+)', '', tail,
+                  count=1, flags=re.IGNORECASE)
     match = _PLACEHOLDER_VALUE_RE.match(tail)
     if match:
         # The placeholder has to *be* the whole value, not merely start it.
@@ -190,6 +198,28 @@ def _is_placeholder_at(content: str, idx: int, keyword: str) -> bool:
             return True
     # An empty value is a template too: `password=` at end of line.
     return not tail.strip() or tail.lstrip().startswith(("\n", "<"))
+
+
+def _is_placeholder_match(m) -> bool:
+    """True when a regex hit is documentation rather than a live credential.
+
+    Works on the matched text itself, since a shape rule matches name *and*
+    value in one go (``secret_key = "REPLACE_ME"``). Splits at the first
+    ``=`` or ``:`` and reuses the value test, so the two paths cannot drift
+    apart on what counts as a placeholder.
+    """
+    text = m.group(0)
+    # Only assignment-shaped matches can carry a placeholder value. A private
+    # key header or a bare AKIA key has no value part and is never exempt.
+    parts = re.split(r'[=:]', text, maxsplit=1)
+    if len(parts) != 2:
+        return False
+    name, value = parts
+    if not re.search(r'[A-Za-z]', name):
+        return False
+    # Reuse the keyword-path logic by handing it a synthetic "key=value".
+    probe = "password=" + value.strip().strip('"\'`')
+    return _is_placeholder_at(probe, 0, "password=")
 
 
 def _find_keyword_hits(content: str, keyword: str) -> list:
@@ -249,14 +279,38 @@ def _mask_secret_literal(s: str) -> str:
     # requiring [A-Za-z0-9] for the first two meant "P@ssw0rd…" — a password
     # with punctuation early on — skipped redaction entirely.
     _VALUE_CHAR = r'[A-Za-z0-9+/=@!$%^&*()_\-.,;:?~|]'
+    # Two passes, because a finding's context is a window cut out of the page
+    # and the keyword can arrive clipped: "password=" reaches us as "word=".
+    # Enumerating the clipped forms would be a list to get wrong, so instead:
+    #
+    #   pass 1  an intact keyword anywhere in the string
+    #   pass 2  any "<letters>=<value>" *at the very start* of the string,
+    #           where a clip can occur — a leading fragment followed by
+    #           "=secret" is treated as a clipped keyword
+    #
+    # Pass 2 is deliberately narrow: only at position 0, and only when the
+    # value looks secret-shaped (long, mixed). Mid-string assignments are
+    # left to pass 1 so ordinary text like "id=12345" is not mangled.
+    _ASSIGN = r'\s*[=:]\s*["\']?'
     s = re.sub(
-        r'((?:key|token|secret|password|passwd|pwd)\s*[=:]\s*["\']?)'
+        r'((?:key|token|secret|password|passwd|pwd)' + _ASSIGN + r')'
         r'(' + _VALUE_CHAR + r'{2})' + _VALUE_CHAR + r'{4,}',
+        r'\1\2****', s, flags=re.IGNORECASE)
+    s = re.sub(
+        r'^((?:\.\.\.)?[A-Za-z]{2,}' + _ASSIGN + r')'
+        r'(' + _VALUE_CHAR + r'{2})' + _VALUE_CHAR + r'{6,}',
         r'\1\2****', s, flags=re.IGNORECASE)
     # Recognisable credential prefixes standing alone
     s = re.sub(
-        r'\b(sk-|AKIA|ghp_|pypi-|eyJ)([A-Za-z0-9\-_/+=]{8,})',
+        r'\b(sk-|pk-|AKIA|ASIA|LTAI|AKID|AIza|ghp_|gho_|ghs_|github_pat_'
+        r'|pypi-|xox[abposr]-|eyJ)([A-Za-z0-9\-_/+=]{8,})',
         lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s)
+    # Long digit runs are themselves the sensitive value — a national ID,
+    # phone or card number has no "key=" in front of it, so every pass above
+    # missed it and the report printed all 18 digits. Keep enough head and
+    # tail to recognise the finding without reproducing it.
+    s = re.sub(r'\b(\d{2})\d{5,}(\d{2})\b',
+               lambda m: f"{m.group(1)}****{m.group(2)}", s)
     # Bearer <jwt-or-opaque>
     s = re.sub(r'\b(Bearer\s+)([A-Za-z0-9\-_.=]{6,})',
                lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s,
@@ -338,7 +392,20 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
 
     # regex rules
     for rule in rules["regex_rules"]:
-        m = rule["pattern"].search(content)
+        m = None
+        for cand in rule["pattern"].finditer(content):
+            # Shape-matching rules see `secret_key = "REPLACE_ME"` as a
+            # credential assignment, because the shape is exactly right — it
+            # is the *value* that is a placeholder. Documentation has to stay
+            # publishable here too, so the same exemption the keyword path
+            # uses applies. Keep scanning: a page may document a placeholder
+            # and also leak a real key, and the real one must still be found.
+            if (rule.get("strength") == "strong"
+                    and rule.get("type") == "credential"
+                    and _is_placeholder_match(cand)):
+                continue
+            m = cand
+            break
         if not m:
             continue
         key = ("re", rule["name"])

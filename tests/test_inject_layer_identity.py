@@ -142,13 +142,39 @@ class TestAdviceMatchesWhatTheLayerActuallyIs(unittest.TestCase):
             with self.subTest(layer=layer.kind):
                 self.assertIn("swaps", self._advice(layer))
 
-    def test_non_data_layers_are_not_promised_an_automatic_swap(self):
-        """Republishing does not re-inject these unless the flag is passed."""
-        for layer in (item for item in LAYERS if not item.is_data):
+    def test_flag_driven_layers_say_the_flag_is_needed(self):
+        """A watermark is dropped on republish unless its flag comes back."""
+        for layer in (item for item in LAYERS
+                      if getattr(item, "on_republish", "flag") == "flag"):
             with self.subTest(layer=layer.kind):
                 advice = self._advice(layer)
                 self.assertIn("NOT replace", advice)
                 self.assertIn(layer.label, advice)
+
+    def test_sticky_layers_are_not_told_to_pass_a_flag(self):
+        """The editor comes back on its own — it follows stored site state.
+
+        Grouping it with the watermark was wrong in a way that mattered: a
+        republish without ``--enable-editor`` still re-injects the editor,
+        because the registry keeps the site marked editable. Someone told to
+        "pass the flag again" concludes the tag is gone when it is not.
+        """
+        for layer in (item for item in LAYERS
+                      if getattr(item, "on_republish", "") == "sticky"):
+            with self.subTest(layer=layer.kind):
+                advice = self._advice(layer)
+                self.assertNotIn(
+                    "NOT replace", advice,
+                    f"{layer.kind} is re-injected automatically; this advice "
+                    f"says the opposite")
+                self.assertIn("editable", advice.lower())
+
+    def test_every_layer_declares_its_republish_behaviour(self):
+        """A new layer must choose, rather than inherit a wrong default."""
+        allowed = {"auto", "flag", "sticky"}
+        for layer in LAYERS:
+            with self.subTest(layer=layer.kind):
+                self.assertIn(getattr(layer, "on_republish", None), allowed)
 
 
 class TestTheLayerListIsTheSingleSource(unittest.TestCase):

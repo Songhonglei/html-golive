@@ -73,15 +73,55 @@ regex_rules:
     strength: strong
   - type: credential
     name: 数据库连接串
-    pattern: '(mongodb|redis|postgres|mysql)://[\w.@:/-]+'
+    # Dialect aliases matter: "postgresql://" is what SQLAlchemy and Django
+    # write, and matching only "postgres://" missed every one of them.
+    # The character class must accept punctuation, or a DSN whose password
+    # contains @ ! $ — i.e. a good password — slips past.
+    pattern: '\b(?:mongodb|mongodb\+srv|redis|rediss|postgres|postgresql|postgis|mysql|mysqlx|mariadb|mssql|sqlserver|oracle|clickhouse|cockroachdb|amqp|amqps)://[^\s"''<>]{4,}'
+    strength: strong
+  - type: credential
+    name: 连接串含内嵌口令
+    # Any scheme://user:password@host — catches dialects not listed above.
+    # The password class excludes only what cannot appear in one.
+    pattern: '\b[a-z][a-z0-9+.\-]{2,}://[^\s:/@"''<>]{1,64}:[^\s/@"''<>]{3,}@[^\s"''<>]{3,}'
+    strength: strong
+  - type: credential
+    name: 凭证赋值（含变量声明）
+    # The keyword list only has the literal "password=", so every ordinary
+    # way of writing it in code went undetected:
+    #   const password = "…"   let apiKey: "…"   self.db_password = '…'
+    # Matches name → optional type/keyword noise → = or : → quoted value.
+    # A quoted value of 6+ chars is required so `password = ""` and
+    # `password: null` stay clean.
+    pattern: '(?:^|[^A-Za-z0-9_])(?:password|passwd|pwd|secret|api[_\-]?key|apikey|access[_\-]?key|secret[_\-]?key|client[_\-]?secret|auth[_\-]?token|access[_\-]?token|refresh[_\-]?token|private[_\-]?key|session[_\-]?token|app[_\-]?secret|db[_\-]?password|admin[_\-]?password)\s*[:=]\s*["''`][^"''`\s]{6,}["''`]'
+    strength: strong
+  - type: credential
+    name: Bearer 令牌值
+    # "authorization:" as a literal missed `const Authorization = "Bearer …"`
+    # and every JS/JSON header object. Match the token itself instead of the
+    # header name — a Bearer followed by a long opaque value is a credential
+    # wherever it appears.
+    pattern: '\bBearer\s+[A-Za-z0-9\-._~+/]{16,}=*'
+    strength: strong
+  - type: credential
+    name: JWT
+    # Three base64url segments: header.payload.signature
+    pattern: '\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}'
     strength: strong
   - type: credential
     name: AWS AccessKey
     pattern: '\bAKIA[0-9A-Z]{16}\b'
     strength: strong
   - type: credential
+    name: 云厂商 AccessKey ID
+    # Alibaba LTAI…, Tencent AKID…, Google AIza… handled separately.
+    pattern: '\b(?:LTAI[A-Za-z0-9]{12,}|AKID[A-Za-z0-9]{13,}|ASIA[0-9A-Z]{16})\b'
+    strength: strong
+  - type: credential
     name: 云平台 AK/SK 赋值
-    pattern: '(?:AccessKeyId|AccessKeySecret|aws_access_key_id|aws_secret_access_key)\s*[=:]\s*["''][A-Za-z0-9/+\-_]{16,}["'']'
+    # Also matches the short generic names people actually use next to a
+    # 16+ char opaque value (id = "…"; secret = "…").
+    pattern: '(?:AccessKeyId|AccessKeySecret|aws_access_key_id|aws_secret_access_key|SecretAccessKey|SecretId|SecretKey)\s*[=:]\s*["''][A-Za-z0-9/+\-_]{16,}["'']'
     strength: strong
   - type: credential
     name: OpenAI 风格 key

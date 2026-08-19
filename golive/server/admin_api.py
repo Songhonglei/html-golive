@@ -244,9 +244,34 @@ def _site_records(site_id: str) -> dict:
         pass
     try:
         from golive.backends.registry.scans_store import get_scans_store
-        out["scans"] = get_scans_store().history_for_site(site_id, limit=10)
+        out["scans"] = [_scan_summary(s) for s in
+                        get_scans_store().history_for_site(site_id, limit=10)]
     except Exception:  # noqa: BLE001
         pass
+    return out
+
+
+#: Scan fields this endpoint is allowed to return. An allowlist rather than
+#: a blocklist: a column added to security_scans later must be opted in
+#: deliberately, not leak by default because nobody updated a deny list.
+_SCAN_PUBLIC_FIELDS = ("scan_id", "verdict", "categories", "created_at",
+                       "ai_used", "scanner_version")
+
+
+def _scan_summary(scan: dict) -> dict:
+    """A scan record without its findings.
+
+    ``findings`` carries an excerpt of the page around each hit. It is
+    redacted of the secret itself, but it is still page content, and the
+    question this view answers — was this page checked, and what did it come
+    back as — needs a verdict and a count, not the excerpts.
+
+    Reported by an external audit of 0.9.0: the portal only ever rendered the
+    count, so the over-return was invisible from the UI. Restraint in the
+    front end is not restraint in the API.
+    """
+    out = {k: scan.get(k) for k in _SCAN_PUBLIC_FIELDS}
+    out["finding_count"] = len(scan.get("findings") or [])
     return out
 
 

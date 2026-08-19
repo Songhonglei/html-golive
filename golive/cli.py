@@ -1405,6 +1405,13 @@ def _doctor_render_site(info: dict) -> None:
 
 
 def cmd_doctor(args) -> int:
+    # `--site ''` used to fall through to the whole-install check, because an
+    # empty string is falsy — so a script whose variable interpolation failed
+    # got a healthy exit 0 for a site that was never looked at. Distinguish
+    # "not asked for" (None) from "asked for, with nothing" (empty).
+    if getattr(args, "site", None) is not None and not str(args.site).strip():
+        print(t("doctor.site.empty_ref"), file=sys.stderr)
+        return 2
     if getattr(args, "site", ""):
         info = _doctor_site_info(args.site)
         if getattr(args, "json", False):
@@ -2441,7 +2448,9 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
     p.add_argument("--json", action="store_true",
                    help=t("arg.doctor.json"))
-    p.add_argument("--site", default="", metavar="REF",
+    # default None, not "": the handler must tell "flag absent" from
+    # "flag given with an empty value", and only reject the second.
+    p.add_argument("--site", default=None, metavar="REF",
                    help=t("arg.doctor.site"))
     p.set_defaults(func=cmd_doctor)
 

@@ -82,6 +82,7 @@ def load_rules(extra_files=None) -> dict:
             compiled_regex.append({
                 "type": r.get("type", "unknown"),
                 "name": r.get("name", "unnamed"),
+                "name_key": r.get("name_key", ""),
                 "strength": r.get("strength", "weak"),
                 "pattern": re.compile(r["pattern"], re.IGNORECASE),
             })
@@ -591,15 +592,50 @@ def _keep_shape_drop_value(m) -> str:
     text = m.group(0)
     if _redact_mode() == "strict":
         return _strict_replacement(text)
-    dsn = re.match(
+    # search, not match: the same DSN is also matched by the broad
+    # credential-assignment rule, whose span starts at `password = "` — so
+    # anchoring at position 0 missed the DSN sitting inside it and fell
+    # through to the generic branch below, reducing the whole thing to
+    # `my****`. The password was safe either way; the host, user and port
+    # that make a refusal actionable were not. Reported by an external audit
+    # of 0.9.0 against exactly this shape.
+    # `secret` must allow @ and match greedily up to the LAST one: passwords
+    # contain @ regularly, and a class excluding it stopped at the first,
+    # leaving the rest of the password sitting in `tail` in clear text. That
+    # exact character-class mistake has now been made four times in this file
+    # (detection in 0.8.2, scrubbing in 0.8.4, value extraction in 0.8.5, and
+    # here) — hence the leak assertions in tests/test_redaction_no_leak.py
+    # covering every shape, not just the one being fixed.
+    dsn = re.search(
         r'(?P<head>[a-z][a-z0-9+.\-]*://(?:[^\s:/@]{0,64}:)?)'
-        r'(?P<secret>[^\s/@]{2,})'
-        r'(?P<tail>@.*)$', text, flags=re.IGNORECASE | re.DOTALL)
+        r'(?P<secret>[^\s/]{2,})'
+        r'(?P<tail>@[^\s"\'`;,)@]*)', text, flags=re.IGNORECASE)
     if dsn and dsn.group("tail"):
-        return f"{dsn.group('head')}****{dsn.group('tail')}"
+        return "{before}{head}****{tail}{after}".format(
+            before=text[:dsn.start()], head=dsn.group("head"),
+            tail=dsn.group("tail"), after=text[dsn.end():])
     if len(text) <= 8:
         return "****"
     return f"{text[:4]}****{text[-2:] if len(text) > 24 else ''}"
+
+
+def _rule_display_name(rule) -> str:
+    """The human-readable rule name, translated when it is a built-in one.
+
+    Built-in rules carry an optional ``name_key`` pointing into the locale
+    tables; ``name`` stays as the fallback and is the only thing a
+    user-supplied rule file needs to provide. So third-party rules keep
+    working untranslated instead of showing a raw key, and the shipped rules
+    stop printing Chinese to English users — which is what an English
+    operator saw on every refusal up to 0.9.0, since these 21 names were
+    missed by the 0.7.5 translation pass.
+    """
+    key = rule.get("name_key") or ""
+    if key:
+        translated = _t(key)
+        if translated and translated != key:
+            return translated
+    return rule.get("name", "") or "unnamed"
 
 
 def _mask_context(text: str, keyword: str, window: int = 30,
@@ -715,7 +751,7 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
             seen.add(key)
             result.matched_details.append({
                 "type": rule.get("type", "unknown"),
-                "name": rule.get("name", ""),
+                "name": _rule_display_name(rule),
                 "keyword": kw,
                 "strength": strength,
                 "context": _mask_context(content, kw, at_idx=hits[0]),
@@ -745,7 +781,7 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
         seen.add(key)
         result.matched_details.append({
             "type": rule["type"],
-            "name": rule["name"],
+            "name": _rule_display_name(rule),
             # Truncating at 24 chars is not redaction: a DSN password or an
             # API key is mostly readable in its first 24 characters, and this
             # value is printed on the BLOCK line.

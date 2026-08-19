@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS security_rules (
     type        TEXT NOT NULL,
     name        TEXT NOT NULL,
     category    TEXT NOT NULL DEFAULT 'unknown',
+    name_key    TEXT NOT NULL DEFAULT '',
     strength    TEXT NOT NULL DEFAULT 'weak',
     pattern     TEXT,
     keywords    TEXT,
@@ -69,6 +70,12 @@ CREATE TABLE IF NOT EXISTS security_rules (
 _MIGRATIONS = [
     ("category", "ALTER TABLE security_rules ADD COLUMN "
                  "category TEXT NOT NULL DEFAULT 'unknown'"),
+    # Built-in rule names are translated via this key; the literal ``name``
+    # stays as the fallback so user-supplied rules need not provide one.
+    # Without the column the key was dropped on the way into the table and
+    # every refusal printed the Chinese literal, whatever the locale.
+    ("name_key", "ALTER TABLE security_rules ADD COLUMN "
+                 "name_key TEXT NOT NULL DEFAULT ''"),
 ]
 
 _RULES_FILE = Path(__file__).parent.parent.parent / "security" / "rules.yaml"
@@ -92,6 +99,7 @@ def _load_builtin_rules() -> list:
             "id": f"builtin:{r.get('name', 'unnamed')}",
             "type": "keyword",
             "name": r.get("name", "unnamed"),
+            "name_key": r.get("name_key", ""),
             "category": r.get("type", "unknown"),
             "strength": r.get("strength", "weak"),
             "keywords": json.dumps(r.get("keywords") or [], ensure_ascii=False),
@@ -104,6 +112,7 @@ def _load_builtin_rules() -> list:
             "id": f"builtin:{r.get('name', 'unnamed')}",
             "type": "regex",
             "name": r.get("name", "unnamed"),
+            "name_key": r.get("name_key", ""),
             "category": r.get("type", "unknown"),
             "strength": r.get("strength", "weak"),
             "keywords": None,
@@ -155,24 +164,30 @@ class RulesStore:
                 # from the yaml on the next run.
                 c.execute(
                     "INSERT INTO security_rules "
-                    "(id, type, name, category, strength, pattern, keywords, "
-                    "enabled, builtin, updated_by, updated_at) "
-                    "VALUES (?,?,?,?,?,?,?,1,1,'',?) "
+                    "(id, type, name, name_key, category, strength, pattern, "
+                    "keywords, enabled, builtin, updated_by, updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,1,1,'',?) "
                     "ON CONFLICT(id) DO UPDATE SET "
                     "  type=excluded.type, name=excluded.name, "
+                    "  name_key=excluded.name_key, "
                     "  category=excluded.category, "
                     "  strength=excluded.strength, pattern=excluded.pattern, "
                     "  keywords=excluded.keywords, builtin=1",
-                    (r["id"], r["type"], r["name"], r["category"],
-                     r["strength"], r["pattern"], r["keywords"], _now())
+                    (r["id"], r["type"], r["name"], r.get("name_key", ""),
+                     r["category"], r["strength"], r["pattern"],
+                     r["keywords"], _now())
                 )
 
     def list_all(self) -> list:
         """Return all rules (built-in + custom), with enabled state."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT id, type, name, category, strength, pattern, keywords, "
-                "enabled, builtin, updated_by, updated_at "
+                # Explicit projection, so adding a column means touching the
+                # DDL, the upsert *and* this list — miss the last one and the
+                # value round-trips into the table and silently never comes
+                # back out.
+                "SELECT id, type, name, name_key, category, strength, "
+                "pattern, keywords, enabled, builtin, updated_by, updated_at "
                 "FROM security_rules ORDER BY builtin DESC, name"
             ).fetchall()
         result = []
@@ -387,6 +402,7 @@ def get_merged_rules_for_scanner(extra_files=None) -> dict:
             keyword_rules.append({
                 "type": category,
                 "name": r["name"],
+                "name_key": r.get("name_key") or "",
                 "strength": r["strength"],
                 "keywords": r.get("keywords") or [],
             })
@@ -395,6 +411,7 @@ def get_merged_rules_for_scanner(extra_files=None) -> dict:
                 regex_rules.append({
                     "type": category,
                     "name": r["name"],
+                    "name_key": r.get("name_key") or "",
                     "strength": r["strength"],
                     "pattern": _re.compile(r["pattern"], _re.IGNORECASE),
                 })

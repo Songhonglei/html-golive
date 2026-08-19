@@ -1986,7 +1986,11 @@ function renderScans(scans){
     // Findings are stored already redacted, but they are still the part of
     // this view most likely to carry something sensitive, so only the counts
     // and the verdict are shown here.
-    var n = (sc.findings || []).length;
+    // finding_count, not findings.length: the API stopped sending the
+    // findings themselves in 0.9.1. Falls back to counting an array so a
+    // portal served by a newer golive against an older record still works.
+    var n = (sc.finding_count != null) ? sc.finding_count
+          : (sc.findings || []).length;
     // The column is "verdict", not "blocked" — reading the latter gave every
     // scan a passing label, including the ones that stopped a publish.
     // Three verdicts, not two: collapsing "warn" into passed would hide

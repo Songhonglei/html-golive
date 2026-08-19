@@ -114,8 +114,17 @@ the host and database name appear, and where a CI log would pick them up.
 
 The fingerprint is a truncated SHA-256 of the credential — **stable** across
 runs and machines, so a repeated refusal is recognisable as the same one, and
-**distinct** per credential, so two DSNs stay tellable apart in a log without
-either being named. It is not reversible and is not a way to check a value.
+**distinct** per credential, so two secrets stay tellable apart in a log
+without either being named. It is not reversible and is not a way to check a
+value.
+
+What gets fingerprinted is the **secret itself**, not the string it was found
+in. For a connection string that means the password, so two DSNs pointing at
+different hosts with the same password share one fingerprint. That is the
+intended reading — one credential, reused in two places, is one thing to go
+rotate — but it does mean strict mode alone will not tell you *which* of the
+two endpoints a refusal came from. Use `locator` mode locally when that is
+what you need; strict exists for logs that leave the machine.
 
 Context snippets are replaced by a line number. The snippet is a slice of the
 page, so it carries the same metadata; masking the credential inside it would

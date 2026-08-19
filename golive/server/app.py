@@ -561,6 +561,42 @@ def make_server(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     return _ThreadingServer((host, port), handler)
 
 
+#: Variable names people reach for when they mean ``GOLIVE_TOKEN``.
+#:
+#: An external audit of 0.9.0 reported the admin API as unauthenticated after
+#: setting ``GOLIVE_ADMIN_TOKEN`` — a name this code has never read. The auth
+#: layer was working; the variable simply did nothing, so the server came up
+#: with no auth at all, and on loopback that means superadmin. The report was
+#: wrong about the cause and right that something was broken: a token setting
+#: that is silently ignored is worse than one that is rejected, because the
+#: operator walks away believing the portal is protected.
+_TOKEN_ENV_NEAR_MISSES = (
+    "GOLIVE_ADMIN_TOKEN",
+    "GOLIVE_API_TOKEN",
+    "GOLIVE_AUTH_TOKEN",
+    "GOLIVE_ACCESS_TOKEN",
+    "GOLIVE_SECRET",
+    "GOLIVE_ADMIN_PASSWORD",
+)
+
+
+def auth_env_warnings(env=None) -> list:
+    """Warnings about auth-looking env vars that golive does not read.
+
+    Takes the environment as an argument so this is testable without
+    mutating the process. Never raises and never echoes a value.
+    """
+    env = os.environ if env is None else env
+    out = []
+    if env.get("GOLIVE_TOKEN", "").strip():
+        return out          # the supported variable is set; nothing to say
+    for name in _TOKEN_ENV_NEAR_MISSES:
+        if env.get(name, "").strip():
+            out.append(t("serve.app.token_env_typo", wrong=name,
+                         right="GOLIVE_TOKEN"))
+    return out
+
+
 def _warn_open_data_layer(host: str) -> None:
     """Loud warning when the data layer is reachable from the network.
 
@@ -607,6 +643,9 @@ def serve(host: str = "127.0.0.1", port: int = DEFAULT_PORT):
     if GoliveHandler.oidc is not None:
         print(t("serve.app.oauth", port=port))
     print(t("serve.app.admin", port=port))
+
+    for line in auth_env_warnings():
+        print(line)
 
     _warn_open_data_layer(host)
 

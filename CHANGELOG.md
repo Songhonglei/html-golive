@@ -3,6 +3,53 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] - 2026-08-19
+
+An external black-box audit of 0.9.0 reported four issues. Three were real and
+are fixed here. The fourth — token auth appearing to have no effect — turned
+out to be caused by the test brief naming a variable golive has never read,
+which uncovered a genuine problem behind it.
+
+### Fixed
+
+- The site detail API returned every scan finding verbatim, including the
+  `context` excerpt cut from the page. It now returns a verdict, a category
+  list and a `finding_count`. The portal only ever displayed the count, so
+  this was invisible from the UI — restraint in the front end is not restraint
+  in the API.
+- A DSN written inside a `password = "..."` assignment lost its locator:
+  redaction anchored its connection-string pattern at the start of the match,
+  and the assignment rule's match starts earlier, so the whole span collapsed
+  to `my****`. Bare DSNs and those in JSON or YAML values now keep
+  `scheme://user:****@host:port/path` as intended. Nothing leaked either way;
+  what was missing was the information telling you which connection string to
+  go fix.
+- `doctor --site ''` ran the whole-install check and exited 0, so a script
+  whose variable interpolation failed got a healthy report for a site that was
+  never examined. An empty or whitespace-only ref is now refused with exit 2.
+- Setting a plausible-but-unread variable such as `GOLIVE_ADMIN_TOKEN`
+  silently started the server with no auth at all — and with no auth a
+  loopback caller is superadmin, so the operator got exactly the access they
+  were trying to restrict. `serve` now warns, naming both the variable set and
+  the one that works (`GOLIVE_TOKEN`), without echoing the value.
+- The 21 built-in security rule names were Chinese literals in every locale,
+  missed by the 0.7.5 translation pass because they live in `rules.yaml`
+  rather than in code. English refusals no longer print
+  `[机密凭证（强特征）]`. Rules from your own `security.extra_rules` files are
+  unaffected and keep showing their own text.
+
+### Known limitations
+
+- A DSN that forms the *entire* value of a credential assignment still loses
+  its locator. The remaining path runs through the single redaction entry
+  point that guards against multi-credential leaks, and the risk of changing
+  it points at disclosure rather than at legibility, so it is deferred to a
+  release that can carry the full randomised leak sweep.
+- `strict` mode fingerprints the secret value, so two connection strings that
+  differ only by host share a fingerprint. That is intended — the fingerprint
+  identifies the credential, not the endpoint — and is now stated in
+  `docs/security.md`.
+
 ## [0.9.0] - 2026-08-19
 
 ### Fixed

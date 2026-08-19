@@ -12,6 +12,7 @@
 keyword_rules:
   - type: credential
     name: 机密凭证（强特征）
+    name_key: scanner.rule.secret_credential
     strength: strong
     keywords:
       - api_key
@@ -37,6 +38,7 @@ keyword_rules:
 
   - type: credential
     name: 凭证相关名词（弱特征）
+    name_key: scanner.rule.credential_noun
     strength: weak
     keywords:
       - apikey
@@ -49,6 +51,7 @@ keyword_rules:
 
   - type: personal_info
     name: 个人信息
+    name_key: scanner.rule.personal_info
     strength: weak
     keywords:
       - 身份证号
@@ -61,18 +64,22 @@ keyword_rules:
 regex_rules:
   - type: personal_info
     name: 手机号（11位）
+    name_key: scanner.rule.phone_cn
     pattern: '\b1[3-9]\d{9}\b'
     strength: weak
   - type: personal_info
     name: 身份证号（18位）
+    name_key: scanner.rule.id_card_cn
     pattern: '\b\d{17}[\dXx]\b'
     strength: strong
   - type: credential
     name: JDBC连接串
+    name_key: scanner.rule.jdbc_dsn
     pattern: 'jdbc:[a-zA-Z]+://[\w.:-]+'
     strength: strong
   - type: credential
     name: 数据库连接串
+    name_key: scanner.rule.db_dsn
     # Dialect aliases matter: "postgresql://" is what SQLAlchemy and Django
     # write, and matching only "postgres://" missed every one of them.
     # The character class must accept punctuation, or a DSN whose password
@@ -81,12 +88,14 @@ regex_rules:
     strength: strong
   - type: credential
     name: 连接串含内嵌口令
+    name_key: scanner.rule.dsn_inline_password
     # Any scheme://user:password@host — catches dialects not listed above.
     # The password class excludes only what cannot appear in one.
     pattern: '\b[a-z][a-z0-9+.\-]{2,}://[^\s:/@"''<>]{1,64}:[^\s/@"''<>]{3,}@[^\s"''<>]{3,}'
     strength: strong
   - type: credential
     name: 凭证赋值（含变量声明）
+    name_key: scanner.rule.credential_assignment
     # The keyword list only has the literal "password=", so every ordinary
     # way of writing it in code went undetected:
     #   const password = "…"   let apiKey: "…"   self.db_password = '…'
@@ -97,6 +106,7 @@ regex_rules:
     strength: strong
   - type: credential
     name: Bearer 令牌值
+    name_key: scanner.rule.bearer_token
     # "authorization:" as a literal missed `const Authorization = "Bearer …"`
     # and every JS/JSON header object. Match the token itself instead of the
     # header name — a Bearer followed by a long opaque value is a credential
@@ -105,51 +115,62 @@ regex_rules:
     strength: strong
   - type: credential
     name: JWT
+    name_key: scanner.rule.jwt
     # Three base64url segments: header.payload.signature
     pattern: '\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}'
     strength: strong
   - type: credential
     name: AWS AccessKey
+    name_key: scanner.rule.aws_access_key
     pattern: '\bAKIA[0-9A-Z]{16}\b'
     strength: strong
   - type: credential
     name: 云厂商 AccessKey ID
+    name_key: scanner.rule.cloud_access_key_id
     # Alibaba LTAI…, Tencent AKID…, Google AIza… handled separately.
     pattern: '\b(?:LTAI[A-Za-z0-9]{12,}|AKID[A-Za-z0-9]{13,}|ASIA[0-9A-Z]{16})\b'
     strength: strong
   - type: credential
     name: 云平台 AK/SK 赋值
+    name_key: scanner.rule.cloud_ak_sk_assignment
     # Also matches the short generic names people actually use next to a
     # 16+ char opaque value (id = "…"; secret = "…").
     pattern: '(?:AccessKeyId|AccessKeySecret|aws_access_key_id|aws_secret_access_key|SecretAccessKey|SecretId|SecretKey)\s*[=:]\s*["''][A-Za-z0-9/+\-_]{16,}["'']'
     strength: strong
   - type: credential
     name: OpenAI 风格 key
+    name_key: scanner.rule.openai_style_key
     pattern: '\bsk-[A-Za-z0-9\-_]{20,}\b'
     strength: strong
   - type: credential
     name: GitHub token
+    name_key: scanner.rule.github_token
     # ghp_ classic PAT / gho_ oauth / ghs_ server / github_pat_ fine-grained
     pattern: '\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}\b'
     strength: strong
   - type: credential
     name: GitHub 细粒度 token
+    name_key: scanner.rule.github_token_fine
     pattern: '\bgithub_pat_[A-Za-z0-9_]{20,}\b'
     strength: strong
   - type: credential
     name: PyPI token
+    name_key: scanner.rule.pypi_token
     pattern: '\bpypi-[A-Za-z0-9_\-]{20,}\b'
     strength: strong
   - type: credential
     name: Slack token
+    name_key: scanner.rule.slack_token
     pattern: '\bxox[abposr]-[A-Za-z0-9\-]{10,}\b'
     strength: strong
   - type: credential
     name: Google API key
+    name_key: scanner.rule.google_api_key
     pattern: '\bAIza[A-Za-z0-9_\-]{35}\b'
     strength: strong
   - type: credential
     name: 私钥文件头
+    name_key: scanner.rule.private_key_header
     # split on purpose so scanners don't flag this rules file itself
     pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
     strength: strong

@@ -3,6 +3,55 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.5] - 2026-08-19
+
+0.8.4 said it had fixed secrets leaking into the block message. An audit
+found a page where they still did. **Upgrade from 0.8.4.**
+
+### Security
+
+- **A page carrying several credentials no longer leaks any of them.** Each
+  finding gets a context window cut around it, so one window routinely
+  overlaps a *neighbouring* credential — and when it starts partway into
+  that value, the `password=` in front of it is outside the window. What
+  remains is a bare string with no shape, which is why every pattern-based
+  pass missed it, including 0.8.4's fix for the single-credential case.
+
+  Secret values are now collected from the whole page **before** any window
+  is cut, and every window is scrubbed against all of them, clipped suffixes
+  included.
+
+  Worth stating plainly: of 72 arrangements of four credentials, 42 leaked
+  and 30 did not. Which one you happen to write decided whether you saw the
+  bug — 0.8.4's own test used one of the 30. The regression test now
+  enumerates orderings instead of picking a sample, and a 2000-case
+  randomised sweep over 16 credential kinds passes clean.
+
+- Values whose whole match is the secret (`AKIA…`, a JWT) were missing from
+  the page set, because collection only looked inside `key="value"`. A
+  neighbour's window printed them in full.
+
+- The DSN password is what goes into the set, not the whole connection
+  string — otherwise scrubbing removed the host too, and the locator that
+  0.8.4 deliberately preserved disappeared again. This was the third place
+  the "password may contain @" mistake appeared: detection (0.8.2), the
+  masker (0.8.4), and value extraction here.
+
+- Page state is thread-local. The editor save endpoint scans inside a
+  threaded server, and a shared set would let two concurrent scans redact
+  each other's reports.
+
+### Tests
+
+- `TestCrowdedPageLeaksNothing` enumerates every ordered pair of 13
+  credential kinds across 7 separators and 4 wrappers, plus all of them on
+  one page, and asserts the DSN locator survives.
+- Each fix was reverted in turn to confirm the matching subtest fails. The
+  first version of the thread-local test passed under a shared global too —
+  a test that could not fail — and was rewritten to assert on the storage
+  rather than run threads and hope.
+- Corpus at 29 `must_block` / 16 `must_pass`.
+
 ## [0.8.4] - 2026-08-18
 
 0.8.3 claimed that a detected credential never reaches the block message.

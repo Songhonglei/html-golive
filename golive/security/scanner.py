@@ -18,6 +18,7 @@ Public API:
 from __future__ import annotations
 
 import re
+import threading
 import sys
 from pathlib import Path
 
@@ -402,6 +403,46 @@ def _mask_by_detection_rules(s: str) -> str:
     return s
 
 
+#: Secret values found anywhere on the page currently being scanned.
+#:
+#: A context window is cut around each hit, so one finding's window routinely
+#: overlaps a *different* credential — and if the window starts partway into
+#: that value, the `password=` in front of it is outside the window. What is
+#: left is a bare string with no shape to recognise, which is why per-snippet
+#: extraction could not see it: the evidence needed is not in the snippet.
+#:
+#: So values are collected once from the whole page before any context is
+#: cut, and every window is scrubbed against all of them.
+#:
+#: Thread-local, not a plain global: the editor save endpoint scans inside a
+#: threaded HTTP server, and two concurrent saves sharing one set would let
+#: one page's report be scrubbed with another page's secrets — or worse, mask
+#: nothing because the other thread cleared it mid-scan.
+_page_state = threading.local()
+
+
+def _page_secrets() -> set:
+    return getattr(_page_state, "secrets", None) or set()
+
+
+def _secret_part(value: str) -> str:
+    """The part of a value that is actually secret.
+
+    A value extracted from an assignment can be a whole connection string,
+    and a connection string is not itself the secret: scheme, user and host
+    are how an operator works out which of their DSNs to go fix. Adding the
+    whole thing to the redaction set silently removed that.
+    """
+    # Greedy up to the LAST @, because the password may contain @ itself.
+    # This is the third place the same character-class mistake appeared: in
+    # detection (0.8.2), in the masker (0.8.4), and here. Anything walking a
+    # DSN has to assume @ is a legal password character.
+    dsn = re.search(r'(?://)?[^\s:/@]{0,64}:([^\s/]{2,})@', value)
+    if dsn:
+        return dsn.group(1)
+    return value
+
+
 def _secret_values_in(snippet: str, rules: dict) -> set:
     """The literal secret values a detection rule can point at in this text.
 
@@ -423,10 +464,28 @@ def _secret_values_in(snippet: str, rules: dict) -> set:
             continue
         for m in rx.finditer(snippet):
             hit = m.group(0)
+            # A connection string is not itself the secret: scheme, user and
+            # host are how an operator finds which of their DSNs to fix, and
+            # blanking the whole match takes that away. Only the password
+            # between ":" and "@" goes into the value set.
+            dsn = re.search(
+                r'://[^\s:/@]{0,64}:([^\s/@]{2,})@', hit)
+            if dsn:
+                values.add(dsn.group(1))
+                continue
+            found_inner = False
             for chunk in re.findall(r'["\']([^"\']{6,})["\']', hit):
-                values.add(chunk)
+                values.add(_secret_part(chunk))
+                found_inner = True
             for chunk in re.findall(r'[=:]\s*["\']?([^\s"\';,)]{6,})', hit):
-                values.add(chunk)
+                values.add(_secret_part(chunk))
+                found_inner = True
+            if not found_inner:
+                # For rules like `\bAKIA[0-9A-Z]{16}\b` or a JWT there is no
+                # key="value" wrapper — the match *is* the secret. Without
+                # this, such a value was absent from the page set, so a
+                # neighbouring finding's window printed it whole.
+                values.add(hit.strip().strip('"\'`'))
     return {v for v in values if len(v) >= 6}
 
 
@@ -478,9 +537,26 @@ def _mask_context(text: str, keyword: str, window: int = 30,
         values = _secret_values_in(snippet, rules_for_values)
     except Exception:  # noqa: BLE001 — redaction must never raise
         values = set()
+    # Union with everything found on the page, not just this window: the
+    # value leaking here usually belongs to a *neighbouring* finding, and
+    # this window may hold only a clipped middle of it with no key= in sight.
+    values |= _page_secrets()
     snippet = _mask_secret_literal(snippet)
     for v in sorted(values, key=len, reverse=True):
         snippet = snippet.replace(v, f"{v[:2]}****")
+        # A window can start partway into a value, so the clipped tail is
+        # still the secret and still worth having. Longest suffix first, and
+        # only suffixes long enough to be worth guessing from — chasing this
+        # down to a few characters would start eating ordinary words that
+        # happen to end the same way.
+        if len(v) >= 16:
+            for cut in range(1, len(v) - 11):
+                tail = v[cut:]
+                if len(tail) < 12:
+                    break
+                if tail in snippet:
+                    snippet = snippet.replace(tail, "****")
+                    break
     return f"...{snippet}..."
 
 
@@ -509,6 +585,16 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
     result = ScanResult()
     content = _extract_text_content(html)
     seen = set()
+
+    # Collect every secret value on the page before cutting any context
+    # window, so a window overlapping a different credential can be scrubbed
+    # against it. Module-level rather than threaded through every call site
+    # because _mask_context is reached from several places; reset per scan so
+    # one page's secrets can never influence another's report.
+    try:
+        _page_state.secrets = _secret_values_in(content, rules)
+    except Exception:  # noqa: BLE001 — redaction must never raise
+        _page_state.secrets = set()
 
     # keyword rules
     for rule in rules["keyword_rules"]:

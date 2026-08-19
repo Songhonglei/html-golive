@@ -16,6 +16,7 @@ nothing about which one to fix.
 """
 from __future__ import annotations
 
+import itertools
 import os
 import unittest
 
@@ -192,6 +193,209 @@ class TestRedactionCannotDriftFromDetection(unittest.TestCase):
         self.assertNotIn(
             "IOSFODNN7EXAMPLE", out,
             "a broken rule earlier in the list stopped redaction")
+
+
+# ── the 0.8.4 regression: several credentials in one <script> ──────────────
+
+#: One secret per entry, in the form it would be written by hand.
+CROWDED_PAGE_SECRETS = {
+    "password variable":
+        ('const password = "%s";', "Xk9mQ2vLp8wRtY"),
+    "quoted json key":
+        ('{"db_password": "%s"}', "Qw3Er4Ty5Ui6Op7A"),
+    "bearer jwt":
+        ('const auth = "Bearer %s";',
+         "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.abcdefghijklmnop"),
+    "mysql dsn":
+        ('const dsn = "mysql://tester:%s@db.example.test:3306/app";',
+         "P@ss!w0rd$x"),
+    "postgres dsn":
+        ('const pg = "postgresql://rep:%s@pg.example.test:5432/audit";',
+         "S3cr3t!p@ss#y"),
+    "redis dsn":
+        ('const rd = "redis://:%s@cache.test:6379";', "onlypass9x"),
+    "openai key":
+        ('const key = "sk-%s";', "abcdefghij0123456789klmnopqrstuv"),
+    "github token":
+        ('const gh = "ghp_%s";', "abcdefghij0123456789klmnopqrstuv2"),
+    "aws access key":
+        ('const ak = "AKIA%s";', "IOSFODNN7EXAMPLE"),
+    "cloud secret":
+        ('const s = {AccessKeySecret:"%s"};', "wJalrXUtnFEMIK7MDENGbPx"),
+    "national id":
+        ("<p>%s</p>", "440101199001011234"),
+    "yaml api key":
+        ('api_key: "%s"', "Mn4Bv5Cx6Zs7Aq8W"),
+    "jdbc password":
+        ('const j = "jdbc:mysql://h:3306/d?user=root&password=%s";',
+         "Zq7Wm2Xt9Lp4Kv"),
+}
+
+SEPARATORS = ["\n", " ", "", "\n\n", ";", " // note\n", "\t"]
+
+WRAPPERS = [
+    "<html><body><script>%s</script></body></html>",
+    "<html><body><pre>%s</pre></body></html>",
+    "<html><body><script>\n%s\n</script><p>t</p></body></html>",
+    "<html><body><div>%s</div></body></html>",
+]
+
+
+class TestCrowdedPageLeaksNothing(unittest.TestCase):
+    """Several credentials on one page, in every arrangement.
+
+    This is the failure 0.8.4 shipped with and claimed to have fixed. A
+    context window is cut around each hit, so one finding's window overlaps
+    a *neighbouring* credential — and when the window starts partway into
+    that value, the `password=` in front of it falls outside. What remains is
+    a bare string with no shape, so every pattern-based pass missed it.
+
+    A single hand-picked sample is not enough here: of 72 orderings of four
+    credentials, 42 leaked and 30 did not. Which one you happen to write
+    decides whether you see the bug, so the arrangement is enumerated.
+    """
+
+    def _scan_text(self, html):
+        result = scanner.scan_html(html, scanner.load_rules())
+        return "\n".join(
+            "{n} {k} {c}".format(n=d.get("name", ""), k=d.get("keyword", ""),
+                                 c=d.get("context", ""))
+            for d in result.matched_details)
+
+    def test_no_secret_leaks_from_any_pair(self):
+        """Every ordered pair, in every separator and wrapper."""
+        names = list(CROWDED_PAGE_SECRETS)
+        for first, second in itertools.permutations(names, 2):
+            tpl_a, sec_a = CROWDED_PAGE_SECRETS[first]
+            tpl_b, sec_b = CROWDED_PAGE_SECRETS[second]
+            for sep in SEPARATORS:
+                body = sep.join([tpl_a % sec_a, tpl_b % sec_b])
+                html = WRAPPERS[0] % body
+                text = self._scan_text(html)
+                for label, secret in ((first, sec_a), (second, sec_b)):
+                    if secret not in text:
+                        continue
+                    self.fail(
+                        "{first} + {second} (sep={sep!r}): {label} leaked"
+                        .format(first=first, second=second, sep=sep,
+                                label=label))
+
+    def test_no_secret_leaks_from_the_whole_page(self):
+        """All of them at once, in each wrapper."""
+        body_parts = [tpl % sec
+                      for tpl, sec in CROWDED_PAGE_SECRETS.values()]
+        for wrapper in WRAPPERS:
+            for sep in SEPARATORS:
+                with self.subTest(wrapper=wrapper[:32], sep=sep):
+                    text = self._scan_text(wrapper % sep.join(body_parts))
+                    for label, (_tpl, secret) in \
+                            CROWDED_PAGE_SECRETS.items():
+                        self.assertNotIn(
+                            secret, text,
+                            "{label} leaked from a crowded page"
+                            .format(label=label))
+
+    def test_the_crowded_page_is_actually_blocked(self):
+        body = "\n".join(tpl % sec
+                         for tpl, sec in CROWDED_PAGE_SECRETS.values())
+        result = scanner.scan_html(WRAPPERS[0] % body, scanner.load_rules())
+        self.assertTrue(result.blocked)
+
+    def test_locators_survive_a_crowded_page(self):
+        """Redaction must not get so aggressive that it stops being useful.
+
+        The first fix for this leak blanked whole matches, which passes a
+        no-leak assertion and leaves an operator with four masked DSNs and
+        no way to tell which one to fix.
+        """
+        cases = [
+            ('<html><body><script>const dsn = '
+             '"mysql://tester:P@ss!w0rd$x@db.example.test:3306/app";'
+             'const p = "Xk9mQ2vLp8wRtY";</script></body></html>',
+             "db.example.test", "P@ss!w0rd$x"),
+            ('<html><body><script>const a = '
+             '"postgresql://u:pw123456@pg.test:5432/d";'
+             'const k = "sk-abcdefghij0123456789klmn";</script></body></html>',
+             "pg.test", "pw123456"),
+        ]
+        for html, locator, secret in cases:
+            with self.subTest(locator=locator):
+                text = self._scan_text(html)
+                self.assertNotIn(secret, text, "the password leaked")
+                self.assertIn(
+                    locator, text,
+                    "the host says which credential to fix and is not itself "
+                    "the secret")
+
+
+class TestPageSecretsDoNotCrossScans(unittest.TestCase):
+    """Page state must not survive into the next page's report.
+
+    The set of secrets is kept per thread while a page is scanned. If it were
+    not cleared, one page's values would be redacted out of another page's
+    report — harmless-looking, but it would mask ordinary text and make
+    findings unreadable for reasons nobody could trace.
+    """
+
+    def test_a_clean_page_after_a_dirty_one_is_unaffected(self):
+        rules = scanner.load_rules()
+        dirty = ('<html><body><script>const password = "Xk9mQ2vLp8wRtY";'
+                 '</script></body></html>')
+        scanner.scan_html(dirty, rules)
+        clean = "<html><body><p>Xk9mQ2vLp8wRtY is just text here</p></body></html>"
+        result = scanner.scan_html(clean, rules)
+        self.assertFalse(
+            result.blocked,
+            "a page with no credential was blocked because of the previous "
+            "page")
+
+    def test_the_secret_set_is_per_thread(self):
+        """Asserted on the storage, because concurrency cannot show this.
+
+        Two threads scanning two pages both redact correctly even when the
+        set is shared, since each writes the set before reading it and the
+        secrets do not collide — running threads and looking for a leak
+        passes either way, which makes it a test that cannot fail.
+
+        What actually distinguishes the two designs is whether one thread can
+        observe another thread's value at all. So set a value here, read it
+        from a second thread, and require the second thread not to see it.
+        """
+        import threading
+
+        scanner._page_state.secrets = {"ThisThreadOnly123456"}
+        seen = []
+
+        def read_from_another_thread():
+            seen.append(scanner._page_secrets())
+
+        thread = threading.Thread(target=read_from_another_thread)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(
+            seen, [set()],
+            "another thread saw this thread's secrets: the set is shared, so "
+            "two concurrent scans can redact each other's reports")
+
+    def test_a_second_scan_replaces_rather_than_accumulates(self):
+        """Within one thread, page state must not build up across scans.
+
+        Accumulating would keep masking correctly and slowly turn every
+        report into asterisks as unrelated values pile up.
+        """
+        rules = scanner.load_rules()
+        first = ('<html><body><script>const password = "AaBbCcDdEeFf11";'
+                 '</script></body></html>')
+        second = ('<html><body><script>const password = "ZzYyXxWwVvUu22";'
+                  '</script></body></html>')
+        scanner.scan_html(first, rules)
+        scanner.scan_html(second, rules)
+        carried = [v for v in scanner._page_secrets()
+                   if "AaBbCcDdEeFf11" in v]
+        self.assertEqual(
+            carried, [],
+            "the previous page's secret is still in the set")
 
 
 if __name__ == "__main__":

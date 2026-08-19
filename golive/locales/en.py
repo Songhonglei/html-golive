@@ -173,6 +173,9 @@ TRANSLATIONS = {
     "publish.sb_unconfigured": "⚠️  Page uses SupabaseAPI but Supabase is not configured — injected a stub (calls will error with guidance).\n   Configure: supabase.url + GOLIVE_SUPABASE_ANON_KEY in golive.yaml/env (remember to set RLS on your tables).",
 
     # ── publish: watermark ─────────────────────────────────────────────
+    "arg.publish.no_watermark": "publish this one without a watermark, even if the site policy asks for one",
+    "publish.wm_from_policy": "   (from this site's policy; --no-watermark publishes without it)",
+    "publish.wm_policy_overridden": "🚫 Watermark skipped for this publish — the site policy still asks for one",
     "publish.wm_disabled": "⏭️  GOLIVE_WATERMARK_OFF=1 — watermark disabled",
     "publish.wm_source_oidc": "OIDC user identity",
     "publish.wm_source_static": "static text \"{text}\"",

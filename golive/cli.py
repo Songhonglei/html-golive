@@ -182,17 +182,27 @@ def cmd_publish(args) -> int:
     # data-layer injection (window.TemplateAPI / window.SupabaseAPI)
     html = _apply_data_layers(html, args)
 
-    # watermark (M3) — --watermark flag or yaml watermark.enabled
-    html = _apply_watermark(html, args)
-
     enable_editor = bool(getattr(args, "enable_editor", False))
+
+    # Resolve the target before injecting the watermark: on --update its
+    # policy is one of the inputs to that decision, and the policy is keyed
+    # by site_id. A failed lookup should also cost nothing, which is another
+    # reason to do it before any injection work.
+    existing = None
+    if args.update:
+        existing = registry.resolve(args.update)
+        if existing is None:
+            print(t("publish.site_not_found", ref=args.update), file=sys.stderr)
+            return 1
+
+    # watermark — explicit flag, then site policy, then yaml
+    html = _apply_watermark(
+        html, args,
+        policy=_site_policy(existing["site_id"]) if existing else None)
 
     # update or create
     if args.update:
-        site = registry.resolve(args.update)
-        if site is None:
-            print(t("publish.site_not_found", ref=args.update), file=sys.stderr)
-            return 1
+        site = existing
         new_slug = None
         if args.slug and args.slug.lower() != (site.get("slug") or ""):
             okv, msg = validate_slug(args.slug, site["site_id"], registry)
@@ -223,6 +233,8 @@ def cmd_publish(args) -> int:
     # The site_id only exists once the site does, so the scan that cleared
     # this publish is filed here rather than next to the scan itself.
     _record_scan(html, _scan, site_id=site["site_id"])
+    _record_manifest(html, site["site_id"], args)
+    _remember_watermark_choice(site["site_id"], args)
 
     print(f"   site_id: {site['site_id']}")
     if site.get("slug"):
@@ -312,31 +324,173 @@ def _title_of(html: str) -> str:
     return m.group(1).strip()[:60] if m else ""
 
 
-def _apply_watermark(html: str, args) -> str:
+def _source_type_of(source: str) -> str:
+    """Classify a publish source into one of the manifest's source types."""
+    from pathlib import Path as _P
+
+    if not source:
+        return "unknown"
+    if str(source).lower().startswith(("http://", "https://")):
+        return "clone"
+    p = _P(source)
+    if p.is_dir():
+        return "dir"
+    if p.suffix.lower() == ".zip":
+        return "zip"
+    if p.exists():
+        return "file"
+    return "unknown"
+
+
+def _record_manifest(html: str, site_id: str, args,
+                     source_type: str = "") -> None:
+    """Record what this publish produced. Never blocks a publish.
+
+    The manifest answers questions the sites table cannot: which layers a
+    page carries, which data model it points at, what it was published from,
+    and whether the file on disk is still the file we wrote. Failing to write
+    it should not undo a publish that already succeeded, so every error here
+    is swallowed — visible under GOLIVE_DEBUG.
+    """
+    if not site_id:
+        return
+    try:
+        import hashlib
+
+        from golive.backends.registry.sqlite_manifest import get_manifests
+        from golive.inject import layers_present, template_api
+
+        models = []
+        model = template_api.extract_model_code_from_html(html) or ""
+        if model:
+            models.append(model)
+
+        get_manifests().put_manifest(
+            site_id,
+            content_sha256=hashlib.sha256(
+                html.encode("utf-8", "replace")).hexdigest(),
+            source_type=(source_type
+                         or _source_type_of(getattr(args, "source", ""))),
+            injections=layers_present(html),
+            data_models=models,
+            published_with=__version__,
+        )
+    except Exception as e:              # noqa: BLE001 - see docstring
+        import os as _os
+        if _os.environ.get("GOLIVE_DEBUG"):
+            print(f"   manifest write failed: {e}", file=sys.stderr)
+
+
+def _remember_watermark_choice(site_id: str, args) -> None:
+    """Persist an explicit watermark decision into the site policy.
+
+    Without this the policy tier would only ever help people who set a policy
+    by hand, and the bug it exists to fix starts earlier than that: a page
+    first published with ``--watermark`` lost the watermark on the next
+    republish. The flag described one publish; nothing carried the intent
+    forward. So an explicit flag now also states the intent.
+
+    Only explicit flags are recorded. ``watermark.enabled`` in yaml already
+    applies to every publish and does not need storing per site, and copying
+    it in would turn a config default into per-site state that outlives
+    changing the config back.
+    """
+    if not site_id:
+        return
+    flag = getattr(args, "watermark", None)
+    refused = bool(getattr(args, "no_watermark", False))
+    if flag is None and not refused:
+        return
+    try:
+        from golive.backends.registry.sqlite_manifest import get_manifests
+
+        config = {}
+        if isinstance(flag, str) and flag:
+            config = {"text": flag}
+        get_manifests().set_policy(
+            site_id,
+            watermark_enabled=(not refused),
+            watermark_config=config if not refused else {},
+            updated_by="cli")
+    except Exception as e:              # noqa: BLE001 - never blocks publish
+        import os as _os
+        if _os.environ.get("GOLIVE_DEBUG"):
+            print(f"   policy write failed: {e}", file=sys.stderr)
+
+
+def _site_policy(site_id: str):
+    """The stored policy for a site, or None if it cannot be read.
+
+    Returning None rather than raising keeps a publish working when the
+    policy table is unreachable. A policy adds intent to a publish; it is not
+    a precondition for one, and refusing to publish because a side table is
+    unavailable would be the wrong trade.
+    """
+    if not site_id:
+        return None
+    try:
+        from golive.backends.registry.sqlite_manifest import get_manifests
+        return get_manifests().get_policy(site_id)
+    except Exception as e:              # noqa: BLE001 - see docstring
+        import os as _os
+        if _os.environ.get("GOLIVE_DEBUG"):
+            print(f"   policy lookup failed: {e}", file=sys.stderr)
+        return None
+
+
+def _apply_watermark(html: str, args, policy=None) -> str:
     """Inject the watermark layer when requested (M3).
 
-    Trigger: ``--watermark [text]`` CLI flag, or yaml ``watermark.enabled``.
-    ``GOLIVE_WATERMARK_OFF=1`` wins over everything (debug kill switch).
+    Trigger, in order of precedence:
+
+    1. ``--no-watermark`` — an explicit refusal wins over everything below.
+    2. ``--watermark [text]`` — an explicit request.
+    3. The site policy, when republishing a site whose policy asks for one.
+    4. yaml ``watermark.enabled``.
+
+    ``GOLIVE_WATERMARK_OFF=1`` still wins over all of it (debug kill switch).
+
+    The policy tier is what 0.9.0 adds. Before it, republishing a watermarked
+    page without repeating ``--watermark`` silently dropped the watermark:
+    the flag described one publish, and nothing remembered the intent across
+    publishes. A page marked as internal stopped saying so, without any
+    message saying it had stopped.
     """
     from golive.config import get_config
     from golive.inject import watermark as wm
 
     cfg = get_config()
     flag = getattr(args, "watermark", None)          # None = flag absent
-    wants = (flag is not None) or cfg.watermark.enabled
+    if getattr(args, "no_watermark", False):
+        # Say so when this overrides a stored policy — otherwise the flag
+        # looks like it did nothing on a page that had no watermark anyway.
+        if policy and policy.get("watermark_enabled"):
+            print(t("publish.wm_policy_overridden"))
+        return wm.remove_from_html(html)
+
+    from_policy = bool(policy and policy.get("watermark_enabled"))
+    wants = (flag is not None) or from_policy or cfg.watermark.enabled
     if not wants:
         return html
     if wm.is_disabled():
         print(t("publish.wm_disabled"), file=sys.stderr)
         return wm.remove_from_html(html)
 
-    text = (flag if isinstance(flag, str) and flag else "") or cfg.watermark.text
+    policy_text = ""
+    if from_policy:
+        policy_text = (policy.get("watermark_config") or {}).get("text", "")
+    text = ((flag if isinstance(flag, str) and flag else "")
+            or policy_text or cfg.watermark.text)
     auth_me = "/auth/me" if cfg.auth.provider == "oidc" else ""
     html = wm.inject_into_html(html, text=text, slug=getattr(args, "slug", ""),
                                auth_me_url=auth_me, cfg=cfg)
     source = (t("publish.wm_source_oidc") if auth_me else
               (t("publish.wm_source_static", text=text) if text else t("publish.wm_source_meta")))
     print(t("publish.wm_injected", source=source))
+    if from_policy and flag is None:
+        # The user did not ask for this on the command line, so name where it
+        # came from and how to opt out of it for one publish.
+        print(t("publish.wm_from_policy"))
     return html
 
 
@@ -2044,6 +2198,11 @@ def main(argv=None) -> int:
     p.add_argument("--watermark", nargs="?", const="", default=None,
                    metavar="TEXT",
                    help=t("arg.publish.watermark"))
+    # Needed once a site policy can ask for a watermark: without this there
+    # would be no way to publish one page without it short of editing the
+    # policy, and an explicit flag should always beat stored intent.
+    p.add_argument("--no-watermark", action="store_true",
+                   help=t("arg.publish.no_watermark"))
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
                    help=t("arg.publish.port"))
     p.set_defaults(func=cmd_publish)

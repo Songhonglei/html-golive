@@ -140,3 +140,26 @@ class SqliteManifests:
             cur = c.execute("DELETE FROM site_policies WHERE site_id = ?",
                             (site_id,))
             return cur.rowcount > 0
+
+
+_store: Optional[SqliteManifests] = None
+
+
+def get_manifests() -> SqliteManifests:
+    """Process-wide store bound to the current GOLIVE_HOME.
+
+    Rebound when the home moves rather than cached once: tests switch
+    GOLIVE_HOME between cases, and a store still pointing at the previous
+    database reads rows that the test under it never wrote.
+    """
+    global _store
+    path = str(get_registry_db())
+    if _store is None or _store.db_path != path:
+        _store = SqliteManifests(path)
+    return _store
+
+
+def reset_cache() -> None:
+    """Drop the cached store — tests switch GOLIVE_HOME between cases."""
+    global _store
+    _store = None

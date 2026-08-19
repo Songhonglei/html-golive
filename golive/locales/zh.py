@@ -176,6 +176,9 @@ TRANSLATIONS = {
     "publish.sb_unconfigured": "⚠️  页面使用了 SupabaseAPI，但 Supabase 未配置 —— 已注入 stub（调用会报错并提示配置方法）。\n   配置：golive.yaml 里 supabase.url + env GOLIVE_SUPABASE_ANON_KEY（注意为表配置 RLS）。",
 
     # ── publish: watermark ─────────────────────────────────────────────
+    "arg.publish.no_watermark": "本次发布不加水印（即使站点 policy 要求加）",
+    "publish.wm_from_policy": "   （来自该站点的 policy；用 --no-watermark 可本次不加）",
+    "publish.wm_policy_overridden": "🚫 本次发布已跳过水印 —— 站点 policy 仍然要求加水印",
     "publish.wm_disabled": "⏭️  GOLIVE_WATERMARK_OFF=1 — 水印已禁用",
     "publish.wm_source_oidc": "OIDC 用户身份",
     "publish.wm_source_static": "静态文本「{text}」",

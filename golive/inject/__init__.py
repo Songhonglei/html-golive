@@ -122,6 +122,19 @@ def all_script_ids() -> tuple:
     return tuple(item.script_id for item in LAYERS) + LEGACY_SCRIPT_IDS
 
 
+def layers_present(html: str) -> list:
+    """Which layer kinds this page carries, in :data:`LAYERS` order.
+
+    Matches on the element id, which every injector sets and which is stable
+    across versions — the ``data-golive-*`` attributes only arrived in 0.8.2,
+    so pages published before that would come back empty if we keyed on them.
+    Order comes from LAYERS rather than the document so the same page always
+    yields the same list.
+    """
+    return [layer.kind for layer in LAYERS
+            if 'id="{sid}"'.format(sid=layer.script_id) in html]
+
+
 # M3 registration slot: watermark / editor layers append here.
 INJECTORS = {}
 

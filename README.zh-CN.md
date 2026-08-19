@@ -243,6 +243,10 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
 
 **安全**
 - 每次发布凭证/隐私信息扫描（YAML 可扩展规则）
+- 拦截信息足以定位是哪个凭证，但不重印它；`redact_mode: strict` 连
+  host/库名一起不打印，适合拦截记录会进共享 CI 日志的场景 *(v0.9)*
+- 每次发布记 manifest，`golive doctor --site` 可发现页面在 golive
+  之外被改过 *(v0.9)*
 - 服务端与压缩包解压均做路径穿越防护
 - 管理 API token 保护（`GOLIVE_TOKEN`）
 

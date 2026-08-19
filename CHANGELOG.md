@@ -3,6 +3,52 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-08-19
+
+### Fixed
+
+- **A watermark no longer disappears on republish.** A page published with
+  `--watermark` lost the watermark the next time it was published without
+  repeating the flag: the flag described one publish and nothing carried the
+  intent forward, so a page marked internal quietly stopped saying so. The
+  decision now reads, in order: `--no-watermark`, `--watermark`, the site
+  policy, then yaml `watermark.enabled`.
+- The site drawer's subtitle was inline Chinese, so `角色` appeared in English
+  sessions. Missed when the portal was translated in 0.7.5.
+- `scan_keep` was never added to `golive.example.yaml` when 0.8.4 shipped it.
+
+### Added
+
+- **`security.redact_mode: strict`** (default `locator`, env
+  `GOLIVE_REDACT_MODE`) — withholds the locator metadata a refusal normally
+  keeps, printing a scheme plus a stable short fingerprint and a line number
+  instead of a context snippet. For installs that collect refusals into shared
+  CI logs, where a hostname or database name is itself worth not printing. The
+  fingerprint is stable across runs and distinct per credential, so two DSNs
+  stay tellable apart without either being named. A typo in this setting is
+  refused rather than silently downgraded to the default.
+- **`--no-watermark`** — publish one page without a watermark even when the
+  site policy asks for one. Explicit flags beat stored intent, in both
+  directions: refusing once does not leave the watermark to reappear.
+- **Site manifests.** Every publish records its content hash, source type, the
+  layers actually injected, the data model and the publishing version.
+- **`golive doctor --site <ref>`** — compares a site's manifest against the
+  page on disk: content hash, layers claimed against layers present, and a
+  policy asking for a watermark the page does not have. Reports only; it never
+  rewrites the page or the record of it, because which of the two is wrong to
+  lose depends on why they differ.
+- **Portal**: the site drawer now shows the last publish, the site policy and
+  the last ten security scans, alongside snapshots.
+
+### Notes
+
+- Manifests, policies and scan history are local SQLite alongside settings and
+  security rules, and do not move when `registry.backend` changes — they are
+  this machine's audit trail and local state.
+- Sites published before 0.9.0 have no manifest; one is written on their next
+  publish, and both the portal and `doctor --site` say so rather than
+  reporting a fault.
+
 ## [0.8.6] - 2026-08-19
 
 No behaviour change. An external audit passed 0.8.5's multi-credential

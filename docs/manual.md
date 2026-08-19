@@ -255,7 +255,30 @@ unexpectedly, and the one to run after every upgrade.
 golive doctor                    # full report
 golive doctor --port 9000        # probe a service on a non-default port
 golive doctor --json             # machine-readable, for scripts and agents
+golive doctor --site my-page     # check one published site
 ```
+
+`--site` narrows the check to a single page and compares what the last publish
+recorded against what is on disk now: the content hash, the layers the
+manifest claims against the layers present, and a policy asking for a
+watermark the page does not have.
+
+```
+🔍 Site check: my-page
+   site_id: 87ee3f88…
+   published: 2026-08-19T07:58:46 (golive 0.9.0, from file)
+   ✅ The page on disk matches what the last publish wrote
+   ✅ Injected layers as recorded: watermark
+```
+
+It reports and stops there. A mismatch has several possible causes — the file
+was edited outside golive, a publish was interrupted, the manifest predates a
+feature — and they call for different fixes, one of which is to leave it
+alone. Repairing automatically would overwrite either the page or the record
+of it, and which one is wrong to lose depends on why they differ.
+
+Sites published before 0.9.0 have no manifest; one is written on their next
+publish, and that is reported as a note rather than a problem.
 
 ```
 🩺 golive doctor
@@ -357,6 +380,13 @@ the site, size, and the snapshot id created.
 - **Scan history**: every scan is recorded (redacted) so the doctor can tell
   a checked page from an unchecked one. `security.scan_keep` caps records per
   site (default 20, `0` keeps everything, env `GOLIVE_SCAN_KEEP`).
+- **What a refusal prints**: by default it keeps enough to identify the
+  credential — for a DSN the scheme, user, host, port and path, with only the
+  password dropped — so you can tell which of several to go fix.
+  `security.redact_mode: strict` withholds that metadata too, printing a
+  scheme plus a stable short fingerprint and a line number instead of a
+  context snippet, for installs where refusals land in shared CI logs.
+  Details: [security.md](security.md#strict-mode).
 - **Rule coverage** is pinned by a corpus of sample pages under
   `tests/corpus/` — adding a case is adding a file. To report a missed
   credential shape or a false positive, a sample page is the most useful bug
@@ -368,6 +398,15 @@ the site, size, and the snapshot id created.
   (`--watermark "CONFIDENTIAL"` or `watermark.enabled: true`). Identity can
   come from the logged-in OIDC user, a static string, or a page meta tag.
   Disable globally with `GOLIVE_WATERMARK_OFF=1`.
+
+  Since 0.9.0 an explicit `--watermark` is remembered as the site's policy, so
+  a later `golive publish --update` keeps the watermark without repeating the
+  flag. Before that it silently dropped it. To publish one page without it,
+  use `--no-watermark`; that is remembered too, so the watermark does not
+  reappear on the publish after. Precedence is `--no-watermark`, then
+  `--watermark`, then the site policy, then `watermark.enabled`. A yaml default
+  is deliberately not copied into a policy — otherwise turning it off in the
+  config would leave every previously published site watermarked.
 
 ## 14. Sharing
 

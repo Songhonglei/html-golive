@@ -254,6 +254,10 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
 
 **Safety**
 - Credential / PII scanning on every publish (YAML-extensible rules)
+- Refusals identify the credential without reprinting it; `redact_mode:
+  strict` withholds the host/database metadata too, for CI logs *(v0.9)*
+- Per-publish manifests + `golive doctor --site` to detect a page changed
+  outside golive *(v0.9)*
 - Path-traversal-hardened server and archive extraction
 - Token-protected management API (`GOLIVE_TOKEN`)
 

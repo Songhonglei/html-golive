@@ -1293,7 +1293,138 @@ def _doctor_target_port(args) -> int:
     return int(explicit or DEFAULT_SERVE_PORT)
 
 
+def _doctor_site_info(ref: str) -> dict:
+    """Compare what a site's manifest claims against the page on disk.
+
+    Reports only. A mismatch has several possible causes — the file was edited
+    outside golive, a publish was interrupted, the manifest predates a
+    feature — and picking one to "fix" automatically would mean overwriting
+    either the page or the record of it. Which is the wrong one to lose
+    depends on why they differ, so that call stays with the user.
+    """
+    import hashlib
+
+    # Through the factory, not SqliteRegistry directly: this has to report on
+    # whichever registry and storage the install actually uses.
+    from golive.backends.factory import get_registry, get_storage
+
+    info = {"ref": ref, "found": False, "site_id": "", "slug": "",
+            "manifest": None, "policy": None, "checks": [], "problems": []}
+
+    registry = get_registry()
+    site = registry.resolve(ref)
+    if site is None:
+        info["problems"].append(t("doctor.site.not_found", ref=ref))
+        return info
+
+    info.update(found=True, site_id=site["site_id"],
+                slug=site.get("slug") or "")
+
+    html = ""
+    try:
+        html = get_storage().read(site["site_id"]) or ""
+    except Exception as e:              # noqa: BLE001
+        info["problems"].append(t("doctor.site.unreadable", error=str(e)))
+    info["bytes"] = len(html.encode("utf-8", "replace"))
+
+    if not html:
+        return info
+
+    from golive.inject import layers_present
+
+    present = layers_present(html)
+    info["layers"] = present
+
+    try:
+        from golive.backends.registry.sqlite_manifest import get_manifests
+        store = get_manifests()
+        manifest = store.get_manifest(site["site_id"])
+        info["policy"] = store.get_policy(site["site_id"])
+    except Exception as e:              # noqa: BLE001
+        info["problems"].append(t("doctor.site.no_manifest_store",
+                                  error=str(e)))
+        return info
+
+    info["manifest"] = manifest
+    if manifest is None:
+        # Not a fault: sites published before manifests existed have none,
+        # and one appears on the next publish.
+        info["checks"].append(t("doctor.site.manifest_missing"))
+    else:
+        live = hashlib.sha256(html.encode("utf-8", "replace")).hexdigest()
+        if live == manifest["content_sha256"]:
+            info["checks"].append(t("doctor.site.hash_match"))
+        else:
+            info["problems"].append(t(
+                "doctor.site.hash_mismatch",
+                stored=manifest["content_sha256"][:12], live=live[:12]))
+
+        claimed = list(manifest.get("injections") or [])
+        missing = [k for k in claimed if k not in present]
+        extra = [k for k in present if k not in claimed]
+        if missing:
+            info["problems"].append(t("doctor.site.layers_missing",
+                                      layers=", ".join(missing)))
+        if extra:
+            info["problems"].append(t("doctor.site.layers_extra",
+                                      layers=", ".join(extra)))
+        if not missing and not extra:
+            info["checks"].append(t("doctor.site.layers_match",
+                                    layers=", ".join(claimed) or "none"))
+
+    policy = info["policy"] or {}
+    if policy.get("watermark_enabled") and "watermark" not in present:
+        # The case that made policies worth storing: the page stopped saying
+        # it was internal and nothing reported that it had.
+        info["problems"].append(t("doctor.site.policy_watermark_absent"))
+    elif policy.get("watermark_enabled"):
+        info["checks"].append(t("doctor.site.policy_watermark_ok"))
+
+    return info
+
+
+def _doctor_render_site(info: dict) -> None:
+    print(t("doctor.site.header", ref=info["ref"]))
+    if not info["found"]:
+        return
+    print(f"   site_id: {info['site_id']}")
+    if info.get("slug"):
+        print(f"   slug:    {info['slug']}")
+    print(t("doctor.site.size", bytes=info.get("bytes", 0)))
+    manifest = info.get("manifest")
+    if manifest:
+        print(t("doctor.site.published",
+                at=manifest["published_at"],
+                version=manifest["published_with"] or "?",
+                source=manifest["source_type"]))
+        if manifest.get("data_models"):
+            print(t("doctor.site.data_models",
+                    models=", ".join(manifest["data_models"])))
+    for line in info["checks"]:
+        print(f"   ✅ {line}")
+
+
 def cmd_doctor(args) -> int:
+    if getattr(args, "site", ""):
+        info = _doctor_site_info(args.site)
+        if getattr(args, "json", False):
+            import json as _json
+            info["ok"] = not info["problems"]
+            print(_json.dumps(info, ensure_ascii=False, indent=2,
+                              default=str))
+            return 1 if info["problems"] else 0
+        _doctor_render_site(info)
+        print()
+        if info["problems"]:
+            print(t("doctor.problems_found", count=len(info["problems"])))
+            for prob in info["problems"]:
+                print(f"  ❌ {prob}")
+            # Reports only — say so, so nobody waits for it to repair things.
+            print(t("doctor.site.reports_only"))
+            return 1
+        print(t("doctor.site.healthy"))
+        return 0
+
     port = _doctor_target_port(args)
     rep = _doctor_collect(port)
     problems = _doctor_problems(rep)
@@ -2310,6 +2441,8 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
     p.add_argument("--json", action="store_true",
                    help=t("arg.doctor.json"))
+    p.add_argument("--site", default="", metavar="REF",
+                   help=t("arg.doctor.site"))
     p.set_defaults(func=cmd_doctor)
 
     # skill

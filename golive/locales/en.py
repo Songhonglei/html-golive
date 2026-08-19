@@ -824,6 +824,7 @@ TRANSLATIONS = {
     "migrate.summary": "{count} issue(s) to address (see list above). Migration guide: docs/data-layer.md",
 
     # ── security scanner ──────────────────────────────────────────────
+    "scanner.context_strict": "(strict mode: line {line}; context withheld)",
     "scanner.skip_content": "⏭️  {count} content warning(s) waived "
                             "(--skip-content-scan); credential scan still ran",
     "scanner.deprecated_skip_scan": "⚠️  --skip-scan is deprecated and now "

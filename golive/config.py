@@ -200,6 +200,11 @@ class StyleConfig:
     font_cdn_base: str = ""
 
 
+#: Accepted values for security.redact_mode. Named here so the loader, the
+#: scanner and the CLI help cannot drift apart on what is valid.
+REDACT_MODES = ("locator", "strict")
+
+
 @dataclass
 class SecurityConfig:
     """Scanner configuration.
@@ -209,10 +214,25 @@ class SecurityConfig:
     Pruning is per site so a frequently-published page cannot evict the only
     record another site has. 0 disables pruning, matching ``audit_keep``.
     env: GOLIVE_SCAN_KEEP.
+
+    ``redact_mode`` controls how much of a credential a refusal shows.
+
+    ``locator`` (default) keeps the parts that identify *which* secret it is:
+    for a DSN the scheme, user, host, port and path, with only the password
+    removed. That is what makes a refusal actionable when someone has four
+    database URLs and needs to know which one to fix.
+
+    ``strict`` also removes that metadata, keeping a scheme and a short
+    fingerprint derived from the value. The fingerprint is stable across runs,
+    so two different DSNs stay distinguishable in a log without either being
+    named. For environments that collect refusals into shared CI logs, where a
+    hostname or database name is itself something to keep in. env:
+    GOLIVE_REDACT_MODE.
     """
     extra_rules: list = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
     scan_keep: int = 20
+    redact_mode: str = "locator"
 
 
 @dataclass
@@ -457,6 +477,17 @@ def _build(raw: dict, source_path: str) -> Config:
         raise ConfigError(
             "security.scan_keep must be an integer (records kept per site, "
             "0 to keep everything)")
+    redact_mode = str(_get(raw, "security", "redact_mode",
+                           default=cfg.security.redact_mode) or "").strip()
+    if redact_mode and redact_mode not in REDACT_MODES:
+        # Refuse rather than fall back to the default: someone who typed
+        # "strict" wrong is asking for less exposure, and silently giving
+        # them more is the wrong way to be forgiving.
+        raise ConfigError(
+            "security.redact_mode must be one of: "
+            + ", ".join(sorted(REDACT_MODES)))
+    if redact_mode:
+        cfg.security.redact_mode = redact_mode
     llm = cfg.security.llm
     llm.base_url = str(_get(raw, "security", "llm", "base_url", default="") or "").rstrip("/")
     llm.api_key_env = str(_get(raw, "security", "llm", "api_key_env",
@@ -555,6 +586,16 @@ def _apply_env_overrides(cfg: Config) -> Config:
             cfg.security.scan_keep = int(scan_keep_env)
         except ValueError:
             pass  # ignore malformed env — keep yaml/default
+    redact_env = os.environ.get("GOLIVE_REDACT_MODE", "").strip()
+    if redact_env in REDACT_MODES:
+        cfg.security.redact_mode = redact_env
+    elif redact_env:
+        # Unlike the other env vars, a typo here is not ignored quietly: the
+        # user asked for a redaction level and would otherwise get a weaker
+        # one without being told.
+        raise ConfigError(
+            "GOLIVE_REDACT_MODE must be one of: "
+            + ", ".join(sorted(REDACT_MODES)))
     return cfg
 
 
@@ -642,9 +683,26 @@ def get_config() -> Config:
         try:
             _current = load_config()
         except ConfigError as e:
+            # Falling back to defaults keeps the tool usable when a yaml file
+            # is malformed, which is the right call for most settings. It is
+            # the wrong call for one that *reduces* exposure: someone who
+            # misspelled "strict" asked for less to be printed, and quietly
+            # giving them more — behind a warning on stderr they may never
+            # see — is a downgrade they did not choose.
+            if _mentions_redact_mode(e):
+                raise
             print(_t("config.parse_failed", error=e), file=sys.stderr)
             _current = Config()
     return _current
+
+
+def _mentions_redact_mode(error) -> bool:
+    """Whether a config error concerns the redaction level.
+
+    Matched on the setting name rather than an exception subclass to keep the
+    check in one place; the loader raises plain ConfigError throughout.
+    """
+    return "redact_mode" in str(error).lower()
 
 
 def reset_config() -> None:

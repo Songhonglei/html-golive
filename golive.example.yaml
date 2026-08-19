@@ -189,6 +189,18 @@ localize:
 # ── security scanning ────────────────────────────────────────────────────────
 security:
   extra_rules: []         # extra rule YAML files, same schema as built-in
+  scan_keep: 20           # scan records kept per site; 0 keeps everything
+  # How much of a credential a refusal prints.
+  #   locator (default) keeps scheme/user/host/port/path for a DSN, dropping
+  #                     only the password — so you can tell which of several
+  #                     connection strings to go fix.
+  #   strict            also withholds that metadata, keeping a scheme and a
+  #                     stable short fingerprint, and replaces context
+  #                     snippets with a line number. For installs that collect
+  #                     refusals into shared CI logs, where a hostname or
+  #                     database name is itself worth not printing.
+  # A typo here is refused rather than quietly downgraded to the default.
+  redact_mode: locator
   # Optional LLM second-pass review of weak hits (M3). Any OpenAI-compatible
   # Chat Completions endpoint works: OpenAI, Azure OpenAI, Ollama
   # (http://localhost:11434/v1), OneAPI/new-api gateways, vLLM, LM Studio.

@@ -84,16 +84,52 @@ person's identity. Two things follow:
   design target; a refusal captured into a shared build log carries the
   retained metadata with it.
 
-There is no stricter mode yet — see
-[the roadmap note](#stricter-redaction-not-yet-implemented).
+If that metadata is itself something to keep in, use
+[strict mode](#strict-mode).
 
-### Stricter redaction (not yet implemented)
+### Strict mode
 
-A mode that keeps only the scheme plus a stable short fingerprint — enough to
-tell two DSNs apart across runs without naming either host — has been
-requested for log-collecting environments. It is **not implemented**; there
-is no flag or setting that turns it on today. Documented here so the current
-boundary is not mistaken for the intended endpoint.
+```yaml
+security:
+  redact_mode: strict     # locator (default) | strict
+```
+
+Env override: `GOLIVE_REDACT_MODE`.
+
+Strict withholds the metadata as well, keeping a scheme and a short
+fingerprint. The difference shows up in both parts of a finding:
+
+```
+locator (default)
+  · [database connection string] mysq****
+    Context: ...<p>mysql://tester:****@db.example.test:3306/app</p>...
+
+strict
+  · [database connection string] mysql://****#c6caf755
+    Context: (strict mode: line 3; context withheld)
+```
+
+The default keeps the readable form in the context snippet — that is where
+the host and database name appear, and where a CI log would pick them up.
+
+The fingerprint is a truncated SHA-256 of the credential — **stable** across
+runs and machines, so a repeated refusal is recognisable as the same one, and
+**distinct** per credential, so two DSNs stay tellable apart in a log without
+either being named. It is not reversible and is not a way to check a value.
+
+Context snippets are replaced by a line number. The snippet is a slice of the
+page, so it carries the same metadata; masking the credential inside it would
+not help.
+
+Two things worth knowing before turning it on:
+
+- **The verdict never changes.** Strict alters what a refusal prints, not what
+  gets blocked.
+- **A typo is refused, not ignored.** `redact_mode: strictt` raises a config
+  error rather than falling back to the default. Every other malformed setting
+  degrades to a default with a warning; this one does not, because quietly
+  handing someone weaker redaction than they asked for is the failure mode
+  worth avoiding.
 
 ## Rule file format
 

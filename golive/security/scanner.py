@@ -293,12 +293,19 @@ def ruleset_hash() -> str:
 def _mask_secret_literal(s: str) -> str:
     """Redact the secret-bearing part of a literal, keeping it recognisable.
 
+    In ``strict`` mode the hand-written shape passes below are skipped: they
+    are built to keep a value recognisable, which is the opposite of what
+    strict asks for. Everything goes through the detection rules instead, so
+    one code path decides how much a strict report shows.
+
     Single source of truth for redaction: both the context snippet and the
     ``keyword`` field on a finding go through here. The finding is printed to
     stderr and may end up in CI logs, terminal scrollback or a screenshot
     attached to a bug report, so "truncate to N characters" is not enough —
     the first 24 characters of a DSN or an API key are the secret.
     """
+    if _redact_mode() == "strict":
+        return _mask_by_detection_rules(s)
     # scheme://user:password@host  → keep scheme and user, drop the password.
     #
     # The password runs to the LAST @ before the host, not the first: a strong
@@ -425,6 +432,87 @@ def _page_secrets() -> set:
     return getattr(_page_state, "secrets", None) or set()
 
 
+def _canonical_credential(text: str) -> str:
+    """The stable identity of a credential inside a matched span.
+
+    Rules overlap: a single DSN is matched by the scheme keyword, by the
+    connection-string regex, and by the embedded-password regex, each with a
+    different extent. Fingerprinting the span therefore produced a different
+    tag per rule for one credential. Reduce to something every rule agrees on
+    before hashing — for a URL the password, otherwise the trailing secret of
+    a quoted assignment, otherwise the trimmed span.
+    """
+    dsn = re.search(r'://[^\s:/@]{0,64}:([^\s/]{2,})@', text)
+    if dsn:
+        return dsn.group(1)
+    quoted = re.findall(r'["\']([^"\']{6,})["\']', text)
+    if quoted:
+        return quoted[-1]
+    assigned = re.search(r'[=:]\s*["\']?([^\s"\';,)]{6,})', text)
+    if assigned:
+        return assigned.group(1)
+    return text.strip().strip('"\'`')
+
+
+def _fingerprint(value: str) -> str:
+    """A short stable tag for a value, revealing nothing about it.
+
+    Two different DSNs must stay distinguishable in a log without either being
+    named, and the same DSN must produce the same tag across runs so a repeated
+    refusal is recognisable as the same one.
+
+    Truncated SHA-256 rather than anything reversible. Eight hex characters is
+    plenty to tell a handful of credentials apart in one page and far too few
+    to attack the value through, and no salt is used precisely because the tag
+    has to be stable across processes and machines.
+    """
+    import hashlib
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+
+
+def _strict_replacement(text: str) -> str:
+    """Collapse a match to a scheme and a fingerprint.
+
+    ``strict`` mode drops the locator metadata that the default keeps — host,
+    database name, username — for installs where a refusal ends up in a shared
+    build log and those are themselves worth not printing.
+
+    The fingerprint is taken from the *credential*, not from the matched span.
+    Several rules match the same DSN with different extents, so hashing the
+    span gave one connection string three different tags in one report —
+    defeating the only thing the tag is for, which is telling two credentials
+    apart and recognising the same one twice.
+    """
+    scheme = re.match(r'([a-z][a-z0-9+.\-]*)://', text, flags=re.IGNORECASE)
+    if scheme:
+        return "{scheme}://****#{fp}".format(
+            scheme=scheme.group(1), fp=_fingerprint(_canonical_credential(text)))
+    prefix = re.match(
+        r'(sk-|pk-|AKIA|ASIA|LTAI|AKID|AIza|ghp_|gho_|ghs_|ghu_|ghr_'
+        r'|github_pat_|pypi-|xox[abposr]-|eyJ|Bearer\s+|jdbc:)',
+        text, flags=re.IGNORECASE)
+    if prefix:
+        return "{p}****#{fp}".format(
+            p=prefix.group(1).strip(),
+            fp=_fingerprint(_canonical_credential(text)))
+    return "****#{fp}".format(fp=_fingerprint(_canonical_credential(text)))
+
+
+def _redact_mode() -> str:
+    """Active redaction mode, defaulting to ``locator`` if config is unusable.
+
+    Falling back to the *weaker* mode is the safe direction here only because
+    the value being shown is already redacted by the strong-hit passes; strict
+    removes surrounding metadata, not the secret. A config error must not stop
+    a scan from reporting at all.
+    """
+    try:
+        from golive.config import get_config
+        return getattr(get_config().security, "redact_mode", "locator")
+    except Exception:  # noqa: BLE001
+        return "locator"
+
+
 def _secret_part(value: str) -> str:
     """The part of a value that is actually secret.
 
@@ -501,6 +589,8 @@ def _keep_shape_drop_value(m) -> str:
     host are what identify it, and only the password between them goes.
     """
     text = m.group(0)
+    if _redact_mode() == "strict":
+        return _strict_replacement(text)
     dsn = re.match(
         r'(?P<head>[a-z][a-z0-9+.\-]*://(?:[^\s:/@]{0,64}:)?)'
         r'(?P<secret>[^\s/@]{2,})'
@@ -521,6 +611,14 @@ def _mask_context(text: str, keyword: str, window: int = 30,
         idx = text.lower().find(keyword.lower())
     if idx == -1:
         return f"...{keyword}..."
+    if _redact_mode() == "strict":
+        # The window itself is the leak in strict mode: it is a slice of the
+        # page, so it carries the host and database name that strict exists to
+        # withhold — masking the credential inside it does not help. Report
+        # the position instead, which is what someone needs to find the line
+        # without the line being reproduced.
+        line_no = text.count("\n", 0, idx) + 1
+        return _t("scanner.context_strict", line=line_no)
     start = max(0, idx - window)
     end = min(len(text), idx + len(keyword) + window)
     snippet = text[start:end].strip()

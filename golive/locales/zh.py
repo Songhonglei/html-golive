@@ -827,6 +827,7 @@ TRANSLATIONS = {
     "migrate.summary": "共 {count} 类问题需要处理（见上方清单）。迁移指南：docs/data-layer.md",
 
     # ── security scanner ──────────────────────────────────────────────
+    "scanner.context_strict": "（strict 模式：第 {line} 行，不显示上下文）",
     "scanner.skip_content": "⏭️  已忽略 {count} 条内容告警"
                             "（--skip-content-scan）；凭证扫描仍已执行",
     "scanner.deprecated_skip_scan": "⚠️  --skip-scan 已弃用，现在只忽略内容告警。"

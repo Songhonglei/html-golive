@@ -215,6 +215,10 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   border-radius:999px;padding:2px 10px;font-size:12px;display:inline-flex;
   gap:6px;align-items:center}
 .tag b{cursor:pointer;color:var(--danger);font-weight:700}
+.kv-row{display:flex;gap:12px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)}
+.kv-row:last-child{border-bottom:none}
+.kv-k{color:var(--muted);min-width:120px;flex-shrink:0}
+.kv-v{color:var(--text);word-break:break-all}
 .snap-row{display:flex;justify-content:space-between;align-items:center;
   padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
 .snap-row:last-child{border-bottom:none}
@@ -910,6 +914,16 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   </div>
 
   <div class="section">
+    <h4 data-i18n="d.manifest"></h4>
+    <div id="d-manifest"></div>
+  </div>
+
+  <div class="section">
+    <h4 data-i18n="d.scans"></h4>
+    <div id="d-scans"></div>
+  </div>
+
+  <div class="section">
     <h4 data-i18n="d.snaps"></h4>
     <div id="d-snaps"></div>
   </div>
@@ -1047,6 +1061,27 @@ en: {
   "d.editable": "Inline edit",
   "d.transfer": "Transfer owner",
   "d.transfer.ph": "new owner email",
+  "d.manifest": "Last publish",
+  "d.manifest.none": "No manifest yet — one is written on the next publish",
+  "d.manifest.published": "Published",
+  "d.manifest.source": "Source",
+  "d.manifest.layers": "Injected layers",
+  "d.manifest.layers.none": "none",
+  "d.manifest.models": "Data model",
+  "d.manifest.hash": "Content hash",
+  "d.policy.watermark": "Policy: watermark",
+  "d.policy.wmtext": "Watermark text",
+  "d.policy.visibility": "Policy: visibility",
+  "d.scans": "Security scans",
+  "d.scans.none": "No scans recorded",
+  "d.scans.blocked": "blocked",
+  "d.scans.warned": "warned",
+  "d.scans.passed": "passed",
+  "d.scans.findings": "{n} finding(s)",
+  "word.on": "on",
+  "word.off": "off",
+  "word.unset": "(not set)",
+  "word.role": "role",
   "d.snaps": "Snapshots / rollback",
   "d.snaps.none": "No snapshots",
   "d.delete": "Delete site",
@@ -1299,6 +1334,27 @@ zh: {
   "d.editable": "在线编辑",
   "d.transfer": "移交 Owner",
   "d.transfer.ph": "新 owner 邮箱",
+  "d.manifest": "上次发布",
+  "d.manifest.none": "还没有 manifest —— 下次发布时会写入",
+  "d.manifest.published": "发布于",
+  "d.manifest.source": "来源",
+  "d.manifest.layers": "注入层",
+  "d.manifest.layers.none": "无",
+  "d.manifest.models": "数据模型",
+  "d.manifest.hash": "内容哈希",
+  "d.policy.watermark": "policy：水印",
+  "d.policy.wmtext": "水印文本",
+  "d.policy.visibility": "policy：可见性",
+  "d.scans": "安全扫描",
+  "d.scans.none": "没有扫描记录",
+  "d.scans.blocked": "已拦截",
+  "d.scans.warned": "有警告",
+  "d.scans.passed": "通过",
+  "d.scans.findings": "{n} 项发现",
+  "word.on": "开",
+  "word.off": "关",
+  "word.unset": "（未设置）",
+  "word.role": "角色",
   "d.snaps": "快照 / 回滚",
   "d.snaps.none": "暂无快照",
   "d.delete": "删除站点",
@@ -1787,9 +1843,13 @@ function openDrawer(ref){
   .then(function(s){
     state.current = s;
     $("d-title").textContent = s.name || s.slug || s.site_id;
-    $("d-sub").textContent = "slug: " + (s.slug || "(无)") +
-      " · id: " + s.site_id + " · owner: " + (s.owner || "(未设置)") +
-      " · 角色: " + s.role;
+    // These three read through t() rather than being inline Chinese, which
+    // is what they were: the drawer subtitle was missed when the portal was
+    // translated, so an English session still saw 角色 here.
+    $("d-sub").textContent = "slug: " + (s.slug || t("word.unset")) +
+      " · id: " + s.site_id +
+      " · owner: " + (s.owner || t("word.unset")) +
+      " · " + t("word.role") + ": " + s.role;
     $("d-name").value = s.name || "";
     $("d-notes").value = s.notes || "";
     $("d-editable").checked = !!s.editable;
@@ -1799,6 +1859,8 @@ function openDrawer(ref){
     $("sec-transfer").style.display = canMeta ? "" : "none";
     $("sec-delete").style.display = canMeta ? "" : "none";
     renderMaints(s.maintainers || []);
+    renderManifest(s.manifest, s.policy);
+    renderScans(s.scans || []);
     renderSnaps(s.snapshots || []);
     $("d-del-confirm").value = "";
     $("drawer").classList.add("open");
@@ -1872,6 +1934,76 @@ $("d-transfer").addEventListener("click", function(){
     loadSites();
   }).catch(function(e){ toast(e.message, true); });
 });
+
+function kvRow(label, value){
+  return '<div class="kv-row"><span class="kv-k">' + esc(label) +
+         '</span><span class="kv-v">' + esc(value) + "</span></div>";
+}
+
+function renderManifest(m, policy){
+  var box = $("d-manifest");
+  var html = "";
+  if (!m){
+    // Not a fault: sites published before 0.9.0 have no manifest, and one
+    // appears on the next publish. Say that rather than showing an error.
+    html += '<div style="color:var(--muted);font-size:12px">' +
+            esc(t("d.manifest.none")) + "</div>";
+  } else {
+    html += kvRow(t("d.manifest.published"),
+                  (m.published_at || "") +
+                  (m.published_with ? "  ·  golive " + m.published_with : ""));
+    html += kvRow(t("d.manifest.source"), m.source_type || "unknown");
+    html += kvRow(t("d.manifest.layers"),
+                  (m.injections && m.injections.length)
+                    ? m.injections.join(", ") : t("d.manifest.layers.none"));
+    if (m.data_models && m.data_models.length){
+      html += kvRow(t("d.manifest.models"), m.data_models.join(", "));
+    }
+    html += kvRow(t("d.manifest.hash"),
+                  (m.content_sha256 || "").slice(0, 16) + "…");
+  }
+  if (policy){
+    html += kvRow(t("d.policy.watermark"),
+                  policy.watermark_enabled ? t("word.on") : t("word.off"));
+    if (policy.watermark_enabled && policy.watermark_config &&
+        policy.watermark_config.text){
+      html += kvRow(t("d.policy.wmtext"), policy.watermark_config.text);
+    }
+    html += kvRow(t("d.policy.visibility"), policy.visibility || "public");
+  }
+  box.innerHTML = html;
+}
+
+function renderScans(scans){
+  var box = $("d-scans");
+  if (!scans || !scans.length){
+    box.innerHTML = '<div style="color:var(--muted);font-size:12px">' +
+                    esc(t("d.scans.none")) + "</div>";
+    return;
+  }
+  var html = "";
+  scans.forEach(function(sc){
+    // Findings are stored already redacted, but they are still the part of
+    // this view most likely to carry something sensitive, so only the counts
+    // and the verdict are shown here.
+    var n = (sc.findings || []).length;
+    // The column is "verdict", not "blocked" — reading the latter gave every
+    // scan a passing label, including the ones that stopped a publish.
+    // Three verdicts, not two: collapsing "warn" into passed would hide
+    // that a page tripped a content rule and was published anyway.
+    // Written as whole keys rather than "d.scans." + suffix so the i18n
+    // completeness test can still see which keys this file uses; the test
+    // caught the concatenated version as a missing key "d.scans.".
+    var verdict = (sc.verdict === "block") ? t("d.scans.blocked")
+                : (sc.verdict === "warn") ? t("d.scans.warned")
+                : t("d.scans.passed");
+    html += '<div class="snap-row"><span class="ts">' +
+            esc(sc.created_at || "") + "</span>" +
+            "<span>" + esc(verdict) + "</span>" +
+            "<span>" + esc(t("d.scans.findings", {n: n})) + "</span></div>";
+  });
+  box.innerHTML = html;
+}
 
 function renderSnaps(snaps){
   var box = $("d-snaps");

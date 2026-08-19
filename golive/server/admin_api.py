@@ -222,7 +222,32 @@ def _site_detail(identity, site, storage) -> tuple:
                             for s in snaps]
     except Exception:  # noqa: BLE001
         out["snapshots"] = []
+    out.update(_site_records(site["site_id"]))
     return 200, out
+
+
+def _site_records(site_id: str) -> dict:
+    """Manifest, policy and recent scans for a site.
+
+    Each in its own try: a page whose manifest predates 0.9.0 should still
+    show its policy, and an unreadable scan history should not blank the rest
+    of the detail view. Absent is represented as null/[] rather than an error,
+    because for these three "nothing recorded yet" is an ordinary state.
+    """
+    out = {"manifest": None, "policy": None, "scans": []}
+    try:
+        from golive.backends.registry.sqlite_manifest import get_manifests
+        store = get_manifests()
+        out["manifest"] = store.get_manifest(site_id)
+        out["policy"] = store.get_policy(site_id)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from golive.backends.registry.scans_store import get_scans_store
+        out["scans"] = get_scans_store().history_for_site(site_id, limit=10)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def _site_patch(identity, site, body, registry) -> tuple:

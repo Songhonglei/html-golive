@@ -3,6 +3,51 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.6] - 2026-08-19
+
+No behaviour change. An external audit passed 0.8.5's multi-credential
+redaction across 72 permutations with zero hits on either exit, and
+recommended keeping that check as a release gate. This wires the gate in and
+documents the boundary the redaction actually draws.
+
+### Added
+
+- **`tests/test_publish_leak_gate.py`** — runs the real CLI in a subprocess
+  against a real `GOLIVE_HOME`, then greps both exits: captured output and
+  every byte of the registry database. The in-process tests inspect findings,
+  which says nothing about what reaches a terminal or lands on disk — and
+  every leak in 0.8.2 through 0.8.4 was found by someone running the command,
+  not by the suite.
+
+  The gate's own coverage was established by reverting each fix: removing the
+  page-wide collection fails both the console and database assertions,
+  blanking the DSN locator fails the actionability assertion. The file states
+  what it does *not* catch rather than implying it catches everything.
+
+  Worth recording why that matters: the first version of this gate separated
+  the credentials with newlines and **stayed green with the fix reverted** —
+  the same mistake 0.8.4 made, one layer up. Newline-separated credentials do
+  not leak; the windows have to overlap. A gate that cannot fail reports
+  safety it never checked.
+
+- A storage-layer test that feeds `_redact_findings` raw, unredacted findings
+  directly. In the normal path a finding is already clean before it reaches
+  storage, so testing through `scan_html` would pass even if storage did
+  nothing.
+
+### Documentation
+
+- **`docs/security.md` now states what a refusal keeps and what it drops**:
+  for a connection string, scheme / user / host / port / path are kept and
+  the password goes. Named explicitly because the retained parts are not
+  secret but can still reveal internal topology, a tenant, or a person —
+  scan history stores exactly what the console prints, and a refusal captured
+  into a shared CI log carries that metadata with it.
+- The stricter mode (scheme plus a short fingerprint, for log-collecting
+  environments) is documented as **requested and not implemented**, with no
+  flag to enable it. An audit asked for it; describing it as available is how
+  0.8.3 claimed a scan history that nothing called.
+
 ## [0.8.5] - 2026-08-19
 
 0.8.4 said it had fixed secrets leaking into the block message. An audit

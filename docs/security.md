@@ -49,6 +49,52 @@ A known credential type prefix (`sk-`, `pk-`, `Bearer `, `Basic `, `token `) may
 precede the placeholder, since documentation often keeps the type and
 replaces only the secret.
 
+## What a blocked report shows you
+
+A refusal has to be actionable: you need to find the credential in your own
+page. So findings keep the parts that identify *which* secret it is, and drop
+the parts that make it usable.
+
+For a connection string:
+
+```
+mysql://tester:****@db.example.test:3306/app
+```
+
+**Kept:** scheme, username, host, port, database path.
+**Dropped:** the password.
+
+Everything else — API keys, tokens, assignments, national IDs — keeps a short
+recognisable head and nothing more (`sk-abcd****`, `44****34`).
+
+This is a deliberate trade. Blanking the whole match would satisfy "no
+sensitive substring in the output" and leave someone with four masked DSNs
+and no way to tell which one to go fix.
+
+### If the retained metadata matters to you
+
+The kept parts are not the secret, but in some organisations a hostname,
+database name or username does reveal internal topology, a tenant, or a
+person's identity. Two things follow:
+
+- **Scan history stores exactly what the console prints** — same redaction
+  function, no second policy. If the console shows a host, the database row
+  holds that host.
+- **CI logs are the case to think about.** Interactive local use is the
+  design target; a refusal captured into a shared build log carries the
+  retained metadata with it.
+
+There is no stricter mode yet — see
+[the roadmap note](#stricter-redaction-not-yet-implemented).
+
+### Stricter redaction (not yet implemented)
+
+A mode that keeps only the scheme plus a stable short fingerprint — enough to
+tell two DSNs apart across runs without naming either host — has been
+requested for log-collecting environments. It is **not implemented**; there
+is no flag or setting that turns it on today. Documented here so the current
+boundary is not mistaken for the intended endpoint.
+
 ## Rule file format
 
 Built-in rules: `golive/security/rules.yaml`. Two sections:

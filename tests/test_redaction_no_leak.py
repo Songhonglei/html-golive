@@ -398,5 +398,44 @@ class TestPageSecretsDoNotCrossScans(unittest.TestCase):
             "the previous page's secret is still in the set")
 
 
+class TestStorageRedactsIndependently(unittest.TestCase):
+    """The history table must not rely on the report having been cleaned.
+
+    In the normal path a finding is already redacted before it reaches
+    storage, so a test that goes through scan_html proves nothing about the
+    storage layer — it would pass even if storage did nothing at all. Feed it
+    raw findings directly, the way a future caller might.
+    """
+
+    def test_raw_findings_are_redacted_on_the_way_in(self):
+        from golive.backends.registry.scans_store import _redact_findings
+        secrets = ["Xk9mQ2vLp8wRtY", "IOSFODNN7EXAMPLE"]
+        raw = [{
+            "name": "credential assignment",
+            "keyword": 'password="Xk9mQ2vLp8wRtY"',
+            "context": ('const password = "Xk9mQ2vLp8wRtY";'
+                        'const k = "AKIAIOSFODNN7EXAMPLE";'),
+            "strength": "strong",
+            "type": "credential",
+        }]
+        stored = str(_redact_findings(raw))
+        for secret in secrets:
+            with self.subTest(secret=secret[:10]):
+                self.assertNotIn(
+                    secret, stored,
+                    "storage passed a raw secret through; it must redact on "
+                    "its own rather than trust the caller")
+
+    def test_storage_shares_the_masker_with_the_console(self):
+        """Same function, so improving one cannot leave the other behind."""
+        import inspect
+
+        from golive.backends.registry import scans_store
+        src = inspect.getsource(scans_store._redact_findings)
+        self.assertIn(
+            "_mask_secret_literal", src,
+            "storage should call the scanner's masker, not reimplement one")
+
+
 if __name__ == "__main__":
     unittest.main()

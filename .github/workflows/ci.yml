@@ -45,6 +45,75 @@ jobs:
         # the job fails in ~45s instead of holding the runner for hours.
         run: python -m pytest tests/ -q --timeout=45 --timeout-method=signal --durations=10
 
+  # A separate job rather than another matrix entry: the Postgres suite is
+  # skipped without a DSN, and until this existed that meant 45 tests never
+  # ran anywhere. Ten Postgres bugs shipped in 0.7.7 for exactly that reason
+  # — the backend was only ever exercised by hand. Keeping it separate also
+  # means a Postgres failure is legible as one, instead of turning a cell of
+  # the main matrix red for an unrelated-looking reason.
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: golive
+          POSTGRES_PASSWORD: golive_ci
+          POSTGRES_DB: golive_test
+        ports:
+          - 5432:5432
+        # Without the health check the job races the container: psycopg
+        # connects before Postgres finishes initialising and every test
+        # errors on connection rather than on anything it is testing.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[image,dev,postgres]'
+
+      - name: Run the Postgres suite
+        env:
+          GOLIVE_PG_DSN: postgresql://golive:golive_ci@127.0.0.1:5432/golive_test
+        run: |
+          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py \
+            -q --timeout=60 --timeout-method=signal -rs
+
+      - name: Assert the suite actually ran
+        # The tests skip themselves when the DSN is missing, so a green run
+        # proves nothing on its own — a typo in the env name above would give
+        # a passing job with everything skipped, which is the failure this
+        # whole job exists to prevent. Require a real count of passes.
+        env:
+          GOLIVE_PG_DSN: postgresql://golive:golive_ci@127.0.0.1:5432/golive_test
+        run: |
+          python -m pytest tests/test_postgres_backend.py -q --timeout=60 \
+            --timeout-method=signal > pg.txt 2>&1 || true
+          tail -3 pg.txt
+          python - <<'EOF'
+          import re, sys
+          report = open("pg.txt", encoding="utf-8").read()
+          passed = int((re.search(r"(\d+) passed", report) or [0, 0])[1])
+          skipped = int((re.search(r"(\d+) skipped", report) or [0, 0])[1])
+          print(f"passed={passed} skipped={skipped}")
+          if passed < 20:
+              sys.exit(f"expected the Postgres suite to run, got {passed} "
+                       f"passed / {skipped} skipped — is GOLIVE_PG_DSN set?")
+          EOF
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15

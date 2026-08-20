@@ -352,9 +352,14 @@ def _mask_secret_literal(s: str) -> str:
         r'(' + _VALUE_CHAR + r'{2})' + _VALUE_CHAR + r'{6,}',
         r'\1\2****', s, flags=re.IGNORECASE)
     # Recognisable credential prefixes standing alone
+    # The value class includes `.` because a JWT is dot-separated: without it
+    # this pass stopped at the first dot and left the payload and *signature*
+    # segments in clear text. The Bearer pass below already had the dot, which
+    # is why only a bare JWT leaked and one behind `Bearer ` did not — the kind
+    # of asymmetry that survives precisely because both look correct in review.
     s = re.sub(
         r'\b(sk-|pk-|AKIA|ASIA|LTAI|AKID|AIza|ghp_|gho_|ghs_|github_pat_'
-        r'|pypi-|xox[abposr]-|eyJ)([A-Za-z0-9\-_/+=]{8,})',
+        r'|pypi-|xox[abposr]-|eyJ)([A-Za-z0-9\-_/+=.]{8,})',
         lambda m: f"{m.group(1)}{m.group(2)[:4]}****", s)
     # Long digit runs are themselves the sensitive value — a national ID,
     # phone or card number has no "key=" in front of it, so every pass above
@@ -592,28 +597,38 @@ def _keep_shape_drop_value(m) -> str:
     text = m.group(0)
     if _redact_mode() == "strict":
         return _strict_replacement(text)
-    # search, not match: the same DSN is also matched by the broad
-    # credential-assignment rule, whose span starts at `password = "` — so
-    # anchoring at position 0 missed the DSN sitting inside it and fell
-    # through to the generic branch below, reducing the whole thing to
-    # `my****`. The password was safe either way; the host, user and port
-    # that make a refusal actionable were not. Reported by an external audit
-    # of 0.9.0 against exactly this shape.
-    # `secret` must allow @ and match greedily up to the LAST one: passwords
-    # contain @ regularly, and a class excluding it stopped at the first,
-    # leaving the rest of the password sitting in `tail` in clear text. That
-    # exact character-class mistake has now been made four times in this file
-    # (detection in 0.8.2, scrubbing in 0.8.4, value extraction in 0.8.5, and
-    # here) — hence the leak assertions in tests/test_redaction_no_leak.py
-    # covering every shape, not just the one being fixed.
-    dsn = re.search(
-        r'(?P<head>[a-z][a-z0-9+.\-]*://(?:[^\s:/@]{0,64}:)?)'
-        r'(?P<secret>[^\s/]{2,})'
-        r'(?P<tail>@[^\s"\'`;,)@]*)', text, flags=re.IGNORECASE)
-    if dsn and dsn.group("tail"):
-        return "{before}{head}****{tail}{after}".format(
-            before=text[:dsn.start()], head=dsn.group("head"),
-            tail=dsn.group("tail"), after=text[dsn.end():])
+    # Split on the LAST @ explicitly rather than asking one regex to do it.
+    #
+    # Every previous attempt expressed "password may contain @, host may not"
+    # as character classes, and every one leaked. A class excluding @ from the
+    # secret stopped at the first one (0.8.2 detection, 0.8.4 scrubbing, 0.8.5
+    # extraction, 0.9.0 shape redaction). Making the secret greedy did not fix
+    # it either: the *tail* class still excluded @, so the engine backtracked
+    # the secret to the first @ to let the tail match, and the remainder of the
+    # password stayed in clear text (0.9.1, found by an external audit — the
+    # fifth variation of one mistake).
+    #
+    # A credential URL has exactly one structural @: the last one. Everything
+    # before it is userinfo, everything after is the host. rpartition states
+    # that directly and cannot backtrack.
+    scheme = re.search(r'[a-z][a-z0-9+.\-]*://', text, flags=re.IGNORECASE)
+    if scheme:
+        before = text[:scheme.start()]
+        head = scheme.group(0)
+        rest = text[scheme.end():]
+        # The host part ends at the first delimiter; anything past it (query
+        # string, trailing quote, following statement) is not ours to redact.
+        m_body = re.match(r"""[^\s"'`;,)]*""", rest)
+        body = m_body.group(0) if m_body else ""
+        after = rest[len(body):]
+        userinfo, at, hostpart = body.rpartition("@")
+        if at and ":" in userinfo:
+            user = userinfo.split(":", 1)[0]
+            # Keep the username only when it looks like one; otherwise drop it
+            # rather than risk echoing another slice of secret.
+            if user and len(user) <= 64 and not re.search(r"[\s@]", user):
+                return "%s%s%s:****@%s%s" % (before, head, user, hostpart, after)
+            return "%s%s****@%s%s" % (before, head, hostpart, after)
     if len(text) <= 8:
         return "****"
     return f"{text[:4]}****{text[-2:] if len(text) > 24 else ''}"
@@ -782,10 +797,14 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
         result.matched_details.append({
             "type": rule["type"],
             "name": _rule_display_name(rule),
-            # Truncating at 24 chars is not redaction: a DSN password or an
-            # API key is mostly readable in its first 24 characters, and this
-            # value is printed on the BLOCK line.
-            "keyword": _mask_secret_literal(m.group(0)[:48]),
+            # Redact FIRST, then bound the length. Slicing before redaction
+            # destroys the shape the redactor recognises: a JWT cut at 48
+            # characters is no longer three dot-separated segments, so the JWT
+            # branch did not fire and the value came back untouched — 48
+            # characters of a real token on the BLOCK line and in the scan
+            # history. Found by an external audit of 0.9.1. Truncation is not
+            # redaction and must never be asked to act as it.
+            "keyword": _mask_secret_literal(m.group(0))[:96],
             "strength": rule["strength"],
             "context": _mask_context(content, m.group(0), at_idx=m.start()),
         })

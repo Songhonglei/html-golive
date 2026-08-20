@@ -3,6 +3,55 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.2] - 2026-08-20
+
+Two disclosures found by an external audit of 0.9.1. Both were live while the
+whole 1013-test suite was green, because every leak assertion in it checked for
+a *whole* credential — and both of these emitted most of one.
+
+### Fixed
+
+- **A DSN password was disclosed from its first `@` onwards.** 0.9.1 made the
+  secret group greedy but left `@` out of the *tail* class, so the engine
+  backtracked the secret to the first `@` to let the tail match and printed
+  everything after it verbatim, on the refusal line and into the scan history.
+  Redaction now splits on the last `@` with `rpartition` instead of asking one
+  pattern to know where a password ends: a credential URL has exactly one
+  structural `@`, and stating that directly cannot backtrack. Five releases
+  have now carried a variation of this one character-class mistake.
+- **48 characters of a JWT reached the refusal line and the scan history.**
+  Findings were truncated to 48 characters *before* redaction, and a JWT cut at
+  48 is no longer three dot-separated segments, so the branch that redacts JWTs
+  never matched and the value passed through untouched. Redaction now runs
+  first and the length bound after. Truncation is not redaction.
+- **A bare JWT's payload and signature segments were never redacted at all**
+  (found while fixing the above, not in the report). The standalone
+  credential-prefix pass omitted `.` from its value class, so it stopped at the
+  first dot. The neighbouring `Bearer` pass did include `.`, which is why a
+  token behind `Bearer ` was masked correctly while a bare one was not — an
+  asymmetry that survives review because either line looks right on its own.
+
+### Testing
+
+Leak assertions now walk every substring of the secret rather than looking for
+the whole value, and distinguish the prefix redaction deliberately keeps
+(`AKIA****`, so a refusal stays identifiable) from any run of the tail. Each of
+the three fixes was reverted individually to confirm the new tests fail: 6, 5
+and 9 failures respectively.
+
+### Known limitations
+
+- A DSN encoded as base64 is not detected. Decoding candidate base64 before
+  scanning is a new capability rather than a fix, and doing it carelessly would
+  flag inline images, fonts and sourcemaps — false refusals teach people to
+  pass `--skip-content-scan`, which disables the check entirely. Deferred to a
+  release that can carry a must-pass corpus of legitimate base64 assets.
+- Misspelled environment variables are only warned about from `serve` in the
+  background path, and the near-miss list does not yet cover names like
+  `GOLIVE_REDACTMODE` or `GOLIVE_WATERMARK`.
+- A DSN forming the *entire* value of a credential assignment still loses its
+  locator (carried over from 0.9.1).
+
 ## [0.9.1] - 2026-08-19
 
 An external black-box audit of 0.9.0 reported four issues. Three were real and

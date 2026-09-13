@@ -79,7 +79,6 @@ class TestDsnPasswordMiddleIsRedacted(_LeakAssertions):
     def tearDown(self):
         _restore_redact_mode()
 
-
     def test_window_cut_mid_password(self):
         """The audit layout: scheme keyword window ends inside the password.
 
@@ -124,7 +123,6 @@ class TestJwtSignatureTailIsRedacted(_LeakAssertions):
     def tearDown(self):
         _restore_redact_mode()
 
-
     def test_assignment_window_overlapping_signature(self):
         """A credential assignment whose window starts inside the signature.
 
@@ -157,7 +155,6 @@ class TestStrictFingerprintIsStable(unittest.TestCase):
     def tearDown(self):
         _restore_redact_mode()
 
-
     def test_history_fingerprint_matches_cli(self):
         import re
 
@@ -189,9 +186,10 @@ class TestSdistShipsTestHelpers(unittest.TestCase):
         check only means something against the built archive.
         """
         import glob
-        import sysconfig
-        sdists = sorted(glob.glob(os.path.join(
-            os.path.dirname(__file__), "..", "dist", "*.tar.gz")))
+        sdists = sorted(
+            glob.glob(os.path.join(
+                os.path.dirname(__file__), "..", "dist", "*.tar.gz")),
+            key=os.path.getmtime)
         if not sdists:
             self.skipTest("no sdist built next to the checkout")
         newest = sdists[-1]

@@ -3,6 +3,46 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.3] - 2026-08-21
+
+Four findings from the independent black-box audit of 0.9.2. All were live
+while 1021 tests were green; the two P0s share a structure with the 0.9.1
+disclosures — the suite asserted on whole credentials while the failure
+mode was a clipped fragment of one.
+
+### Fixed
+
+- **A DSN password of 23+ characters with an internal `@` disclosed 15–21
+  consecutive characters** on the refusal line and into the scan history.
+  Two causes stacked: the page-secret extraction stopped at the first `@`
+  (the sixth variation of that mistake), so the scrubber only knew the
+  fragment before it; and the scrubber itself only removed *suffixes* of
+  known values, while a context window clipped at both ends holds a
+  *middle*. Extraction now splits on the last `@`, and the scrub walks
+  every substring of a known secret down to four characters.
+- **The last 3–9 characters of a standard 43-character JWT signature**
+  reached the CLI and `security_scans.findings` when a neighbouring
+  finding's 30-character lead-in started inside the signature. The same
+  suffix-only scrubber gap: tails under 12 characters were never chased.
+- **strict mode's `****#fingerprint` tag was re-masked on its way into the
+  scan history**, deriving a second fingerprint from a different canonical
+  (the mask string itself, read as a fresh DSN). The tag exists to
+  recognise the same credential across surfaces; history now keeps an
+  already-tagged value verbatim.
+- **The PyPI sdist omitted `tests/__init__.py`, `fake_idp.py` and
+  `fake_postgrest.py`**, so the suite could not be collected from the
+  archive alone. The sdist now also ships the corpus (with its README),
+  `docs/`, `CHANGELOG.md`, `README.zh-CN.md` and `golive.example.yaml` —
+  the full suite runs green from the extracted archive; the wheel stays
+  runtime-only.
+
+### Testing
+
+New `tests/test_audit_092_independent.py` pins the audit layouts at the
+audit's own disclosure bar (runs of six or more secret characters). Each
+fix reverted individually fails the suite: 9, 5, 4 and 1 failures
+respectively.
+
 ## [0.9.2] - 2026-08-20
 
 Two disclosures found by an external audit of 0.9.1. Both were live while the

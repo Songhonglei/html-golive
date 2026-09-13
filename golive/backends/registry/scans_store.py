@@ -59,6 +59,14 @@ def _redact_findings(findings) -> list:
     credential, defeating the tag's one job of recognising the same secret
     across surfaces (external audit of 0.9.2). The string contains no secret:
     a fingerprint of a fingerprint reveals nothing.
+
+    Boundary: the check is a substring test over the whole stored field, so
+    a literal ``****#`` planted in the page text makes this pass keep a field
+    verbatim. That is not an opening: whatever the scanner detected was
+    already masked upstream in ``_mask_context`` before storage, and an
+    undetected secret bypassed 0.9.2's re-mask the same way. The heuristic
+    trades a narrow defence-in-depth reduction for the fingerprint
+    stability the tag exists for.
     """
     from golive.security.scanner import _mask_secret_literal
 

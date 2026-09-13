@@ -50,8 +50,21 @@ def _redact_findings(findings) -> list:
 
     Runs the same masker the scan report uses, so the two cannot drift: if
     output redaction improves, storage improves with it.
+
+    An already-strict value is kept verbatim, though. Strict masking ends in
+    ``****#<fingerprint>`` and is idempotent-unstable: re-running the masker
+    over such a string treats the mask itself as a fresh DSN and derives a
+    *second* fingerprint from a different canonical — so the history showed
+    ``#3d013c8b`` where the CLI had printed ``#bc02d614`` for the same
+    credential, defeating the tag's one job of recognising the same secret
+    across surfaces (external audit of 0.9.2). The string contains no secret:
+    a fingerprint of a fingerprint reveals nothing.
     """
     from golive.security.scanner import _mask_secret_literal
+
+    def _already_masked(s: str) -> bool:
+        return "****#" in s
+
     safe = []
     for f in (findings or []):
         if not isinstance(f, dict):
@@ -63,8 +76,10 @@ def _redact_findings(findings) -> list:
             "type": str(f.get("type", ""))[:40],
             "strength": str(f.get("strength", ""))[:16],
             # Both fields can carry the literal that matched.
-            "keyword": _mask_secret_literal(keyword),
-            "context": _mask_secret_literal(excerpt),
+            "keyword": (keyword if _already_masked(keyword)
+                        else _mask_secret_literal(keyword)),
+            "context": (excerpt if _already_masked(excerpt)
+                        else _mask_secret_literal(excerpt)),
         })
     return safe
 

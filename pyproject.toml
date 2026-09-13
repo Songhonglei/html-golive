@@ -54,3 +54,22 @@ include = ["golive*"]
     "resources/skill/references/*.md",
 ]
 "golive.security" = ["rules.yaml"]
+
+# Test assets ship in the sdist so `pip download html-golive && pytest` works
+# from the archive alone. The wheel stays runtime-only: these files import
+# nothing the package needs at run time, and an install should not carry its
+# own audit fixtures. tests/__init__.py must be listed explicitly — without a
+# package-level include for `tests`, setuptools omits it and every module
+# doing `from tests.fake_postgrest import ...` fails to collect (external
+# audit of 0.9.2: three helper files missing, suite not collectable).
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.data-files]
+"tests" = [
+    "tests/__init__.py",
+    "tests/fake_idp.py",
+    "tests/fake_postgrest.py",
+]
+"tests/corpus/must_block" = ["tests/corpus/must_block/*.html"]
+"tests/corpus/must_pass" = ["tests/corpus/must_pass/*.html"]

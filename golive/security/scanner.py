@@ -559,14 +559,27 @@ def _secret_values_in(snippet: str, rules: dict) -> set:
         for m in rx.finditer(snippet):
             hit = m.group(0)
             # A connection string is not itself the secret: scheme, user and
-            # host are how an operator finds which of their DSNs to fix, and
+            # host are how an operator finds which of their DSNs to go fix, and
             # blanking the whole match takes that away. Only the password
-            # between ":" and "@" goes into the value set.
-            dsn = re.search(
-                r'://[^\s:/@]{0,64}:([^\s/@]{2,})@', hit)
-            if dsn:
-                values.add(dsn.group(1))
-                continue
+            # between ":" and "@" goes into the value set -- split on the
+            # LAST @ (rpartition), the same structural fact
+            # _keep_shape_drop_value relies on: a password may contain @, a
+            # host may not. This extraction used to stop at the first @, so a
+            # long password with an internal @ contributed only its first
+            # fragment to the page set -- and when a context window was cut
+            # mid-password, the 15-21 characters after the @ came through the
+            # window in clear text (external audit of 0.9.2; the sixth
+            # variation of the one-@-is-enough mistake).
+            scheme_m = re.match(r'[A-Za-z][A-Za-z0-9+.\-]*://', hit)
+            if scheme_m:
+                body = re.split(r'[\s"\'`;,)]',
+                                hit[scheme_m.end():], 1)[0]
+                userinfo, at, _host = body.rpartition("@")
+                if at and ":" in userinfo:
+                    candidate = userinfo.split(":", 1)[1]
+                    if len(candidate) >= 2:
+                        values.add(candidate)
+                        continue
             found_inner = False
             for chunk in re.findall(r'["\']([^"\']{6,})["\']', hit):
                 values.add(_secret_part(chunk))
@@ -693,19 +706,25 @@ def _mask_context(text: str, keyword: str, window: int = 30,
     snippet = _mask_secret_literal(snippet)
     for v in sorted(values, key=len, reverse=True):
         snippet = snippet.replace(v, f"{v[:2]}****")
-        # A window can start partway into a value, so the clipped tail is
-        # still the secret and still worth having. Longest suffix first, and
-        # only suffixes long enough to be worth guessing from — chasing this
-        # down to a few characters would start eating ordinary words that
-        # happen to end the same way.
-        if len(v) >= 16:
-            for cut in range(1, len(v) - 11):
-                tail = v[cut:]
-                if len(tail) < 12:
-                    break
-                if tail in snippet:
-                    snippet = snippet.replace(tail, "****")
-                    break
+        # A window can start *and* end partway into a value, so what survives
+        # the full-value replace is a clipped middle of the secret — no
+        # prefix, no shape, and (if the clip ends short of the value's end)
+        # not even a true suffix of it. The old suffix-only loop was the
+        # sixth variation of assuming a secret arrives whole: an audit of
+        # 0.9.2 measured 15–21 consecutive characters of a DSN password and
+        # the last 3–9 of a JWT signature coming through exactly this way.
+        # Scrub every substring of a known secret long enough to be worth
+        # guessing from. Four, not six: the audit's bar counted six-character
+        # runs, but a five-character signature tail also survived a six floor,
+        # and four still stays above the coincidental-word range.
+        _MIN_RUN = 4
+        if len(v) >= _MIN_RUN + 1:
+            for i in range(0, len(v) - _MIN_RUN + 1):
+                for L in range(len(v) - i, _MIN_RUN - 1, -1):
+                    run = v[i:i + L]
+                    if run in snippet:
+                        snippet = snippet.replace(run, "****")
+                        break
     return f"...{snippet}..."
 
 

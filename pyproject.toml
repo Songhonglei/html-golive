@@ -71,5 +71,6 @@ include-package-data = true
     "tests/fake_idp.py",
     "tests/fake_postgrest.py",
 ]
+"tests/corpus" = ["tests/corpus/README.md"]
 "tests/corpus/must_block" = ["tests/corpus/must_block/*.html"]
 "tests/corpus/must_pass" = ["tests/corpus/must_pass/*.html"]

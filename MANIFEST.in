@@ -1,0 +1,9 @@
+# Test assets ship in the sdist only — `pip download html-golive && pytest`
+# works from the archive alone. They must NOT reach the wheel: the wheel is
+# the runtime surface, an install should not carry its own audit fixtures,
+# and data-files entries land in .data/data/ where nothing sane imports them
+# from (external audit of 0.9.3: 52 test assets inside the wheel violated the
+# runtime-only promise). MANIFEST.in feeds the sdist, never the wheel.
+include tests/__init__.py
+recursive-include tests *.py
+recursive-include tests/corpus *.html *.md

@@ -20,6 +20,13 @@ count; the redactor deliberately keeps short identifying prefixes).
 * GLV-092-04 — the sdist omitted ``tests/__init__.py``, ``fake_idp.py`` and
   ``fake_postgrest.py``, so the suite could not even be collected from the
   published archive.
+* GLV-093-01 (audit of 0.9.3) — the fix for GLV-092-04 over-shot: the same
+  data-files entries that fed the sdist also landed 52 test assets in the
+  wheel's ``.data/data/tests/``, violating the runtime-only promise. The
+  0.9.3 wheel gate checked ``startswith('tests/')`` — a prefix assertion
+  about where pollution was expected, not an exhaustive check of where it
+  could be. Test assets now reach the sdist via MANIFEST.in (which never
+  feeds the wheel), and the gate checks every path segment.
 """
 
 from __future__ import annotations
@@ -204,6 +211,33 @@ class TestSdistShipsTestHelpers(unittest.TestCase):
                 helper, names,
                 "%s missing from %s — the suite cannot be collected from "
                 "the archive" % (helper, os.path.basename(newest)))
+
+
+class TestWheelStaysRuntimeOnly(unittest.TestCase):
+    """GLV-093-01: no test asset may reach the wheel, at any path depth."""
+
+    def test_wheel_has_no_tests_at_any_depth(self):
+        """Every member path is checked, not just the top-level layout.
+
+        The 0.9.3 gate asserted ``startswith('tests/')`` and the pollution
+        lived at ``html_golive-0.9.3.data/data/tests/`` — a prefix check
+        about the expected shape of a violation cannot catch a violation of
+        a different shape. The auditor's check walks every path segment.
+        """
+        from pathlib import Path, PurePosixPath
+        from zipfile import ZipFile
+
+        wheels = sorted(Path(__file__).parent.parent.glob("dist/*.whl"),
+                        key=lambda p: p.stat().st_mtime)
+        if not wheels:
+            self.skipTest("no wheel built next to the checkout")
+        with ZipFile(wheels[-1]) as archive:
+            unexpected = [
+                name for name in archive.namelist()
+                if "tests" in PurePosixPath(name).parts]
+        self.assertEqual(
+            unexpected, [],
+            "test assets must not ship in the wheel: %r" % (unexpected,))
 
 
 if __name__ == "__main__":  # pragma: no cover

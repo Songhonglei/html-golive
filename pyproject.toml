@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "html-golive"
-version = "0.9.3"
+version = "0.9.4"
 description = "Self-hosted one-command HTML deployment — Vercel-lite for your intranet."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -66,14 +66,6 @@ include = ["golive*"]
 include-package-data = true
 
 [tool.setuptools.data-files]
-"tests" = [
-    "tests/__init__.py",
-    "tests/fake_idp.py",
-    "tests/fake_postgrest.py",
-]
-"tests/corpus" = ["tests/corpus/README.md"]
-"tests/corpus/must_block" = ["tests/corpus/must_block/*.html"]
-"tests/corpus/must_pass" = ["tests/corpus/must_pass/*.html"]
 "docs" = [
     "docs/*.md",
     "docs/*.html",

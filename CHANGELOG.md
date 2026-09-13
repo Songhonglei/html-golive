@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.4] - 2026-08-21
+
+One finding from the independent verification of 0.9.3: DSN/JWT leak fixes
+and strict fingerprint stability all passed, but the wheel shipped 52 test
+assets under ``.data/data/tests/``, violating the runtime-only promise.
+
+### Fixed
+
+- **Test assets moved from ``data-files`` to ``MANIFEST.in``.** The
+  ``[tool.setuptools.data-files]`` entries that fixed the sdist (0.9.3) also
+  landed the same files inside the wheel's ``.data/data/`` — a path no sane
+  install imports from, but a violation of "the wheel stays runtime-only"
+  all the same. The 0.9.3 wheel gate had checked ``startswith('tests/')``:
+  a prefix assertion about the expected shape of a violation, blind to a
+  violation of a different shape. MANIFEST.in feeds the sdist and never the
+  wheel; the new gate checks every path segment of every member.
+
 ## [0.9.3] - 2026-08-21
 
 Four findings from the independent black-box audit of 0.9.2. All were live

@@ -190,7 +190,12 @@ class TestPortalI18n(unittest.TestCase):
         en, _zh, html = self._dicts()
         used = set(re.findall(r'data-i18n="([^"]+)"', html))
         used |= set(re.findall(r'data-i18n-ph="([^"]+)"', html))
-        used |= set(re.findall(r'\bt\("([^"]+)"', html))
+        # Only complete string arguments are static keys. Enumerate the
+        # dynamic namespaces from their controls as well.
+        used |= set(re.findall(r'\bt\("([^"]+)"\s*[,)]', html))
+        used |= {"nav." + view for view in re.findall(r'data-view="([^"]+)"', html)}
+        used |= {"theme." + mode for mode in ("system", "light", "dark")}
+        used |= {"role." + role for role in ("superadmin", "owner", "maintainer")}
         missing = used - en
         self.assertFalse(missing, f"keys used but not defined: {sorted(missing)}")
 

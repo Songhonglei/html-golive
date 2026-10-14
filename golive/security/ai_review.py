@@ -172,6 +172,10 @@ def review_hits(candidates: list, cfg=None) -> AIReviewResult:
     if not candidates:
         return result
 
+    if not cfg.security.ai_review_enabled and not llm.strict_mode:
+        result.kept = list(candidates)
+        return result
+
     if not llm.configured:
         # default policy: skip AI, keep rule verdicts untouched
         result.kept = list(candidates)

@@ -17,6 +17,7 @@ from typing import Optional
 
 from golive import __version__
 from golive.inject._escape import json_for_script
+from golive.server.brand import ROCKET_MARK
 
 
 DOCS_URL = "https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md"
@@ -59,7 +60,8 @@ def render_admin_page(identity=None) -> str:
         "config_path": paths["config_path"],
         "docs_url": DOCS_URL,
     }
-    return _PAGE_TEMPLATE.replace("__GOLIVE_BOOT__", json_for_script(boot))
+    return _PAGE_TEMPLATE.replace("__GOLIVE_BOOT__", json_for_script(boot)).replace(
+        "__GOLIVE_ROCKET__", ROCKET_MARK)
 
 
 _PAGE_TEMPLATE = r"""<!DOCTYPE html>
@@ -68,6 +70,7 @@ _PAGE_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>golive · admin</title>
+<link rel="icon" type="image/svg+xml" href="/admin/favicon.svg?v=rocket-1">
 <script>
 /* Applied before any paint so switching themes never flashes (no FOUC).
    Kept deliberately tiny and dependency-free. */
@@ -96,290 +99,1480 @@ _PAGE_TEMPLATE = r"""<!DOCTYPE html>
 })();
 </script>
 <style>
-/* dark is the default palette; [data-theme="light"] overrides it below.
-   Every colour below is a variable so the two themes stay in sync. */
+/* Quiet Console: warm neutrals, pine accents, and an 8px spacing rhythm. */
 :root, :root[data-theme="dark"]{
-  --bg:#0f1419;--panel:#171e26;--panel2:#1d2630;--line:#2a3542;
-  --text:#dce3ea;--muted:#8296a8;--accent:#4da3ff;--accent2:#2a76d2;
-  --ok:#3fb96f;--warn:#e0a63c;--danger:#e05c5c;--radius:10px;
-  --on-accent:#ffffff;
-  --btn-hover:#243040;
-  --accent-soft:rgba(77,163,255,.08);
-  --row-hover:rgba(77,163,255,.05);
-  --danger-soft:rgba(224,92,92,.12);
-  --mask:rgba(0,0,0,.55);
-  --shadow:0 10px 40px rgba(0,0,0,.45);
-  --code-bg:#1d2630;
-  --ok-soft:rgba(63,185,111,.10);
-  --warn-soft:rgba(224,166,60,.10);
+  color-scheme:dark;
+  --bg:#141918;
+  --panel:#1b211f;
+  --panel2:#242c29;
+  --line:#343f39;
+  --text:#e8eeea;
+  --muted:#a3b2a9;
+  --accent:#9bd9ba;
+  --accent2:#a5e0c3;
+  --ok:#9bd9ba;
+  --warn:#e8c58c;
+  --danger:#f4a6a6;
+  --radius:12px;
+  --on-accent:#14271e;
+  --btn-hover:#303a34;
+  --accent-soft:#273e32;
+  --row-hover:#222c26;
+  --danger-soft:#3c2829;
+  --mask:rgba(4,10,7,.66);
+  --shadow:0 24px 80px rgba(0,0,0,.3);
+  --code-bg:#141b17;
+  --ok-soft:#273e32;
+  --warn-soft:#3a3326;
+  --sidebar:#171d1a;
+  --subtle:#1f2722;
+  --focus:#a5e0c3;
+  --brand:#a5e0c3;
 }
 :root[data-theme="light"]{
-  --bg:#f4f6f9;--panel:#ffffff;--panel2:#eaeff5;--line:#d3dce6;
-  --text:#16212e;--muted:#5b6b7c;--accent:#1263c4;--accent2:#0f56ac;
-  --ok:#12784a;--warn:#8a5a00;--danger:#bf2f2f;--radius:10px;
+  color-scheme:light;
+  --bg:#f7f8f5;
+  --panel:#ffffff;
+  --panel2:#f0f3ef;
+  --line:#dce2dc;
+  --text:#202c25;
+  --muted:#5f6f64;
+  --accent:#2c6649;
+  --accent2:#285c42;
+  --ok:#286043;
+  --warn:#8a611c;
+  --danger:#ad3e3e;
+  --radius:12px;
   --on-accent:#ffffff;
-  --btn-hover:#dde5ee;
-  --accent-soft:rgba(18,99,196,.09);
-  --row-hover:rgba(18,99,196,.055);
-  --danger-soft:rgba(191,47,47,.10);
-  --mask:rgba(22,33,46,.42);
-  --shadow:0 10px 34px rgba(22,33,46,.16);
-  --code-bg:#f0f4f9;
-  --ok-soft:rgba(18,120,74,.08);
-  --warn-soft:rgba(138,90,0,.08);
+  --btn-hover:#e7ece6;
+  --accent-soft:#e7f0e9;
+  --row-hover:#f5f8f3;
+  --danger-soft:#faeeee;
+  --mask:rgba(22,35,26,.36);
+  --shadow:0 24px 80px rgba(28,46,34,.13);
+  --code-bg:#f1f4ef;
+  --ok-soft:#e7f0e9;
+  --warn-soft:#fbf3e4;
+  --sidebar:#eef1eb;
+  --subtle:#f9faf7;
+  --focus:#2c6649;
+  --brand:#285c42;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);
-  font:14px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--accent);text-decoration:none}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);
-  background:var(--panel2);color:var(--text);border-radius:6px;
-  padding:6px 14px;transition:background .15s}
-button:hover{background:var(--btn-hover)}
-button.primary{background:var(--accent2);border-color:var(--accent2);
-  color:var(--on-accent)}
-button.primary:hover{background:var(--accent)}
-button.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
-button.danger:hover{background:var(--danger-soft)}
-/* disabled stays legible (contrast >= 5:1); it reads as inactive via the
-   flat background and muted colour, not by fading into the page. */
-button:disabled{cursor:not-allowed;color:var(--muted);
-  background:transparent;border-style:dashed}
-button:disabled:hover{background:transparent}
-input,select{font:inherit;background:var(--bg);color:var(--text);
-  border:1px solid var(--line);border-radius:6px;padding:6px 10px}
-input:focus{outline:1px solid var(--accent)}
-#layout{display:flex;min-height:100vh}
-#sidebar{width:210px;flex:0 0 210px;background:var(--panel);
-  border-right:1px solid var(--line);padding:20px 0;display:flex;
-  flex-direction:column}
-#logo{padding:0 20px 18px;font-size:17px;font-weight:700}
-#logo small{display:block;color:var(--muted);font-weight:400;font-size:11px}
-.nav-item{padding:10px 20px;color:var(--muted);cursor:pointer;
-  border-left:3px solid transparent}
-.nav-item:hover{color:var(--text)}
-.nav-item.active{color:var(--text);border-left-color:var(--accent);
-  background:var(--accent-soft)}
-.nav-item.hidden{display:none}
-#whoami{margin-top:auto;padding:14px 20px;font-size:12px;
-  color:var(--muted);border-top:1px solid var(--line);word-break:break-all}
-#main{flex:1;padding:26px 32px;min-width:0}
-.view{display:none}
-.view.active{display:block}
-h2{font-size:18px;margin-bottom:16px}
-.toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;
-  align-items:center}
-.toolbar .spacer{flex:1}
-table{width:100%;border-collapse:collapse;background:var(--panel);
-  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);
-  vertical-align:middle}
-th{background:var(--panel2);color:var(--muted);font-weight:600;
-  font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-tr:last-child td{border-bottom:none}
-tbody tr:hover{background:var(--row-hover)}
-td.actions{white-space:nowrap}
-td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
-.badge{display:inline-block;padding:1px 8px;border-radius:999px;
-  font-size:11px;border:1px solid var(--line);color:var(--muted)}
-.badge.owner{border-color:var(--ok);color:var(--ok)}
-.badge.superadmin{border-color:var(--warn);color:var(--warn)}
-.badge.maintainer{border-color:var(--accent);color:var(--accent)}
-.badge.on{border-color:var(--ok);color:var(--ok)}
-.pager{display:flex;gap:8px;align-items:center;margin-top:12px;
-  color:var(--muted);font-size:13px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-  gap:14px;margin-bottom:22px}
-.card{background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--radius);padding:16px 18px}
-.card .num{font-size:26px;font-weight:700;margin-top:4px}
-.card .lbl{color:var(--muted);font-size:12px}
-#drawer-mask{position:fixed;inset:0;background:var(--mask);
-  display:none;z-index:40}
-#drawer{position:fixed;top:0;right:-560px;width:540px;max-width:94vw;
-  height:100vh;background:var(--panel);border-left:1px solid var(--line);
-  z-index:50;transition:right .2s ease;overflow-y:auto;padding:24px 26px}
-#drawer.open{right:0}
-#drawer-mask.open{display:block}
-#drawer h3{font-size:16px;margin-bottom:4px;word-break:break-all}
-#drawer .sub{color:var(--muted);font-size:12px;margin-bottom:18px;
-  word-break:break-all}
-.section{border-top:1px solid var(--line);padding:16px 0}
-.section h4{font-size:13px;color:var(--muted);margin-bottom:10px;
-  text-transform:uppercase;letter-spacing:.04em}
-.frow{display:flex;gap:10px;margin-bottom:10px;align-items:center}
-.frow label{width:86px;flex:0 0 86px;color:var(--muted);font-size:13px}
-.frow input[type=text]{flex:1}
-.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-.tag{background:var(--panel2);border:1px solid var(--line);
-  border-radius:999px;padding:2px 10px;font-size:12px;display:inline-flex;
-  gap:6px;align-items:center}
-.tag b{cursor:pointer;color:var(--danger);font-weight:700}
-.kv-row{display:flex;gap:12px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)}
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0
+}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font:14px/1.65 "Avenir Next","PingFang SC","Noto Sans CJK SC",sans-serif;
+  -webkit-font-smoothing:antialiased
+}
+a{
+  color:var(--accent);
+  text-decoration:none
+}
+a:hover{
+  text-decoration:underline;
+  text-underline-offset:4px
+}
+button,input,select,textarea{
+  font:inherit
+}
+button,a,input,select,textarea{
+  -webkit-tap-highlight-color:transparent
+}
+button{
+  cursor:pointer;
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text);
+  border-radius:7px;
+  min-height:44px;
+  padding:9px 15px;
+  transition:background .18s,border-color .18s,color .18s;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  font-weight:500;
+  white-space:nowrap
+}
+button:hover{
+  background:var(--btn-hover);
+  border-color:var(--muted)
+}
+button.primary{
+  background:var(--accent2);
+  border-color:var(--accent2);
+  color:var(--on-accent)
+}
+button.primary:hover{
+  background:var(--accent);
+  border-color:var(--accent)
+}
+button.danger{
+  background:transparent;
+  border-color:var(--line);
+  color:var(--danger)
+}
+button.danger:hover{
+  background:var(--danger-soft);
+  border-color:var(--danger)
+}
+button:disabled{
+  cursor:not-allowed;
+  color:var(--muted);
+  background:var(--panel2);
+  border-color:var(--line)
+}
+button:disabled:hover{
+  background:var(--panel2);
+  border-color:var(--line)
+}
+:where(button,a,input,select,textarea,[role="button"]):focus-visible{
+  outline:2px solid var(--focus);
+  outline-offset:3px
+}
+input,select,textarea{
+  background:var(--panel);
+  color:var(--text);
+  border:1px solid var(--line);
+  border-radius:7px;
+  padding:9px 12px;
+  min-width:0;
+  max-width:100%;
+  min-height:44px
+}
+input::placeholder,textarea::placeholder{
+  color:var(--muted)
+}
+input[type=checkbox]{
+  accent-color:var(--accent);
+  min-height:20px;
+  width:18px;
+  height:18px;
+  cursor:pointer
+}
+textarea{
+  line-height:1.65
+}
+select{
+  cursor:pointer
+}
+svg.icon{
+  width:19px;
+  height:19px;
+  flex:0 0 auto;
+  stroke:currentColor;
+  stroke-width:1.7;
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round
+}
+.sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip-path:inset(50%);
+  white-space:nowrap;
+  border:0
+}
+.skip-link{
+  position:fixed;
+  left:16px;
+  top:-100px;
+  z-index:100;
+  background:var(--panel);
+  padding:12px;
+  border:1px solid var(--accent);
+  border-radius:8px
+}
+.skip-link:focus{
+  top:12px
+}
+#layout{
+  display:flex;
+  min-height:100vh
+}
+#sidebar{
+  width:238px;
+  flex:0 0 238px;
+  background:var(--sidebar);
+  border-right:1px solid var(--line);
+  padding:28px 16px 16px;
+  display:flex;
+  flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto
+}
+#logo{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  padding:0 12px 30px;
+  font:700 24px/1.2 "Avenir Next",sans-serif;
+  letter-spacing:-1.2px;
+  border-bottom:1px solid var(--line);
+  margin-bottom:20px
+}
+.brand-mark{
+  width:32px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  color:var(--brand)
+}
+.brand-mark svg{
+  width:32px;
+  height:34px
+}
+#logo small{
+  display:block;
+  font:500 10px/1.5 "Avenir Next",sans-serif;
+  color:var(--muted);
+  letter-spacing:2.1px;
+  margin-top:5px
+}
+.nav-group-label{
+  font-size:10px;
+  letter-spacing:1.8px;
+  color:var(--muted);
+  padding:0 14px;
+  margin:20px 0 8px;
+  font-weight:600;
+  text-transform:uppercase
+}
+.nav-group-label:first-of-type{
+  margin-top:0
+}
+.nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:44px;
+  padding:10px 13px;
+  margin:3px 0;
+  color:var(--muted);
+  cursor:pointer;
+  border-radius:7px;
+  transition:background .18s,color .18s;
+  position:relative;
+  font-weight:500
+}
+.nav-item:hover{
+  background:var(--btn-hover);
+  color:var(--text)
+}
+.nav-item.active{
+  color:var(--accent);
+  background:var(--accent-soft)
+}
+.nav-item.active::after{
+  content:"";
+  width:5px;
+  height:5px;
+  background:var(--accent);
+  border-radius:50%;
+  margin-left:auto
+}
+.nav-item.hidden{
+  display:none
+}
+.sidebar-bottom{
+  margin-top:auto;
+  padding-top:36px
+}
+.connection{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  color:var(--muted);
+  font-size:11px
+}
+.connection::before{
+  content:"";
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--ok)
+}
+#whoami{
+  padding:13px 12px 5px;
+  font-size:11px;
+  color:var(--muted);
+  border-top:1px solid var(--line);
+  overflow-wrap:anywhere
+}
+#ver{
+  padding:2px 12px;
+  font:11px/1.8 "SFMono-Regular",Consolas,monospace;
+  color:var(--muted)
+}
+#main{
+  flex:1;
+  min-width:0;
+  padding:0 44px 40px;
+  max-width:1800px
+}
+#topbar{
+  height:78px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  border-bottom:1px solid var(--line);
+  margin-bottom:38px
+}
+.breadcrumb{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  color:var(--muted);
+  font-size:12px
+}
+.breadcrumb strong{
+  font-weight:500;
+  color:var(--text)
+}
+.breadcrumb .slash{
+  color:var(--muted)
+}
+.topbar-actions{
+  margin-left:auto;
+  display:flex;
+  gap:16px;
+  align-items:center
+}
+.switch{
+  display:inline-flex;
+  gap:2px;
+  padding:3px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel2)
+}
+.switch button{
+  min-width:44px;
+  min-height:44px;
+  padding:5px 9px;
+  border:0;
+  background:transparent;
+  border-radius:5px;
+  font-size:12px;
+  color:var(--muted)
+}
+.switch button:hover{
+  background:var(--btn-hover);
+  color:var(--text)
+}
+.switch button[aria-pressed="true"]{
+  background:var(--panel);
+  color:var(--accent);
+  box-shadow:0 1px 3px var(--line)
+}
+#mobile-menu,#nav-mask{
+  display:none
+}
+.view{
+  display:none
+}
+.view.active{
+  display:block;
+  animation:arrive .22s ease-out
+}
+@keyframes arrive{
+  from{
+    opacity:.4;
+    transform:translateY(5px)
+  }
+  to{
+    opacity:1;
+    transform:translateY(0)
+  }
+}
+h2{
+  font-size:28px;
+  letter-spacing:-.7px;
+  line-height:1.3;
+  font-weight:600;
+  margin-bottom:26px
+}
+.view-description{
+  color:var(--muted);
+  font-size:13px;
+  margin:-14px 0 28px;
+  max-width:75ch
+}
+h3{
+  font-size:17px;
+  font-weight:600;
+  letter-spacing:-.2px
+}
+.page-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  margin-bottom:30px
+}
+.page-heading h2{
+  margin:6px 0 10px;
+  font-size:30px
+}
+.eyebrow{
+  font-size:10px;
+  letter-spacing:2.1px;
+  font-weight:600;
+  color:var(--muted)
+}
+.page-description{
+  font-size:13px;
+  color:var(--muted);
+  max-width:65ch
+}
+.overview{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  margin-bottom:30px
+}
+.overview-item{
+  padding:20px 24px;
+  border-right:1px solid var(--line)
+}
+.overview-item:last-child{
+  border:0
+}
+.overview-item .lbl{
+  font-size:11px;
+  color:var(--muted)
+}
+.overview-item .num{
+  font-size:26px;
+  font-weight:500;
+  letter-spacing:-.8px;
+  margin-top:6px;
+  font-variant-numeric:tabular-nums
+}
+.overview-item .metric-note{
+  font-size:10px;
+  color:var(--muted);
+  margin-top:2px
+}
+.list-panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:10px;
+  overflow:hidden
+}
+.list-panel .toolbar{
+  padding:20px 20px 16px;
+  margin:0
+}
+.list-panel .pager{
+  padding:14px 20px;
+  margin:0;
+  border-top:1px solid var(--line)
+}
+.toolbar{
+  display:flex;
+  gap:10px;
+  margin-bottom:20px;
+  flex-wrap:wrap;
+  align-items:center
+}
+.spacer{
+  flex:1
+}
+.search-field{
+  position:relative;
+  display:flex;
+  align-items:center
+}
+.search-field svg{
+  position:absolute;
+  left:13px;
+  color:var(--muted);
+  width:17px;
+  height:17px
+}
+.search-field input{
+  padding-left:40px;
+  width:280px;
+  background:var(--subtle)
+}
+.table-scroll{
+  width:100%;
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+  border:1px solid var(--line);
+  border-radius:9px
+}
+.list-panel .table-scroll{
+  border:0;
+  border-radius:0
+}
+.table-scroll:focus-visible{
+  outline:2px solid var(--focus);
+  outline-offset:-2px
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--panel);
+  font-variant-numeric:tabular-nums
+}
+th,td{
+  padding:17px 20px;
+  text-align:left;
+  border-bottom:1px solid var(--line);
+  vertical-align:middle;
+  font-size:12px
+}
+th{
+  background:var(--subtle);
+  color:var(--muted);
+  font-weight:500;
+  font-size:10px;
+  letter-spacing:.08em;
+  white-space:nowrap
+}
+tr:last-child td{
+  border-bottom:0
+}
+tbody tr{
+  transition:background .15s
+}
+tbody tr:hover{
+  background:var(--row-hover)
+}
+td.actions{
+  white-space:nowrap
+}
+td.actions button{
+  font-size:11px;
+  min-height:44px;
+  padding:5px 10px;
+  margin-right:4px;
+  background:transparent
+}
+td.actions button:hover{
+  background:var(--btn-hover)
+}
+.site-name{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:180px
+}
+.site-monogram{
+  height:34px;
+  width:30px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  display:grid;
+  place-items:center;
+  color:var(--accent);
+  background:var(--subtle)
+}
+.site-name strong{
+  font-size:12px;
+  font-weight:600
+}
+.site-name small{
+  display:block;
+  color:var(--muted);
+  font:10px/1.8 "SFMono-Regular",Consolas,monospace
+}
+.site-url{
+  font:11px/1.5 "SFMono-Regular",Consolas,monospace;
+  white-space:nowrap
+}
+.date-cell{
+  white-space:nowrap;
+  font-size:11px;
+  color:var(--muted)
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:3px 8px;
+  border-radius:5px;
+  font-size:10px;
+  border:1px solid var(--line);
+  color:var(--muted);
+  line-height:1.5
+}
+.badge.owner,.badge.on{
+  background:var(--ok-soft);
+  border-color:var(--ok-soft);
+  color:var(--ok)
+}
+.badge.superadmin,.badge.maintainer{
+  border-color:var(--line);
+  background:var(--panel2);
+  color:var(--muted)
+}
+.pager{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top:18px;
+  color:var(--muted);
+  font-size:11px
+}
+.pager button{
+  min-height:44px;
+  padding:5px 11px;
+  font-size:11px
+}
+.pager #site-page{
+  min-width:46px;
+  text-align:center
+}
+.pager-note{
+  margin-right:auto
+}
+.workspace-note{
+  display:flex;
+  gap:14px;
+  padding:22px 2px;
+  color:var(--muted);
+  font-size:12px;
+  align-items:flex-start
+}
+.workspace-note>svg{
+  margin-top:2px
+}
+.workspace-note b{
+  display:block;
+  color:var(--text);
+  font-size:12px;
+  font-weight:500;
+  margin-bottom:4px
+}
+.workspace-note button{
+  margin-left:auto;
+  background:transparent;
+  border:0;
+  padding:0;
+  min-height:36px;
+  font-size:11px;
+  color:var(--accent)
+}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:16px;
+  margin-bottom:28px
+}
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:22px 24px
+}
+.card .num{
+  font-size:30px;
+  font-weight:500;
+  margin-top:8px;
+  font-variant-numeric:tabular-nums
+}
+.card .lbl{
+  color:var(--muted);
+  font-size:12px
+}
+#drawer-mask{
+  position:fixed;
+  inset:0;
+  background:var(--mask);
+  display:none;
+  z-index:40
+}
+#drawer-mask.open{
+  display:block
+}
+#drawer{
+  position:fixed;
+  top:0;
+  right:0;
+  transform:translateX(100%);
+  width:560px;
+  max-width:94vw;
+  height:100dvh;
+  background:var(--panel);
+  border-left:1px solid var(--line);
+  box-shadow:var(--shadow);
+  z-index:50;
+  transition:transform .22s ease;
+  overflow-y:auto;
+  padding:30px
+}
+#drawer.open{
+  transform:translateX(0)
+}
+#drawer h3{
+  font-size:22px;
+  margin:10px 48px 10px 0;
+  overflow-wrap:anywhere
+}
+#drawer .sub{
+  color:var(--muted);
+  font-size:11px;
+  margin-bottom:26px;
+  overflow-wrap:anywhere
+}
+#drawer-close{
+  position:absolute;
+  right:20px;
+  top:22px;
+  background:transparent;
+  width:44px;
+  padding:0
+}
+.section{
+  border-top:1px solid var(--line);
+  padding:22px 0
+}
+.section h4{
+  font-size:12px;
+  font-weight:500;
+  color:var(--muted);
+  margin-bottom:16px;
+  letter-spacing:.05em
+}
+.frow{
+  display:flex;
+  gap:12px;
+  margin-bottom:12px;
+  align-items:center
+}
+.frow label{
+  width:86px;
+  flex:0 0 86px;
+  color:var(--muted);
+  font-size:12px
+}
+.frow input[type=text]{
+  flex:1
+}
+.tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:12px
+}
+.tag{
+  background:var(--panel2);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:3px 10px;
+  font-size:12px;
+  display:inline-flex;
+  gap:6px;
+  align-items:center
+}
+.tag b{
+  cursor:pointer;
+  color:var(--danger);
+  font-weight:500;
+  min-width:28px;
+  min-height:32px;
+  display:grid;
+  place-items:center
+}
+.snap-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:10px 0;
+  border-bottom:1px solid var(--line);
+  font-size:12px
+}
+.snap-row:last-child{
+  border-bottom:0
+}
+.snap-row .ts{
+  font-family:"SFMono-Regular",Consolas,monospace;
+  color:var(--muted)
+}
+#toast{
+  position:fixed;
+  bottom:24px;
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--panel);
+  box-shadow:var(--shadow);
+  border:1px solid var(--ok);
+  color:var(--text);
+  border-radius:9px;
+  padding:13px 22px;
+  display:none;
+  z-index:99;
+  max-width:min(560px,90vw);
+  font-size:13px
+}
+#toast.err{
+  border-color:var(--danger);
+  color:var(--danger)
+}
+#login-gate{
+  max-width:420px;
+  margin:16vh auto;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:36px
+}
+#login-gate h2{
+  margin-bottom:12px
+}
+#login-gate p{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:22px
+}
+#login-gate input{
+  width:100%;
+  margin-bottom:16px
+}
+.empty{
+  color:var(--muted);
+  padding:52px 24px;
+  text-align:center;
+  font-size:13px
+}
+.guide{
+  text-align:left;
+  color:var(--text);
+  padding:0;
+  max-width:820px
+}
+.guide h3{
+  font-size:17px;
+  margin-bottom:10px
+}
+.guide p{
+  color:var(--muted);
+  margin-bottom:16px
+}
+.guide .hint{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-left:3px solid var(--accent);
+  border-radius:8px;
+  padding:16px 18px;
+  margin-bottom:20px;
+  color:var(--text)
+}
+.guide-actions{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:22px
+}
+.codeblock{
+  position:relative;
+  margin-bottom:24px
+}
+.codeblock pre{
+  background:var(--code-bg);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:52px 18px 18px;
+  font:12px/1.8 "SFMono-Regular",Consolas,monospace;
+  overflow-x:auto;
+  color:var(--text)
+}
+.codeblock .cb-copy{
+  position:absolute;
+  top:8px;
+  right:8px;
+  font-size:11px;
+  padding:5px 12px;
+  min-height:36px;
+  color:var(--muted)
+}
+.codeblock .cb-copy.ok{
+  color:var(--ok);
+  border-color:var(--ok)
+}
+.guide .cb-label{
+  font-size:11px;
+  color:var(--muted);
+  margin-bottom:8px;
+  letter-spacing:.05em
+}
+.guide .doclink{
+  font-size:13px
+}
+.perm-block,.form-block{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:26px;
+  margin-bottom:22px
+}
+.perm-block h3,.form-block h3{
+  font-size:16px;
+  margin-bottom:8px
+}
+.desc{
+  color:var(--muted);
+  font-size:12px;
+  margin-bottom:22px;
+  max-width:75ch
+}
+.perm-block table{
+  margin-top:8px
+}
+.lock{
+  display:inline-block;
+  position:relative;
+  width:11px;
+  height:9px;
+  border:1.5px solid var(--muted);
+  border-radius:2px;
+  margin-top:5px;
+  cursor:help
+}
+.lock::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:-6px;
+  width:7px;
+  height:6px;
+  margin-left:-4.5px;
+  border:1.5px solid var(--muted);
+  border-bottom:0;
+  border-radius:4px 4px 0 0
+}
+.chks{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  max-height:240px;
+  overflow-y:auto;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:12px;
+  background:var(--bg);
+  margin-bottom:16px
+}
+.chks label{
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  font-size:12px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:8px 12px;
+  cursor:pointer;
+  min-height:44px
+}
+.chks label input{
+  margin:0;
+  flex:0 0 auto
+}
+.mine dt{
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.05em;
+  margin-top:14px
+}
+.mine dd{
+  margin:5px 0 0;
+  overflow-wrap:anywhere
+}
+.form-row{
+  display:flex;
+  gap:14px;
+  margin-bottom:18px;
+  align-items:center;
+  flex-wrap:wrap
+}
+.form-row label{
+  width:140px;
+  flex:0 0 140px;
+  color:var(--muted);
+  font-size:12px
+}
+.form-row input,.form-row select{
+  flex:1
+}
+.form-row input[type=checkbox]{
+  flex:0 0 auto;
+  margin:0
+}
+.form-row .hint{
+  font-size:11px;
+  color:var(--muted);
+  margin-left:4px
+}
+.form-actions{
+  display:flex;
+  gap:10px;
+  margin-top:22px;
+  flex-wrap:wrap
+}
+.callback-box{
+  background:var(--code-bg);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:16px;
+  margin:12px 0;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font:12px/1.6 "SFMono-Regular",Consolas,monospace;
+  overflow-wrap:anywhere
+}
+.callback-box .cb-btn{
+  flex:0 0 auto
+}
+.status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:6px;
+  font-size:11px;
+  font-weight:500
+}
+.status-pill.none{
+  background:var(--danger-soft);
+  color:var(--danger);
+  border:1px solid var(--danger-soft)
+}
+.status-pill.token,.status-pill.proxy{
+  background:var(--accent-soft);
+  color:var(--accent);
+  border:1px solid var(--accent-soft)
+}
+.status-pill.oidc{
+  background:var(--ok-soft);
+  color:var(--ok);
+  border:1px solid var(--ok-soft)
+}
+.test-result{
+  margin-top:16px;
+  padding:16px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  font-size:13px;
+  display:none
+}
+.test-result.ok{
+  border-color:var(--ok);
+  background:var(--ok-soft);
+  color:var(--ok)
+}
+.test-result.fail{
+  border-color:var(--danger);
+  background:var(--danger-soft);
+  color:var(--danger)
+}
+.test-result .endpoint{
+  font-family:"SFMono-Regular",Consolas,monospace;
+  font-size:12px;
+  color:var(--muted);
+  margin-top:6px
+}
+.rule-row{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  padding:16px 0;
+  border-bottom:1px solid var(--line)
+}
+.rule-row:last-child{
+  border:0
+}
+.rule-row .rule-name{
+  flex:1;
+  font-size:13px;
+  min-width:0;
+  overflow-wrap:anywhere
+}
+.rule-row .rule-name b{
+  display:block;
+  margin-bottom:4px;
+  font-weight:500
+}
+.rule-row .rule-name .meta{
+  color:var(--muted);
+  font-size:11px
+}
+.rule-row .rule-actions{
+  flex:0 0 auto;
+  display:flex;
+  gap:6px
+}
+.rule-row .lock{
+  flex:0 0 auto;
+  margin-top:6px
+}
+.src-badge,.scope-badge{
+  font-size:10px;
+  padding:3px 7px;
+  border-radius:5px;
+  border:1px solid var(--line);
+  color:var(--muted);
+  letter-spacing:.02em
+}
+.src-badge.file{
+  color:var(--accent)
+}
+.src-badge.db,.scope-badge.restart{
+  color:var(--warn)
+}
+.scope-badge.hot{
+  color:var(--ok)
+}
+.warn-box{
+  background:var(--danger-soft);
+  border:1px solid var(--danger);
+  border-radius:8px;
+  padding:16px 18px;
+  margin-bottom:18px;
+  font-size:13px;
+  color:var(--danger)
+}
+.warn-box b{
+  display:block;
+  margin-bottom:6px
+}
+.kv-row{display:flex;gap:12px;padding:8px 0;font-size:13px;border-bottom:1px solid var(--line)}
 .kv-row:last-child{border-bottom:none}
 .kv-k{color:var(--muted);min-width:120px;flex-shrink:0}
-.kv-v{color:var(--text);word-break:break-all}
-.snap-row{display:flex;justify-content:space-between;align-items:center;
-  padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
-.snap-row:last-child{border-bottom:none}
-.snap-row .ts{font-family:ui-monospace,monospace;color:var(--muted)}
-#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
-  background:var(--panel2);border:1px solid var(--line);color:var(--text);
-  border-radius:8px;padding:10px 20px;display:none;z-index:99;
-  max-width:70vw}
-#toast.err{border-color:var(--danger);color:var(--danger)}
-#login-gate{max-width:380px;margin:16vh auto;background:var(--panel);
-  border:1px solid var(--line);border-radius:var(--radius);padding:28px}
-#login-gate h2{margin-bottom:6px}
-#login-gate p{color:var(--muted);font-size:13px;margin-bottom:14px}
-#login-gate input{width:100%;margin-bottom:12px}
-.empty{color:var(--muted);padding:26px;text-align:center}
-
-/* ── top bar: theme + language switchers ─────────────────────── */
-#topbar{display:flex;align-items:center;gap:8px;justify-content:flex-end;
-  margin-bottom:14px}
-.switch{display:inline-flex;border:1px solid var(--line);border-radius:8px;
-  overflow:hidden;background:var(--panel)}
-.switch button{border:none;border-radius:0;background:transparent;
-  padding:5px 11px;font-size:12.5px;color:var(--muted);line-height:1.5}
-.switch button + button{border-left:1px solid var(--line)}
-.switch button:hover{background:var(--btn-hover);color:var(--text)}
-.switch button[aria-pressed="true"]{background:var(--accent-soft);
-  color:var(--accent);font-weight:600}
-
-/* ── sidebar brand separator (C) ─────────────────────────────── */
-#logo{border-bottom:1px solid var(--line);margin-bottom:12px}
-
-/* ── guide / empty-state blocks (C) ──────────────────────────── */
-.guide{text-align:left;color:var(--text);padding:0;max-width:820px}
-.guide h3{font-size:15px;margin-bottom:8px}
-.guide p{color:var(--muted);margin-bottom:12px}
-.guide .hint{background:var(--panel);border:1px solid var(--line);
-  border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;
-  margin-bottom:16px;color:var(--text)}
-.guide-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-.codeblock{position:relative;margin-bottom:22px}
-.codeblock pre{background:var(--code-bg);border:1px solid var(--line);
-  border-radius:8px;padding:15px 18px;font:12px/1.75 ui-monospace,monospace;
-  overflow-x:auto;color:var(--text)}
-.codeblock .cb-copy{position:absolute;top:8px;right:8px;font-size:11.5px;
-  padding:3px 9px;background:var(--panel);color:var(--muted)}
-.codeblock .cb-copy:hover{color:var(--text)}
-.codeblock .cb-copy.ok{color:var(--ok);border-color:var(--ok)}
-.guide .cb-label{font-size:12px;color:var(--muted);margin-bottom:7px;
-  text-transform:uppercase;letter-spacing:.04em}
-.guide .doclink{font-size:13px}
-
-/* ── permissions page (D) ────────────────────────────────────── */
-.perm-block{background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--radius);padding:18px 20px;margin-bottom:18px}
-.perm-block h3{font-size:14px;margin-bottom:4px}
-.perm-block .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
-.perm-block table{margin-top:4px}
-/* A padlock drawn in CSS: the portal ships no fonts, and an emoji glyph
-   renders as tofu wherever the system has no emoji font installed. */
-.lock{display:inline-block;position:relative;width:11px;height:9px;
-  border:1.5px solid var(--muted);border-radius:2px;margin-top:5px;
-  cursor:help}
-.lock::before{content:"";position:absolute;left:50%;top:-6px;
-  width:7px;height:6px;margin-left:-4.5px;border:1.5px solid var(--muted);
-  border-bottom:none;border-radius:4px 4px 0 0}
-.chks{display:flex;flex-wrap:wrap;gap:8px;max-height:210px;overflow-y:auto;
-  border:1px solid var(--line);border-radius:8px;padding:10px;
-  background:var(--bg);margin-bottom:10px}
-.chks label{display:inline-flex;gap:7px;align-items:center;font-size:13px;
-  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
-  padding:4px 12px;cursor:pointer;line-height:1.4}
-.chks label input{margin:0;flex:0 0 auto}
-#perm-bulk .chks{margin-bottom:16px}
-.mine dt{color:var(--muted);font-size:12px;text-transform:uppercase;
-  letter-spacing:.04em;margin-top:10px}
-.mine dd{margin:3px 0 0;word-break:break-all}
-/* ── identity / security / settings pages (v0.8.0) ─────────── */
-.form-block{background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--radius);padding:18px 20px;margin-bottom:18px}
-.form-block h3{font-size:14px;margin-bottom:4px}
-.form-block .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
-.form-row{display:flex;gap:10px;margin-bottom:10px;align-items:center}
-.form-row label{width:120px;flex:0 0 120px;color:var(--muted);font-size:13px}
-.form-row input,.form-row select{flex:1}
-.form-row input[type=checkbox]{flex:0 0 auto;margin:0}
-.form-row .hint{font-size:11.5px;color:var(--muted);margin-left:4px}
-.form-actions{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
-.callback-box{background:var(--code-bg);border:1px solid var(--line);
-  border-radius:8px;padding:12px 14px;margin:10px 0;display:flex;
-  align-items:center;gap:10px;font:13px/1.5 ui-monospace,monospace;
-  word-break:break-all}
-.callback-box .cb-btn{flex:0 0 auto}
-.status-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;
-  border-radius:999px;font-size:12px;font-weight:600}
-.status-pill.none{background:var(--danger-soft);color:var(--danger);
-  border:1px solid var(--danger)}
-.status-pill.token{background:var(--accent-soft);color:var(--accent);
-  border:1px solid var(--accent)}
-.status-pill.oidc{background:var(--ok-soft);color:var(--ok);
-  border:1px solid var(--ok)}
-.status-pill.proxy{background:var(--accent-soft);color:var(--accent);
-  border:1px solid var(--accent)}
-.test-result{margin-top:12px;padding:14px;border-radius:8px;
-  border:1px solid var(--line);font-size:13px;display:none}
-.test-result.ok{border-color:var(--ok);background:var(--ok-soft);
-  color:var(--ok)}
-.test-result.fail{border-color:var(--danger);background:var(--danger-soft);
-  color:var(--danger)}
-.test-result .endpoint{font-family:ui-monospace,monospace;font-size:12px;
-  color:var(--muted);margin-top:4px}
-.rule-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
-  border-bottom:1px solid var(--line)}
-.rule-row:last-child{border-bottom:none}
-.rule-row .rule-name{flex:1;font-size:13px}
-.rule-row .rule-name b{display:block;margin-bottom:2px}
-.rule-row .rule-name .meta{color:var(--muted);font-size:11.5px}
-.rule-row .rule-actions{flex:0 0 auto;display:flex;gap:6px}
-.rule-row .lock{flex:0 0 auto;margin-top:3px}
-.settings-group{margin-bottom:18px}
-.settings-group h3{font-size:14px;margin-bottom:8px;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.04em}
-.setting-row{display:flex;align-items:center;gap:10px;padding:8px 0;
-  border-bottom:1px dashed var(--line);font-size:13px}
-.setting-row:last-child{border-bottom:none}
-.setting-row .s-label{flex:1}
-.setting-row .s-value{flex:0 0 auto;font-family:ui-monospace,monospace;
-  font-size:12px;color:var(--muted)}
-.setting-row .s-source{flex:0 0 auto}
-.src-badge{font-size:10.5px;padding:1px 7px;border-radius:999px;
-  border:1px solid var(--line);color:var(--muted);text-transform:uppercase;
-  letter-spacing:.03em}
-.src-badge.file{border-color:var(--accent);color:var(--accent)}
-.src-badge.db{border-color:var(--warn);color:var(--warn)}
-.src-badge.default{border-color:var(--muted);color:var(--muted)}
-.scope-badge{font-size:10.5px;padding:1px 7px;border-radius:999px;
-  border:1px solid var(--line);color:var(--muted)}
-.scope-badge.restart{border-color:var(--warn);color:var(--warn)}
-.scope-badge.hot{border-color:var(--ok);color:var(--ok)}
-.warn-box{background:var(--danger-soft);border:1px solid var(--danger);
-  border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;
-  color:var(--danger)}
-.warn-box b{display:block;margin-bottom:4px}
-.degraded-notice{background:var(--panel);border:1px solid var(--line);
-  border-left:3px solid var(--warn);border-radius:8px;padding:14px 16px;
-  margin-bottom:16px;color:var(--text);font-size:13px}
-.degraded-notice b{color:var(--warn)}
-
-@media(max-width:760px){
-  #layout{flex-direction:column}
-  #sidebar{width:100%;flex-direction:row;align-items:center;
-    padding:8px 4px;overflow-x:auto}
-  #logo{padding:0 12px}
-  .nav-item{border-left:none;white-space:nowrap}
-  #whoami{display:none}
-  #main{padding:16px}
-  .form-row{flex-direction:column;align-items:flex-start}
-  .form-row label{width:auto}
+.kv-v{color:var(--text);overflow-wrap:anywhere}
+.migrate-cmd-hint{margin-top:12px;padding:12px;background:var(--code-bg);border-radius:8px;font-family:var(--mono);font-size:13px;color:var(--text)}
+.migrate-cmd-hint code{display:block;margin-top:6px;color:var(--text)}
+.degraded-notice{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-left:3px solid var(--warn);
+  border-radius:8px;
+  padding:16px 18px;
+  margin-bottom:20px;
+  color:var(--text);
+  font-size:13px
 }
+.degraded-notice b{
+  color:var(--warn)
+}
+#publish-guide{
+  margin:auto;
+  width:600px;
+  max-width:calc(100vw - 32px);
+  max-height:85dvh;
+  overflow-y:auto;
+  background:var(--panel);
+  color:var(--text);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:32px;
+  box-shadow:var(--shadow)
+}
+#publish-guide::backdrop{
+  background:var(--mask)
+}
+.dialog-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px
+}
+.dialog-heading button{
+  width:44px;
+  padding:0
+}
+.dialog-description{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:20px
+}
+.step-label{
+  color:var(--muted);
+  font-size:11px;
+  margin:20px 0 8px
+}
+#publish-command{
+  display:block;
+  background:var(--code-bg);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:18px;
+  overflow-x:auto;
+  font:12px/1.8 "SFMono-Regular",Consolas,monospace;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere
+}
+.dialog-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:12px;
+  margin-top:22px
+}
+@media(min-width:1600px){
+  #main{
+    padding-left:60px;
+    padding-right:60px
+  }
+}
+@media(max-width:1100px){
+  #sidebar{
+    width:204px;
+    flex-basis:204px;
+    padding-left:12px;
+    padding-right:12px
+  }
+  #main{
+    padding-left:26px;
+    padding-right:26px
+  }
+  .overview-item{
+    padding:18px
+  }
+  th,td{
+    padding:15px
+  }
+  .topbar-actions{
+    gap:10px
+  }
+}
+.degraded-notice{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:14px 16px;margin-bottom:16px;color:var(--text);font-size:13px}
+.degraded-notice b{color:var(--warn)}
+@media(max-width:760px){
+  body{
+    font-size:16px
+  }
+  #sidebar{
+    position:fixed;
+    left:0;
+    top:0;
+    z-index:30;
+    width:260px;
+    transform:translateX(-100%);
+    transition:transform .2s;
+    box-shadow:var(--shadow)
+  }
+  #sidebar.mobile-open{
+    transform:translateX(0)
+  }
+  #nav-mask.open{
+    display:block;
+    position:fixed;
+    inset:0;
+    background:var(--mask);
+    z-index:20;
+    border:0;
+    border-radius:0;
+    width:100%;
+    height:100%
+  }
+  #main{
+    padding:0 20px 30px;
+    width:100%
+  }
+  #topbar{
+    height:72px;
+    margin-bottom:28px;
+    gap:10px
+  }
+  .breadcrumb>span:first-child,.breadcrumb .slash{
+    display:none
+  }
+  .breadcrumb{
+    font-size:12px
+  }
+  .topbar-actions{
+    gap:8px
+  }
+  .switch button{
+    min-height:44px;
+    min-width:44px;
+    padding:5px 7px
+  }
+  #mobile-menu{
+    display:flex;
+    width:44px;
+    padding:0;
+    background:transparent;
+    border:0;
+    flex:0 0 44px
+  }
+  .page-heading{
+    align-items:flex-start;
+    gap:12px;
+    margin-bottom:24px
+  }
+  .page-heading h2{
+    font-size:26px
+  }
+  .page-description{
+    font-size:12px
+  }
+  .page-heading>button{
+    font-size:12px;
+    padding:9px 12px;
+    margin-top:20px
+  }
+  .eyebrow{
+    font-size:9px
+  }
+  .overview{
+    grid-template-columns:repeat(2,1fr);
+    margin-bottom:24px
+  }
+  .overview-item{
+    padding:16px 18px
+  }
+  .overview-item:nth-child(2){
+    border-right:0
+  }
+  .overview-item:nth-child(-n+2){
+    border-bottom:1px solid var(--line)
+  }
+  .overview-item .num{
+    font-size:24px
+  }
+  .overview-item .metric-note{
+    display:none
+  }
+  .toolbar .spacer{
+    display:none
+  }
+  .search-field{
+    flex:1;
+    min-width:150px
+  }
+  .search-field input{
+    width:100%
+  }
+  input,textarea,select{
+    font-size:16px
+  }
+  .list-panel .toolbar{
+    padding:16px;
+    gap:8px
+  }
+  .table-scroll table{
+    min-width:680px
+  }
+  .list-panel .pager{
+    padding:12px 16px
+  }
+  .pager-note{
+    display:none
+  }
+  .pager{
+    justify-content:flex-end
+  }
+  .workspace-note{
+    font-size:12px;
+    flex-wrap:wrap
+  }
+  .workspace-note button{
+    margin-left:32px
+  }
+  .form-row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px
+  }
+  .form-row label{
+    width:auto;
+    flex:auto
+  }
+  .form-row input[type=checkbox]{
+    align-self:flex-start
+  }
+  .form-block,.perm-block{
+    padding:20px
+  }
+  .frow{
+    flex-wrap:wrap
+  }
+  .frow input{
+    max-width:100%
+  }
+  .frow label{
+    flex:0 0 100%;
+    width:auto
+  }
+  .callback-box{
+    flex-wrap:wrap
+  }
+  #drawer{
+    padding:24px;
+    max-width:100vw
+  }
+  .dialog-heading h3{
+    font-size:19px
+  }
+  #publish-guide{
+    padding:24px
+  }
+  .cards{
+    grid-template-columns:repeat(2,1fr)
+  }
+}
+@media(max-width:480px){
+  .breadcrumb{
+    display:none
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation:none!important;
+    transition:none!important;
+    scroll-behavior:auto!important
+  }
+}
+
+.settings-notice{padding:14px 18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);font-size:12px;margin-bottom:24px}
+#settings-feedback{padding:14px 18px;border:1px solid var(--ok);border-radius:8px;background:var(--ok-soft);color:var(--ok);font-size:13px;margin-bottom:22px}
+#settings-feedback.restart{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.settings-group{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:24px;overflow:hidden}
+.settings-group h3{padding:17px 22px;margin:0;background:var(--subtle);border-bottom:1px solid var(--line);font-size:13px;color:var(--text)}
+.setting-row{display:flex;align-items:center;flex-wrap:wrap;padding:20px 22px;margin:0;gap:18px;border-bottom:1px solid var(--line);font-size:12px}
+.setting-row:last-child{border-bottom:0}
+.setting-row .s-label{min-width:220px;flex:1 1 260px}
+.setting-name{font-weight:500;color:var(--text)}
+.setting-key{font:10px/1.8 "SFMono-Regular",Consolas,monospace;color:var(--muted);margin:3px 0 5px;overflow-wrap:anywhere}
+.setting-description{font-size:11px;color:var(--muted);max-width:65ch;line-height:1.7}
+.setting-row .s-value{font:11px/1.7 "SFMono-Regular",Consolas,monospace;color:var(--muted);max-width:240px;min-width:60px;overflow-wrap:anywhere;white-space:pre-wrap}
+.setting-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.setting-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.setting-actions button{min-height:44px;font-size:12px;padding:8px 12px}
+.setting-editor{flex:0 0 100%;min-width:0;border-top:1px dashed var(--line);padding-top:18px}
+.setting-editor[hidden]{display:none}
+.setting-editor input,.setting-editor select,.setting-editor textarea{width:100%;max-width:600px}
+.setting-editor textarea{min-height:120px;font-family:"SFMono-Regular",Consolas,monospace}
+.setting-editor-label{display:block;font-size:12px;margin-bottom:8px;color:var(--muted)}
+.setting-editor-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.setting-error{color:var(--danger);font-size:12px;margin-top:10px;overflow-wrap:anywhere}
+.setting-edit-note{font-size:11px;color:var(--muted);margin-top:10px}
+@media(max-width:760px){.setting-row{padding:18px;gap:14px}.setting-row .s-label{flex:0 0 100%;min-width:0}.setting-row .s-value{flex:1;max-width:100%}.setting-description{font-size:12px}.setting-editor input,.setting-editor select{font-size:16px}.settings-group h3{padding:16px 18px}}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main" data-i18n="workspace.skip"></a>
 <script>window.GOLIVE_BOOT = __GOLIVE_BOOT__;</script>
 
 <div id="login-gate" style="display:none">
@@ -392,53 +1585,62 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
 </div>
 
 <div id="layout" style="display:none">
-  <div id="sidebar">
-    <div id="logo">🚀 golive <small id="ver"></small></div>
-    <div class="nav-item active" data-view="sites" data-i18n="nav.sites"></div>
-    <div class="nav-item hidden" data-view="data" id="nav-data"
-         data-i18n="nav.data"></div>
-    <div class="nav-item hidden" data-view="perms" id="nav-perms"
-         data-i18n="nav.perms"></div>
-    <div class="nav-item hidden" data-view="stats" id="nav-stats"
-         data-i18n="nav.stats"></div>
-    <div class="nav-item hidden" data-view="audit" id="nav-audit"
-         data-i18n="nav.audit"></div>
-    <div class="nav-item hidden" data-view="identity" id="nav-identity"
-         data-i18n="nav.identity"></div>
-    <div class="nav-item hidden" data-view="databackend" id="nav-databackend"
-         data-i18n="nav.databackend"></div>
-    <div class="nav-item hidden" data-view="security" id="nav-security"
-         data-i18n="nav.security"></div>
-    <div class="nav-item hidden" data-view="settings" id="nav-settings"
-         data-i18n="nav.settings"></div>
-    <div id="whoami"></div>
-  </div>
-
-  <div id="main">
-    <div id="topbar">
-      <div class="switch" id="lang-switch" role="group"
-           aria-label="Language">
-        <button data-lang="en" type="button">EN</button>
-        <button data-lang="zh" type="button">中文</button>
+  <aside id="sidebar" aria-label="Workspace navigation">
+    <div id="logo"><span class="brand-mark">__GOLIVE_ROCKET__</span><div>golive<small>WORKSPACE</small></div></div>
+    <nav aria-label="Main navigation">
+      <p class="nav-group-label" data-i18n="nav.workspace"></p>
+      <div class="nav-item active" data-view="sites" role="button" tabindex="0" aria-controls="view-sites"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></svg><span data-i18n="nav.sites"></span></div>
+      <div class="nav-item hidden" data-view="data" id="nav-data" role="button" tabindex="0" aria-controls="view-data"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 4 16 4 16 0V5M4 12v7c0 4 16 4 16 0v-7"/></svg><span data-i18n="nav.data"></span></div>
+      <div class="nav-item hidden" data-view="stats" id="nav-stats" role="button" tabindex="0" aria-controls="view-stats"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h17M9 16v-4M14 16V8M19 16V5"/></svg><span data-i18n="nav.stats"></span></div>
+      <div class="nav-item hidden" data-view="audit" id="nav-audit" role="button" tabindex="0" aria-controls="view-audit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h6"/></svg><span data-i18n="nav.audit"></span></div>
+      <p class="nav-group-label" data-i18n="nav.system"></p>
+      <div class="nav-item hidden" data-view="perms" id="nav-perms" role="button" tabindex="0" aria-controls="view-perms"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6zM9 12l2 2 4-4"/></svg><span data-i18n="nav.perms"></span></div>
+      <div class="nav-item hidden" data-view="identity" id="nav-identity" role="button" tabindex="0" aria-controls="view-identity"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span data-i18n="nav.identity"></span></div>
+      <div class="nav-item hidden" data-view="databackend" id="nav-databackend" role="button" tabindex="0" aria-controls="view-databackend"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M15 6.5h3M15 17.5h3"/></svg><span data-i18n="nav.databackend"></span></div>
+      <div class="nav-item hidden" data-view="security" id="nav-security" role="button" tabindex="0" aria-controls="view-security"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span data-i18n="nav.security"></span></div>
+      <div class="nav-item hidden" data-view="settings" id="nav-settings" role="button" tabindex="0" aria-controls="view-settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span data-i18n="nav.settings"></span></div>
+    </nav>
+    <div class="sidebar-bottom"><div class="connection" data-i18n="workspace.connected"></div><div id="whoami"></div><div id="ver"></div></div>
+  </aside>
+  <button id="nav-mask" tabindex="-1" aria-label="Close navigation"></button>
+  <main id="main" tabindex="-1">
+    <header id="topbar">
+      <button id="mobile-menu" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="breadcrumb"><span data-i18n="workspace.name"></span><span class="slash">/</span><strong id="current-view-label" data-i18n="nav.sites"></strong></div>
+      <div class="topbar-actions">
+        <div class="switch" id="theme-switch" role="group" aria-label="Theme">
+          <button data-theme-set="system" type="button" title="System" aria-label="System"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+          <button data-theme-set="light" type="button" title="Light" aria-label="Light"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg></button>
+          <button data-theme-set="dark" type="button" title="Dark" aria-label="Dark"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button>
+        </div>
+        <div class="switch" id="lang-switch" role="group" aria-label="Language">
+          <button data-lang="en" type="button" aria-label="English">EN</button>
+          <button data-lang="zh" type="button" aria-label="中文">中</button>
+        </div>
       </div>
-      <div class="switch" id="theme-switch" role="group" aria-label="Theme">
-        <button data-theme-set="system" type="button" title="System">🖥</button>
-        <button data-theme-set="light" type="button" title="Light">☀</button>
-        <button data-theme-set="dark" type="button" title="Dark">🌙</button>
-      </div>
-    </div>
+    </header>
 
     <!-- sites -->
     <div class="view active" id="view-sites">
-      <h2 data-i18n="sites.title"></h2>
-      <div class="toolbar">
-        <input type="text" id="site-q" data-i18n-ph="sites.search"
-               style="width:240px">
-        <button id="site-search" data-i18n="btn.search"></button>
-        <div class="spacer"></div>
-        <span id="site-count" style="color:var(--muted);font-size:13px"></span>
+      <div class="page-heading">
+        <div><p class="eyebrow">PUBLISH · MANAGE · SHARE</p><h2 data-i18n="sites.title"></h2><p class="page-description" data-i18n="sites.description"></p></div>
+        <button class="primary" id="publish-open" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="sites.publish"></span></button>
       </div>
-      <table>
+      <div class="overview" id="site-overview" style="display:none" aria-label="Workspace overview">
+        <div class="overview-item"><div class="lbl" data-i18n="stats.sites"></div><div class="num" id="overview-total_sites">—</div><div class="metric-note" data-i18n="metric.sites"></div></div>
+        <div class="overview-item"><div class="lbl" data-i18n="stats.bytes"></div><div class="num" id="overview-total_bytes">—</div><div class="metric-note" data-i18n="metric.bytes"></div></div>
+        <div class="overview-item"><div class="lbl" data-i18n="stats.recent"></div><div class="num" id="overview-updated_last_7d">—</div><div class="metric-note" data-i18n="metric.recent"></div></div>
+        <div class="overview-item"><div class="lbl" data-i18n="stats.editable"></div><div class="num" id="overview-editable_sites">—</div><div class="metric-note" data-i18n="metric.editable"></div></div>
+      </div>
+      <section class="list-panel" aria-label="Sites">
+      <div class="toolbar">
+        <label class="search-field" for="site-q"><span class="sr-only" data-i18n="sites.search"></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" id="site-q" data-i18n-ph="sites.search"></label>
+        <button id="site-search" data-i18n="btn.search"></button>
+        <button id="site-clear" style="display:none" data-i18n="sites.clear"></button>
+        <div class="spacer"></div>
+        <span id="site-count" style="color:var(--muted);font-size:12px" aria-live="polite"></span>
+      </div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
         <thead><tr>
           <th data-i18n="th.name"></th><th data-i18n="th.slug"></th>
           <th data-i18n="th.owner"></th><th data-i18n="th.role"></th>
@@ -446,17 +1648,21 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
           <th data-i18n="th.actions"></th>
         </tr></thead>
         <tbody id="site-rows"></tbody>
-      </table>
+      </table></div>
       <div class="pager">
+        <span class="pager-note" data-i18n="sites.pager.note"></span>
         <button id="site-prev" data-i18n="btn.prev"></button>
         <span id="site-page"></span>
         <button id="site-next" data-i18n="btn.next"></button>
       </div>
+      </section>
+      <div class="workspace-note"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg><div><b data-i18n="sites.note.title"></b><span data-i18n="sites.note.body"></span></div><button id="publish-help" type="button"><span data-i18n="sites.guide"></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button></div>
     </div>
 
     <!-- data management (M6) -->
     <div class="view" id="view-data">
       <h2 data-i18n="data.title"></h2>
+      <p class="view-description" data-i18n="sites.description.data"></p>
       <div id="data-nobackend" class="guide" style="display:none"></div>
       <div id="data-main" style="display:none">
         <div class="toolbar">
@@ -467,14 +1673,14 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
           <div class="spacer"></div>
           <button class="primary" id="data-add" data-i18n="data.add"></button>
         </div>
-        <table>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
           <thead><tr>
             <th data-i18n="th.id"></th><th data-i18n="th.name"></th>
             <th data-i18n="th.summary"></th><th data-i18n="th.updated"></th>
             <th data-i18n="th.actions"></th>
           </tr></thead>
           <tbody id="data-rows"></tbody>
-        </table>
+        </table></div>
         <div class="pager">
           <button id="data-prev" data-i18n="btn.prev"></button>
           <span id="data-page"></span>
@@ -487,6 +1693,7 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- permissions (M7) -->
     <div class="view" id="view-perms">
       <h2 data-i18n="perms.title"></h2>
+      <p class="view-description" data-i18n="sites.description.perms"></p>
       <div id="perms-unavailable" class="guide" style="display:none"></div>
       <div id="perms-main" style="display:none">
         <div class="perm-block" id="perm-mine">
@@ -498,13 +1705,13 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
         <div class="perm-block" id="perm-admins">
           <h3 data-i18n="perms.admins"></h3>
           <div class="desc" data-i18n="perms.admins.desc"></div>
-          <table>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
             <thead><tr>
               <th data-i18n="th.email"></th><th data-i18n="th.source"></th>
               <th data-i18n="th.actions"></th>
             </tr></thead>
             <tbody id="perm-admin-rows"></tbody>
-          </table>
+          </table></div>
           <div class="frow" style="margin-top:12px">
             <input type="text" id="perm-admin-email"
                    data-i18n-ph="perms.admins.ph" style="flex:1">
@@ -521,13 +1728,13 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
                    style="width:240px">
             <button id="perm-site-search" data-i18n="btn.search"></button>
           </div>
-          <table>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
             <thead><tr>
               <th data-i18n="th.name"></th><th data-i18n="th.slug"></th>
               <th data-i18n="th.owner"></th><th data-i18n="th.maintainers"></th>
             </tr></thead>
             <tbody id="perm-site-rows"></tbody>
-          </table>
+          </table></div>
         </div>
 
         <div class="perm-block" id="perm-bulk">
@@ -555,18 +1762,20 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- stats -->
     <div class="view" id="view-stats">
       <h2 data-i18n="stats.title"></h2>
+      <p class="view-description" data-i18n="sites.description.stats"></p>
       <div class="cards" id="stat-cards"></div>
       <h2 style="font-size:15px" data-i18n="stats.top"></h2>
-      <table>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
         <thead><tr><th>#</th><th data-i18n="th.slug"></th>
           <th data-i18n="th.name"></th><th data-i18n="th.size"></th></tr></thead>
         <tbody id="stat-top"></tbody>
-      </table>
+      </table></div>
     </div>
 
     <!-- audit -->
     <div class="view" id="view-audit">
       <h2 data-i18n="audit.title"></h2>
+      <p class="view-description" data-i18n="sites.description.audit"></p>
       <div class="toolbar">
         <input type="text" id="audit-slug" data-i18n-ph="audit.byslug"
                style="width:170px">
@@ -574,12 +1783,12 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
                style="width:170px">
         <button id="audit-search" data-i18n="btn.filter"></button>
       </div>
-      <table>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
         <thead><tr><th data-i18n="th.time"></th><th data-i18n="th.who"></th>
           <th data-i18n="th.action"></th><th data-i18n="th.slug"></th>
           <th data-i18n="th.detail"></th></tr></thead>
         <tbody id="audit-rows"></tbody>
-      </table>
+      </table></div>
       <div class="pager">
         <button id="audit-prev" data-i18n="btn.prev"></button>
         <span id="audit-page"></span>
@@ -590,8 +1799,9 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- identity / auth (v0.8.0) -->
     <div class="view" id="view-identity">
       <h2 data-i18n="identity.title"></h2>
+      <p class="view-description" data-i18n="sites.description.identity"></p>
       <div id="identity-degraded" class="degraded-notice" style="display:none">
-        <b>⚠</b> <span data-i18n="identity.degraded"></span>
+        <b>!</b> <span data-i18n="identity.degraded"></span>
       </div>
       <div id="identity-main">
         <div class="form-block">
@@ -685,8 +1895,9 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- data backend (v0.8.0) -->
     <div class="view" id="view-databackend">
       <h2 data-i18n="databackend.title"></h2>
+      <p class="view-description" data-i18n="sites.description.databackend"></p>
       <div id="databackend-degraded" class="degraded-notice" style="display:none">
-        <b>⚠</b> <span data-i18n="databackend.degraded"></span>
+        <b>!</b> <span data-i18n="databackend.degraded"></span>
       </div>
       <div id="databackend-main">
         <div class="form-block">
@@ -714,9 +1925,9 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
           <div class="warn-box" id="db-migrate-warn">
             <b data-i18n="databackend.migrate.warn.title"></b>
             <span data-i18n="databackend.migrate.warn.body"></span>
-            <div class="migrate-cmd-hint" style="margin-top:8px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:13px;">
+            <div class="migrate-cmd-hint">
               <span data-i18n="databackend.migrate.hint"></span>
-              <code id="migrate-cmd-preview" style="display:block;margin-top:4px;color:#333;"></code>
+              <code id="migrate-cmd-preview"></code>
             </div>
           </div>
           <div class="form-row">
@@ -744,7 +1955,7 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
                     data-i18n="databackend.test"></button>
             <button id="db-switch" data-i18n="databackend.switch"></button>
           </div>
-          <div class="test-result" id="db-test-result"></div>
+          <div class="test-result" id="db-test-result" role="status" aria-live="polite" aria-atomic="true"></div>
           <div style="margin-top:10px;font-size:12px;color:var(--muted)"
                data-i18n="databackend.restart.hint"></div>
         </div>
@@ -754,8 +1965,9 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- security (v0.8.0) -->
     <div class="view" id="view-security">
       <h2 data-i18n="security.title"></h2>
+      <p class="view-description" data-i18n="sites.description.security"></p>
       <div id="security-degraded" class="degraded-notice" style="display:none">
-        <b>⚠</b> <span data-i18n="security.degraded"></span>
+        <b>!</b> <span data-i18n="security.degraded"></span>
       </div>
       <div id="security-main">
         <div class="form-block">
@@ -852,14 +2064,14 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
 
         <div class="form-block">
           <h3 data-i18n="security.blocks"></h3>
-          <table>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Data table"><table>
             <thead><tr>
               <th data-i18n="th.time"></th>
               <th data-i18n="th.who"></th>
               <th data-i18n="security.rules.rule"></th>
             </tr></thead>
             <tbody id="sec-blocks-list"></tbody>
-          </table>
+          </table></div>
         </div>
       </div>
     </div>
@@ -867,19 +2079,24 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <!-- global settings (v0.8.0) -->
     <div class="view" id="view-settings">
       <h2 data-i18n="settings.title"></h2>
+      <p class="view-description" data-i18n="sites.description.settings"></p>
       <div id="settings-degraded" class="degraded-notice" style="display:none">
-        <b>⚠</b> <span data-i18n="settings.degraded"></span>
+        <b>!</b> <span data-i18n="settings.degraded"></span>
       </div>
       <div id="settings-main">
+        <div class="settings-notice" data-i18n="settings.help"></div>
+        <div id="settings-feedback" role="status" aria-live="polite" hidden></div>
         <div id="settings-groups"></div>
       </div>
     </div>
-  </div>
+  </main>
 </div>
 
 <!-- drawer -->
 <div id="drawer-mask"></div>
-<div id="drawer">
+<div id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" tabindex="-1" inert>
+  <button id="drawer-close" type="button" aria-label="Close details"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  <p class="eyebrow" data-i18n="sites.detail"></p>
   <h3 id="d-title"></h3>
   <div class="sub" id="d-sub"></div>
 
@@ -941,7 +2158,7 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
 <!-- data row modal (M6) -->
 <div id="dm-mask" style="position:fixed;inset:0;background:var(--mask);
   display:none;z-index:60"></div>
-<div id="dm" style="position:fixed;top:8vh;left:50%;transform:translateX(-50%);
+<div id="dm" role="dialog" aria-modal="true" aria-labelledby="dm-title" tabindex="-1" style="position:fixed;top:8vh;left:50%;transform:translateX(-50%);
   width:640px;max-width:94vw;max-height:82vh;overflow-y:auto;
   background:var(--panel);border:1px solid var(--line);
   border-radius:var(--radius);padding:22px 24px;display:none;z-index:61">
@@ -950,11 +2167,12 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
     <input type="text" id="dm-model" maxlength="200" style="flex:1"></div>
   <div class="frow"><label data-i18n="d.name"></label>
     <input type="text" id="dm-name" maxlength="200" style="flex:1"></div>
+  <label for="dm-json" class="sr-only" data-i18n="data.content"></label>
   <textarea id="dm-json" spellcheck="false"
     style="width:100%;height:300px;font:12px/1.6 ui-monospace,monospace;
     background:var(--bg);color:var(--text);border:1px solid var(--line);
     border-radius:6px;padding:10px;resize:vertical"></textarea>
-  <div id="dm-err" style="color:var(--danger);font-size:12px;
+  <div id="dm-err" role="alert" style="color:var(--danger);font-size:12px;
     margin-top:6px;display:none"></div>
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
     <button id="dm-cancel" data-i18n="btn.cancel"></button>
@@ -963,7 +2181,15 @@ td.actions button{padding:3px 10px;font-size:12px;margin-right:6px}
   </div>
 </div>
 
-<div id="toast"></div>
+<dialog id="publish-guide" aria-labelledby="publish-title">
+  <div class="dialog-heading"><h3 id="publish-title" data-i18n="publish.title"></h3><button id="publish-close" type="button" aria-label="Close publishing guide"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+  <p class="dialog-description" data-i18n="publish.description"></p>
+  <p class="step-label" data-i18n="publish.step"></p>
+  <code id="publish-command">golive publish ./index.html --name "My site" --slug my-site</code>
+  <p class="step-label" data-i18n="publish.after"></p>
+  <div class="dialog-actions"><button id="publish-copy" type="button" data-i18n="publish.copy"></button><button id="publish-done" class="primary" type="button" data-i18n="publish.done"></button></div>
+</dialog>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 (function(){
@@ -972,6 +2198,11 @@ var BOOT = window.GOLIVE_BOOT || {};
 var TOKEN_KEY = "golive_admin_token";
 var THEME_KEY = "golive_admin_theme";
 var LANG_KEY = "golive_admin_lang";
+var siteRequest = 0;
+var overview = null;
+var lastActionButton = null;
+var overlayReturnFocus = null;
+var overlayId = null;
 var state = {
   me: null, page: 1, size: 20, q: "",
   auditPage: 1, current: null,
@@ -986,6 +2217,155 @@ var state = {
 // action names, emails) is never translated.
 var I18N = {
 en: {
+  "dbcheck.admin_unauthorized": "The admin session is no longer authenticated. Sign in again, then retry.",
+  "dbcheck.admin_forbidden": "Administrator privileges are required to test backend connections.",
+  "dbcheck.endpoint_unavailable": "The local server does not provide the diagnostic endpoint. Check the running server version.",
+  "dbcheck.running": "Checking…",
+  "dbcheck.configuration": "Complete the connection configuration",
+  "dbcheck.failed": "Connection check failed",
+  "dbcheck.sqlite_ok": "SQLite read/write and integrity checks passed.",
+  "dbcheck.sqlite_note": "Probe writes were rolled back; existing application data was not changed.",
+  "dbcheck.supabase_ok": "The Supabase Data API responded successfully.",
+  "dbcheck.supabase_note": "This checks Data API reachability and visible schema metadata, not table write permissions or RLS policies.",
+  "dbcheck.required": "Provide {fields}. No remote connection test has been started.",
+  "dbcheck.key": "API key",
+  "dbcheck.location": "Database file",
+  "dbcheck.latency": "Elapsed time",
+  "dbcheck.http": "HTTP status",
+  "dbcheck.backend_disabled": "The data layer is disabled; there is no connection to test.",
+  "dbcheck.sqlite_locked": "SQLite is busy or locked. Wait for other writes to finish, then retry.",
+  "dbcheck.sqlite_readonly": "SQLite is read-only. Check write permissions on both the file and its parent directory.",
+  "dbcheck.sqlite_corrupt": "The database file is invalid or failed the integrity check. Back up and inspect or restore it.",
+  "dbcheck.sqlite_open_failed": "The database file cannot be opened. Check that its parent directory exists and is accessible to the server.",
+  "dbcheck.sqlite_io_error": "SQLite read/write check failed. Check local disk space, filesystem health and permissions.",
+  "dbcheck.supabase_url_invalid": "Enter the project root URL (http/https), without credentials, query parameters or /rest/v1. No remote request was made.",
+  "dbcheck.supabase_url_placeholder": "Replace the example URL with your actual Supabase project URL. No remote request was made.",
+  "dbcheck.supabase_key_invalid": "The API key contains spaces or newlines. Paste the complete key without whitespace. No remote request was made.",
+  "dbcheck.supabase_unauthorized": "Supabase rejected the API key. Check that it is active and belongs to this project.",
+  "dbcheck.supabase_forbidden": "The Data API denied access. Check schema exposure and the API role permissions.",
+  "dbcheck.supabase_not_found": "The Data API endpoint was not found. Check the project URL and whether the Data API is enabled.",
+  "dbcheck.supabase_rate_limited": "Supabase rate limited the request. Wait before retrying.",
+  "dbcheck.supabase_redirect": "The URL returned a redirect. Use the final project root URL; the key is not forwarded through redirects.",
+  "dbcheck.supabase_unavailable": "The endpoint responded but the service is unavailable. Check project status and gateway health.",
+  "dbcheck.supabase_http_error": "The Data API returned an unexpected HTTP status. Check the project URL and API configuration.",
+  "dbcheck.supabase_invalid_response": "The endpoint did not return a Data API schema document. The URL may point to a dashboard or login page.",
+  "dbcheck.supabase_tls_error": "TLS certificate verification failed. Check the hostname, certificate and trusted CA configuration.",
+  "dbcheck.supabase_timeout": "No response was received within 15 seconds. Check the network and whether the project is paused or unavailable.",
+  "dbcheck.supabase_network_error": "The server could not reach the endpoint. Check DNS, network, proxy and firewall. This does not establish that the key is invalid.",
+  "dbcheck.supabase_request_error": "The request could not be completed. Check the project URL, key format and server network.",
+  "dbcheck.backend_unsupported": "Connection testing is not supported for this backend. Select SQLite or Supabase.",
+  "dbcheck.backend_internal_error": "An internal diagnostic error prevented the test from completing. Retry or inspect server logs.",
+  "dbcheck.request_failed": "The diagnostic request did not complete. Check the local service and retry.",
+  "settings.description.server.host": "Bind address for the HTTP server",
+  "settings.description.server.port": "HTTP server port",
+  "settings.description.server.public_base": "Public base URL for publish links",
+  "settings.description.data.backend": "Data layer backend: sqlite | postgres | supabase | none",
+  "settings.description.auth.provider": "Authentication provider: none | token | oidc | proxy",
+  "settings.description.auth.oidc.issuer": "OIDC IdP issuer URL",
+  "settings.description.auth.oidc.client_id": "OIDC client ID",
+  "settings.description.auth.oidc.verify_signature": "Verify id_token signatures (disable = security risk)",
+  "settings.description.watermark.enabled": "Enable front-end canvas watermark",
+  "settings.description.watermark.text": "Watermark text (empty = use identity)",
+  "settings.description.watermark.opacity": "Watermark opacity (0.0\u20131.0)",
+  "settings.description.watermark.font_size": "Watermark font size (px)",
+  "settings.description.watermark.rotation": "Watermark rotation (degrees)",
+  "settings.description.watermark.color": "Watermark color (R,G,B triplet)",
+  "settings.description.security.llm.base_url": "LLM API base URL for AI security review",
+  "settings.description.security.llm.model": "LLM model name for AI security review",
+  "settings.description.security.llm.strict_mode": "Refuse publish when LLM is not configured",
+  "settings.description.security.ai_review_enabled": "Enable AI second-pass review for weak hits",
+  "settings.description.admin.audit_max_bytes": "Audit log max size before rotation (bytes, 0 = off)",
+  "settings.description.admin.audit_keep": "Number of archived audit logs to keep",
+  "settings.help": "Changes are saved as database overrides. Environment variables and explicit startup arguments take priority.",
+  "settings.edit": "Edit",
+  "settings.reset": "Restore inherited value",
+  "settings.reset.confirm": "Remove the saved override for {key} and use the file/default value?",
+  "settings.saved.hot": "Saved. Live configuration has been updated.",
+  "settings.saved.restart": "Saved. Restart the server to apply this change.",
+  "settings.reset.hot": "Override removed. Live configuration has been restored.",
+  "settings.reset.restart": "Override removed. Restart the server to apply the inherited value.",
+  "settings.source.environment": "environment",
+  "settings.environment": "Controlled by an environment variable. Update the deployment configuration to change it.",
+  "settings.inherited": "Saving creates a database override; the configuration file stays intact.",
+  "settings.value.label": "Value for {key}",
+  "settings.empty": "Not set",
+  "settings.enabled": "Enabled",
+  "settings.disabled": "Disabled",
+  "settings.invalid.number": "Enter a valid number.",
+  "settings.invalid.int": "Enter a whole number.",
+  "settings.invalid.json": "Enter valid JSON.",
+  "settings.saving": "Saving…",
+  "settings.group.watermark": "Watermark",
+  "settings.group.general": "General",
+  "settings.group.registry": "Registry",
+  "settings.label.server.host": "Bind address",
+  "settings.label.server.port": "HTTP port",
+  "settings.label.server.public_base": "Public URL",
+  "settings.label.data.backend": "Data backend",
+  "settings.label.auth.provider": "Sign-in provider",
+  "settings.label.auth.oidc.issuer": "OIDC issuer",
+  "settings.label.auth.oidc.client_id": "OIDC client ID",
+  "settings.label.auth.oidc.verify_signature": "Verify token signatures",
+  "settings.label.watermark.enabled": "Canvas watermark",
+  "settings.label.watermark.text": "Watermark text",
+  "settings.label.watermark.opacity": "Watermark opacity",
+  "settings.label.watermark.font_size": "Watermark font size",
+  "settings.label.watermark.rotation": "Watermark rotation",
+  "settings.label.watermark.color": "Watermark color",
+  "settings.label.security.llm.base_url": "AI review endpoint",
+  "settings.label.security.llm.model": "AI review model",
+  "settings.label.security.llm.strict_mode": "Require AI review",
+  "settings.label.security.ai_review_enabled": "AI second-pass review",
+  "settings.label.admin.audit_max_bytes": "Audit log size limit",
+  "settings.label.admin.audit_keep": "Retained audit archives",
+  "workspace.name": "Workspace",
+  "workspace.connected": "Service connected",
+  "workspace.skip": "Skip to main content",
+  "nav.workspace": "Workspace",
+  "nav.system": "Administration",
+  "sites.description": "A quiet home for everything you publish. Manage your sites, access and content in one place.",
+  "sites.publish": "Publish site",
+  "sites.pager.note": "All your published work, in one place.",
+  "sites.note.title": "From a file to a shared destination",
+  "sites.note.body": "Publish an HTML file, a folder or an archive with a single command.",
+  "sites.guide": "Publishing guide",
+  "sites.detail": "SITE DETAILS",
+  "metric.sites": "Across this workspace",
+  "metric.bytes": "Published content",
+  "metric.recent": "Active in the last 7 days",
+  "metric.editable": "With inline editing enabled",
+  "publish.title": "Publish your next idea",
+  "publish.description": "Run this command in the terminal connected to this golive instance. Replace the file path and site name with your own.",
+  "publish.step": "01  /  PUBLISH FROM YOUR TERMINAL",
+  "publish.after": "02  /  Refresh this list after publishing. Open your site using its slug.",
+  "publish.copy": "Copy command",
+  "publish.done": "Got it",
+  "btn.close": "Close",
+  "sites.noresults": "No matching sites",
+  "sites.noresults.hint": "Try a different name or slug, or clear your search.",
+  "sites.none.hint": "Publish your first HTML page to see it here.",
+  "sites.clear": "Clear search",
+  "sites.loading": "Loading sites…",
+  "role.superadmin": "Admin",
+  "role.owner": "Owner",
+  "role.maintainer": "Maintainer",
+  "sites.description.data": "Browse, search and maintain the records behind your published pages.",
+  "sites.description.perms": "Keep ownership and collaboration clear, with access granted intentionally.",
+  "sites.description.stats": "A concise view of your published content and recent activity.",
+  "sites.description.audit": "Follow changes across your workspace with a traceable activity record.",
+  "sites.description.identity": "Configure how people sign in to your workspace.",
+  "sites.description.databackend": "Choose where your application data lives and verify the connection.",
+  "sites.description.security": "Review publishing checks and manage the rules that protect your content.",
+  "sites.description.settings": "Review and edit workspace configuration, with clear sources and activation rules.",
+  "who.local": "Admin session",
+  "theme.system": "Follow system",
+  "theme.light": "Light theme",
+  "theme.dark": "Dark theme",
+  "nav.open": "Open navigation",
+  "nav.close": "Close navigation",
+  "data.content": "JSON content",
+  "data.model.label": "Data model",
+  "sites.loadfailed": "Could not load sites. Try searching again.",
   "gate.hint": "This server requires token auth. Enter the access token (GOLIVE_TOKEN). It is kept in this browser's sessionStorage only.",
   "gate.enter": "Enter portal",
   "nav.sites": "Sites",
@@ -1191,16 +2571,17 @@ en: {
   "databackend.switch.title": "Switch backend",
   "databackend.newtype": "New type",
   "databackend.sb.url": "Supabase URL",
-  "databackend.sb.key": "Service key",
-  "databackend.sb.key.ph": "paste key (stored as env var)",
+  "databackend.sb.key": "API key",
+  "databackend.sb.key.ph": "Used for this test only; leave blank to use the matching server configuration",
   "databackend.test": "Test connection",
-  "databackend.switch": "Switch & restart",
+  "databackend.switch": "Save backend",
+  "databackend.configure.supabase": "Configure supabase.url in golive.yaml and GOLIVE_SUPABASE_SERVICE_KEY on the server, then select Supabase in Global settings and restart. Test inputs are never saved.",
   "databackend.migrate.warn.title": "Data will not be migrated.",
   "databackend.migrate.warn.body": "Switching backends does not copy existing data. Use the command below to migrate data to the new backend. Source data is not deleted.",
   "databackend.migrate.hint": "Run this command to migrate:",
   "databackend.restart.hint": "Backend changes require a server restart to take effect.",
   "databackend.test.ok": "Connection successful. Backend is reachable.",
-  "databackend.test.ok.tables": "Tables found: {n}",
+  "databackend.test.ok.tables": "Visible tables: {n}",
   "databackend.test.fail": "Connection failed.",
   "security.title": "Security scan",
   "security.degraded": "The security management API requires golive 0.8.0 or newer. Update and restart to use this page.",
@@ -1259,6 +2640,155 @@ en: {
   "settings.restart": "Restart server"
 },
 zh: {
+  "dbcheck.admin_unauthorized": "管理会话未认证或已失效，请重新认证后再测试。",
+  "dbcheck.admin_forbidden": "当前账号没有连接诊断权限，需要超级管理员身份。",
+  "dbcheck.endpoint_unavailable": "当前本地服务没有提供连接诊断接口，请检查运行中的服务版本。",
+  "dbcheck.running": "正在检查…",
+  "dbcheck.configuration": "请完善连接配置",
+  "dbcheck.failed": "连接检查未通过",
+  "dbcheck.sqlite_ok": "SQLite 本地读写与完整性检查通过。",
+  "dbcheck.sqlite_note": "测试写入已回滚，未修改现有应用数据。",
+  "dbcheck.supabase_ok": "Supabase Data API 已正常响应。",
+  "dbcheck.supabase_note": "本次检查接口可达性与可见表元数据，不代表各表写入权限或 RLS 策略已通过验证。",
+  "dbcheck.required": "请填写{fields}；尚未发起远程连接测试。",
+  "dbcheck.key": "API 密钥",
+  "dbcheck.location": "数据库文件",
+  "dbcheck.latency": "检查耗时",
+  "dbcheck.http": "HTTP 状态",
+  "dbcheck.backend_disabled": "数据层已禁用，无需进行连接测试。",
+  "dbcheck.sqlite_locked": "SQLite 正忙或被其他进程锁定。请等待其他写入完成后重试。",
+  "dbcheck.sqlite_readonly": "SQLite 当前不可写。请检查数据库文件及其父目录的写入权限。",
+  "dbcheck.sqlite_corrupt": "数据库文件格式无效或未通过完整性检查。请先备份，再检查或恢复数据库。",
+  "dbcheck.sqlite_open_failed": "无法打开数据库文件。请检查父目录是否存在，以及服务进程是否具有访问权限。",
+  "dbcheck.sqlite_io_error": "SQLite 本地读写检查失败。请检查磁盘空间、文件系统状态及权限。",
+  "dbcheck.supabase_url_invalid": "请填写完整的 HTTP(S) 项目根地址，不要包含账号密码、查询参数或 /rest/v1 路径。尚未发起远程请求。",
+  "dbcheck.supabase_url_placeholder": "当前仍是示例地址，请替换为真实 Supabase 项目地址。尚未发起远程请求。",
+  "dbcheck.supabase_key_invalid": "API 密钥中含空格或换行，请重新粘贴完整密钥。尚未发起远程请求。",
+  "dbcheck.supabase_unauthorized": "Supabase 拒绝了此 API 密钥。请确认密钥有效，且属于所填写的项目。",
+  "dbcheck.supabase_forbidden": "Data API 拒绝访问。请检查 Schema 暴露设置及当前密钥对应角色的访问权限。",
+  "dbcheck.supabase_not_found": "未找到 Data API 接口。请检查项目根地址，以及项目是否已启用 Data API。",
+  "dbcheck.supabase_rate_limited": "Supabase 对请求进行了限流，请稍后重试。",
+  "dbcheck.supabase_redirect": "该地址返回了重定向，请填写最终项目根地址。为保护密钥，测试不会自动跳转。",
+  "dbcheck.supabase_unavailable": "接口已响应，但服务暂不可用。请检查项目状态及网关服务。",
+  "dbcheck.supabase_http_error": "Data API 返回了非预期 HTTP 状态，请检查项目地址与接口配置。",
+  "dbcheck.supabase_invalid_response": "响应内容不是 Data API 元数据，可能误填了控制台、登录页或其他服务地址。",
+  "dbcheck.supabase_tls_error": "TLS 证书验证失败，请检查域名、证书及服务端信任的 CA 配置。",
+  "dbcheck.supabase_timeout": "15 秒内未收到响应。请检查网络，以及项目是否暂停或暂不可用。",
+  "dbcheck.supabase_network_error": "服务端无法连接该地址。请检查 DNS、网络、代理和防火墙；此错误不能说明密钥无效。",
+  "dbcheck.supabase_request_error": "无法完成请求，请检查项目地址、密钥格式和服务端网络配置。",
+  "dbcheck.backend_unsupported": "此后端暂不支持连接测试，请选择 SQLite 或 Supabase。",
+  "dbcheck.backend_internal_error": "内部诊断异常导致测试未完成，请重试或检查服务日志。",
+  "dbcheck.request_failed": "诊断请求未完成，请检查本地服务状态后重试。",
+  "settings.help": "修改将保存为数据库覆盖值；环境变量、启动命令中的显式参数优先。",
+  "settings.edit": "修改",
+  "settings.reset": "恢复继承值",
+  "settings.reset.confirm": "移除 {key} 的数据库覆盖值，恢复为文件或默认配置？",
+  "settings.saved.hot": "已保存，运行配置已更新。",
+  "settings.saved.restart": "已保存，重启服务后生效。",
+  "settings.reset.hot": "已移除覆盖值，运行配置已恢复。",
+  "settings.reset.restart": "已移除覆盖值，重启后使用继承配置。",
+  "settings.source.environment": "环境变量",
+  "settings.environment": "由环境变量控制，请在部署环境中修改。",
+  "settings.inherited": "保存会创建数据库覆盖值，配置文件保持原样。",
+  "settings.value.label": "{key} 的参数值",
+  "settings.empty": "未设置",
+  "settings.enabled": "开启",
+  "settings.disabled": "关闭",
+  "settings.invalid.number": "请输入有效数字。",
+  "settings.invalid.int": "请输入整数。",
+  "settings.invalid.json": "请输入有效 JSON。",
+  "settings.saving": "正在保存…",
+  "settings.group.watermark": "页面水印",
+  "settings.group.general": "通用",
+  "settings.group.registry": "站点登记",
+  "settings.label.server.host": "监听地址",
+  "settings.description.server.host": "服务监听的主机名或 IP 地址。",
+  "settings.label.server.port": "服务端口",
+  "settings.description.server.port": "有效范围为 1–65535，重启后生效。",
+  "settings.label.server.public_base": "公开访问地址",
+  "settings.description.server.public_base": "用于生成发布链接的完整 HTTP(S) 地址，可留空。",
+  "settings.label.data.backend": "数据后端",
+  "settings.description.data.backend": "为页面应用选择数据存储后端。",
+  "settings.label.auth.provider": "身份认证方式",
+  "settings.description.auth.provider": "选择无认证、令牌、OIDC 或可信反向代理认证。",
+  "settings.label.auth.oidc.issuer": "OIDC 签发者地址",
+  "settings.description.auth.oidc.issuer": "身份提供方的完整 HTTP(S) 地址。",
+  "settings.label.auth.oidc.client_id": "OIDC 客户端标识",
+  "settings.description.auth.oidc.client_id": "身份提供方分配给此应用的公开客户端 ID。",
+  "settings.label.auth.oidc.verify_signature": "验证令牌签名",
+  "settings.description.auth.oidc.verify_signature": "验证 OIDC 登录令牌的签名。",
+  "settings.label.watermark.enabled": "页面水印",
+  "settings.description.watermark.enabled": "控制后续发布页面的前端画布水印。",
+  "settings.label.watermark.text": "水印文字",
+  "settings.description.watermark.text": "留空时使用身份信息作为水印文字。",
+  "settings.label.watermark.opacity": "水印透明度",
+  "settings.description.watermark.opacity": "取值 0–1，例如 0.15 表示 15% 不透明度。",
+  "settings.label.watermark.font_size": "水印字号",
+  "settings.description.watermark.font_size": "水印文字的像素大小，范围为 1–256。",
+  "settings.label.watermark.rotation": "水印旋转角度",
+  "settings.description.watermark.rotation": "水印的旋转角度，范围为 -360–360。",
+  "settings.label.watermark.color": "水印颜色",
+  "settings.description.watermark.color": "RGB 三通道值，如 150,150,150；每个通道为 0–255。",
+  "settings.label.security.llm.base_url": "AI 审核服务地址",
+  "settings.description.security.llm.base_url": "用于安全复审的服务地址，留空表示未配置。",
+  "settings.label.security.llm.model": "AI 审核模型",
+  "settings.description.security.llm.model": "用于安全复审的模型名称。",
+  "settings.label.security.llm.strict_mode": "强制 AI 审核",
+  "settings.description.security.llm.strict_mode": "启用后，AI 审核服务未配置时会拒绝发布。",
+  "settings.label.security.ai_review_enabled": "AI 二次审核",
+  "settings.description.security.ai_review_enabled": "对弱规则命中进行 AI 复审；强制审核模式优先。",
+  "settings.label.admin.audit_max_bytes": "审计日志大小上限",
+  "settings.description.admin.audit_max_bytes": "单个日志文件的字节数上限，0 表示关闭轮转。",
+  "settings.label.admin.audit_keep": "审计归档保留数",
+  "settings.description.admin.audit_keep": "轮转时保留的历史日志数量，范围为 1–100。",
+  "workspace.name": "工作空间",
+  "workspace.connected": "服务已连接",
+  "workspace.skip": "跳至主要内容",
+  "nav.workspace": "工作空间",
+  "nav.system": "管理设置",
+  "sites.description": "让每一次发布井然有序。在这里管理站点、内容与访问权限。",
+  "sites.publish": "发布站点",
+  "sites.pager.note": "已发布的内容，尽在此处。",
+  "sites.note.title": "从一个文件，到一个可分享的页面",
+  "sites.note.body": "一条命令发布 HTML、项目目录或压缩包，让想法即刻可见。",
+  "sites.guide": "查看发布指南",
+  "sites.detail": "站点详情",
+  "metric.sites": "当前工作空间内",
+  "metric.bytes": "已发布内容占用",
+  "metric.recent": "过去 7 天内有更新",
+  "metric.editable": "已启用在线编辑",
+  "publish.title": "发布你的下一个想法",
+  "publish.description": "在运行此 golive 实例的终端执行命令，将文件路径、名称和短链接替换为你的内容。",
+  "publish.step": "01  /  在终端发布页面",
+  "publish.after": "02  /  发布完成后刷新列表，通过站点短链接访问页面。",
+  "publish.copy": "复制命令",
+  "publish.done": "明白了",
+  "btn.close": "关闭",
+  "sites.noresults": "没有找到匹配的站点",
+  "sites.noresults.hint": "换一个名称或短链接试试，也可以清除搜索。",
+  "sites.none.hint": "发布你的第一个 HTML 页面，它就会出现在这里。",
+  "sites.clear": "清除搜索",
+  "sites.loading": "正在加载站点…",
+  "role.superadmin": "管理员",
+  "role.owner": "所有者",
+  "role.maintainer": "协作者",
+  "sites.description.data": "查看、搜索和维护已发布页面背后的应用数据。",
+  "sites.description.perms": "明确内容归属与协作边界，让每一份权限恰到好处。",
+  "sites.description.stats": "简洁了解已发布内容、存储占用与近期动态。",
+  "sites.description.audit": "追溯工作空间内的操作，让每一次变更有迹可循。",
+  "sites.description.identity": "配置成员登录工作空间的方式。",
+  "sites.description.databackend": "选择应用数据的存储位置，并验证连接状态。",
+  "sites.description.security": "查看发布检查，管理保护内容安全的扫描规则。",
+  "sites.description.settings": "查看与修改全局配置，明确每项参数的来源和生效方式。",
+  "who.local": "管理会话",
+  "theme.system": "跟随系统",
+  "theme.light": "浅色主题",
+  "theme.dark": "深色主题",
+  "nav.open": "打开导航",
+  "nav.close": "关闭导航",
+  "data.content": "JSON 内容",
+  "data.model.label": "数据模型",
+  "sites.loadfailed": "站点加载失败，请重新搜索再试。",
   "gate.hint": "该服务启用了 Token 认证，请输入访问令牌（GOLIVE_TOKEN）。令牌仅保存在本浏览器的 sessionStorage。",
   "gate.enter": "进入门户",
   "nav.sites": "站点管理",
@@ -1291,7 +2821,7 @@ zh: {
   "btn.copied": "已复制",
   "th.name": "名称",
   "th.slug": "slug",
-  "th.owner": "owner",
+  "th.owner": "所有者",
   "th.role": "角色",
   "th.size": "大小",
   "th.updated": "更新时间",
@@ -1320,9 +2850,9 @@ zh: {
   "stats.title": "统计",
   "stats.top": "Top 10 站点（按大小）",
   "stats.sites": "站点总数",
-  "stats.bytes": "总大小",
+  "stats.bytes": "存储用量",
   "stats.recent": "近 7 天有更新",
-  "stats.editable": "开启在线编辑",
+  "stats.editable": "可在线编辑",
   "stats.none": "暂无数据",
   "audit.title": "审计日志",
   "audit.byslug": "按 slug 过滤",
@@ -1464,16 +2994,17 @@ zh: {
   "databackend.switch.title": "切换后端",
   "databackend.newtype": "新类型",
   "databackend.sb.url": "Supabase URL",
-  "databackend.sb.key": "Service Key",
-  "databackend.sb.key.ph": "粘贴密钥（将存为环境变量）",
+  "databackend.sb.key": "API 密钥",
+  "databackend.sb.key.ph": "仅用于本次测试；同一项目可留空使用服务端已有密钥",
   "databackend.test": "测试连接",
-  "databackend.switch": "切换并重启",
+  "databackend.switch": "保存后端类型",
+  "databackend.configure.supabase": "请先在 golive.yaml 配置 supabase.url，并在服务端设置 GOLIVE_SUPABASE_SERVICE_KEY；再到全局参数选择 Supabase 后重启。连接测试中的 URL 和密钥不会保存。",
   "databackend.migrate.warn.title": "数据不会自动迁移。",
   "databackend.migrate.warn.body": "切换后端不会复制已有数据。使用下方命令将数据迁移到新后端。源数据不会被删除。",
   "databackend.migrate.hint": "运行此命令进行迁移：",
   "databackend.restart.hint": "后端变更需要重启服务才能生效。",
   "databackend.test.ok": "连接成功。后端可达。",
-  "databackend.test.ok.tables": "发现表：{n} 个",
+  "databackend.test.ok.tables": "可见表：{n} 个",
   "databackend.test.fail": "连接失败。",
   "security.title": "安全扫描",
   "security.degraded": "安全管理接口需要 golive 0.8.0 及以上版本。升级并重启后可用。",
@@ -1619,14 +3150,14 @@ function applyLang(lang, persist){
     b.setAttribute("aria-pressed",
       b.dataset.lang === state.lang ? "true" : "false");
   });
-  document.title = "golive · " + t("nav.sites").toLowerCase();
+  updateChrome();
   rerender();
 }
 function rerender(){
   // Re-paint anything drawn from JS strings after a language switch.
   if (!state.me) return;
   var who = state.me.identity || {};
-  $("whoami").textContent = (who.email || "(token)") +
+  $("whoami").textContent = (who.email || t("who.local")) +
     (who.superadmin ? " · " + t("who.superadmin") : "");
   var active = document.querySelector(".nav-item.active");
   var view = active ? active.dataset.view : "sites";
@@ -1640,6 +3171,139 @@ function rerender(){
   else if (view === "security") loadSecurity();
   else if (view === "settings") loadSettings();
 }
+
+// Shared workspace chrome and accessible controls.
+function updateChrome(){
+  var active = document.querySelector(".nav-item.active");
+  var view = active ? active.dataset.view : "sites";
+  $("current-view-label").textContent = t("nav." + view);
+  document.title = "golive · " + t("nav." + view);
+  document.querySelectorAll(".nav-item").forEach(function(el){
+    if (el === active) el.setAttribute("aria-current", "page");
+    else el.removeAttribute("aria-current");
+  });
+  document.querySelectorAll("[data-theme-set]").forEach(function(el){
+    el.title = t("theme." + el.dataset.themeSet);
+    el.setAttribute("aria-label", el.title);
+  });
+  $("drawer-close").setAttribute("aria-label", t("btn.close"));
+  $("publish-close").setAttribute("aria-label", t("btn.close"));
+  $("mobile-menu").setAttribute("aria-label", t("nav.open"));
+  $("nav-mask").setAttribute("aria-label", t("nav.close"));
+  enhanceControls();
+  renderOverview();
+}
+function enhanceControls(){
+  document.querySelectorAll("input,select,textarea").forEach(function(input){
+    if (input.id){
+      var row = input.closest(".form-row,.frow");
+      var label = row && row.querySelector("label");
+      if (label && !label.querySelector("input")) label.htmlFor = input.id;
+    }
+    if (!input.labels || !input.labels.length){
+      var name = input.getAttribute("placeholder") || input.id.replace(/-/g, " ");
+      if (input.id === "dm-json") name = t("data.content");
+      if (input.id === "data-model") name = t("data.model.label");
+      input.setAttribute("aria-label", name);
+    }
+  });
+  document.querySelectorAll(".table-scroll").forEach(function(el){
+    var heading = el.closest(".view");
+    if (heading){
+      var title = heading.querySelector("h2");
+      if (title) el.setAttribute("aria-label", title.textContent);
+    }
+  });
+  document.querySelectorAll(".tag b").forEach(function(el){
+    el.setAttribute("role", "button");
+    el.tabIndex = 0;
+    el.setAttribute("aria-label", t("btn.remove") + " " + el.parentElement.textContent.replace("×", "").trim());
+  });
+}
+var enhanceQueued = false;
+new MutationObserver(function(){
+  if (enhanceQueued) return;
+  enhanceQueued = true;
+  requestAnimationFrame(function(){ enhanceQueued = false; enhanceControls(); });
+}).observe($("layout"), {childList:true, subtree:true});
+function renderOverview(){
+  if (!overview) return;
+  $("site-overview").style.display = "grid";
+  ["total_sites", "total_bytes", "updated_last_7d", "editable_sites"].forEach(function(key){
+    $("overview-" + key).textContent = key === "total_bytes" ? fmtBytes(overview[key]) : overview[key];
+  });
+}
+function loadOverview(){
+  if (!(state.me && state.me.identity && state.me.identity.superadmin)) return;
+  api("GET", "/api/admin/stats").then(function(data){ overview = data; renderOverview(); })
+    .catch(function(){ $("site-overview").style.display = "none"; });
+}
+function setMobileNav(open){
+  $("sidebar").classList.toggle("mobile-open", open);
+  $("nav-mask").classList.toggle("open", open);
+  $("mobile-menu").setAttribute("aria-expanded", String(open));
+  var mobile = window.matchMedia("(max-width:760px)").matches;
+  $("sidebar").inert = mobile && !open;
+  if (mobile) $("main").inert = open;
+  document.body.style.overflow = (open || overlayId) ? "hidden" : "";
+  if (open) document.querySelector(".nav-item.active").focus();
+}
+$("mobile-menu").addEventListener("click", function(){ setMobileNav(true); });
+$("nav-mask").addEventListener("click", function(){ setMobileNav(false); $("mobile-menu").focus(); });
+window.addEventListener("resize", function(){
+  if (!window.matchMedia("(max-width:760px)").matches) setMobileNav(false);
+  else if (!$("sidebar").classList.contains("mobile-open")) $("sidebar").inert = true;
+});
+function focusOverlay(id){
+  overlayReturnFocus = document.activeElement;
+  overlayId = id;
+  $("layout").inert = true;
+  $(id).inert = false;
+  document.body.style.overflow = "hidden";
+  $(id).focus();
+  enhanceControls();
+}
+function releaseOverlay(id){
+  if (overlayId !== id) return;
+  $("layout").inert = false;
+  overlayId = null;
+  document.body.style.overflow = "";
+  if (overlayReturnFocus && overlayReturnFocus.isConnected) overlayReturnFocus.focus();
+}
+document.addEventListener("keydown", function(ev){
+  var mobileNav = $("sidebar").classList.contains("mobile-open");
+  if (ev.key === "Escape"){
+    if (overlayId === "drawer") closeDrawer();
+    else if (overlayId === "dm") closeRowModal();
+    else if (mobileNav){ setMobileNav(false); $("mobile-menu").focus(); }
+  }
+  var panel = overlayId ? $(overlayId) : mobileNav ? $("sidebar") : null;
+  if (ev.key === "Tab" && panel){
+    var items = Array.prototype.filter.call(panel.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]'), function(el){ return el.getClientRects().length; });
+    var first = items[0], last = items[items.length-1];
+    if (!first){ ev.preventDefault(); return; }
+    if (ev.shiftKey && (document.activeElement === first || document.activeElement === panel)) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && (document.activeElement === last || document.activeElement === panel)){ ev.preventDefault(); first.focus(); }
+  }
+  var target = ev.target.closest('[role="button"]');
+  if (target && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); target.click(); }
+});
+$("drawer-close").addEventListener("click", closeDrawer);
+["publish-open", "publish-help"].forEach(function(id){
+  $(id).addEventListener("click", function(){ $("publish-guide").showModal(); });
+});
+["publish-close", "publish-done"].forEach(function(id){
+  $(id).addEventListener("click", function(){ $("publish-guide").close(); });
+});
+$("publish-guide").addEventListener("click", function(ev){
+  if (ev.target === this){ var r = this.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) this.close(); }
+});
+$("publish-copy").addEventListener("click", function(){ copyText($("publish-command").textContent, this); });
+document.addEventListener("click", function(ev){
+  lastActionButton = ev.target.closest("button");
+  var captured = lastActionButton;
+  setTimeout(function(){ if (lastActionButton === captured) lastActionButton = null; }, 0);
+}, true);
 
 // ── clipboard ──────────────────────────────────────────────────
 function copyText(text, btn){
@@ -1659,11 +3323,12 @@ function copyText(text, btn){
     ta.value = text;
     ta.style.position = "fixed";
     ta.style.opacity = "0";
-    document.body.appendChild(ta);
+    var host = $("publish-guide").open ? $("publish-guide") : document.body;
+    host.appendChild(ta);
     ta.select();
     var done = false;
     try { done = document.execCommand("copy"); } catch (e) { done = false; }
-    document.body.removeChild(ta);
+    host.removeChild(ta);
     if (done) ok(); else toast(t("msg.copyfail"), true);
   };
   if (navigator.clipboard && navigator.clipboard.writeText){
@@ -1682,15 +3347,24 @@ function api(method, path, body){
     headers["Content-Type"] = "application/json";
     opt.body = JSON.stringify(body);
   }
+  var button = method !== "GET" ? lastActionButton : null;
+  var wasDisabled = button ? button.disabled : false;
+  if (button){ button.disabled = true; button.setAttribute("aria-busy", "true"); }
   return fetch(path, opt).then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(j){
       if (!r.ok){
         var e = new Error(j.error || ("HTTP " + r.status));
         e.status = r.status;
+        e.code = j.code;
+        e.hint = j.hint;
+        e.fields = j.fields;
+        e.http_status = j.http_status;
         throw e;
       }
       return j;
     });
+  }).finally(function(){
+    if (button){ button.disabled = wasDisabled; button.removeAttribute("aria-busy"); }
   });
 }
 
@@ -1728,8 +3402,9 @@ function start(){
     $("layout").style.display = "flex";
     $("ver").textContent = "v" + (BOOT.version || "");
     var who = me.identity || {};
-    $("whoami").textContent = (who.email || "(token)") +
+    $("whoami").textContent = (who.email || t("who.local")) +
       (who.superadmin ? " · " + t("who.superadmin") : "");
+    document.querySelector('[data-i18n="nav.system"]').hidden = !who.superadmin;
     if (who.superadmin){
       $("nav-data").classList.remove("hidden");
       $("nav-perms").classList.remove("hidden");
@@ -1740,6 +3415,9 @@ function start(){
       $("nav-security").classList.remove("hidden");
       $("nav-settings").classList.remove("hidden");
     }
+    updateChrome();
+    setMobileNav(false);
+    if (who.superadmin) $("site-overview").style.display = "grid";
     loadSites();
   }).catch(function(e){
     if (e.status === 401){
@@ -1773,6 +3451,8 @@ Array.prototype.forEach.call(
       document.querySelectorAll(".view"), function(v){
         v.classList.remove("active"); });
     $("view-" + el.dataset.view).classList.add("active");
+    setMobileNav(false);
+    updateChrome();
     if (el.dataset.view === "sites") loadSites();
     if (el.dataset.view === "data") initData();
     if (el.dataset.view === "perms") loadPerms();
@@ -1787,28 +3467,34 @@ Array.prototype.forEach.call(
 
 // ── sites list ─────────────────────────────────────────────────
 function loadSites(){
+  var requestId = ++siteRequest;
+  $("site-search").disabled = true;
+  $("site-rows").setAttribute("aria-busy", "true");
+  if (!$("site-rows").children.length) $("site-rows").innerHTML = '<tr><td colspan="7" class="empty">' + esc(t("sites.loading")) + '</td></tr>';
+  $("site-clear").style.display = state.q ? "" : "none";
   var qs = "?page=" + state.page + "&size=" + state.size +
            "&q=" + encodeURIComponent(state.q);
   api("GET", "/api/admin/sites" + qs).then(function(d){
+    if (requestId !== siteRequest) return;
     var tb = $("site-rows");
     tb.innerHTML = "";
     if (!d.sites.length){
       tb.innerHTML = '<tr><td colspan="7" class="empty">' +
-        esc(t("sites.none")) + "</td></tr>";
+        "<strong>" + esc(t(state.q ? "sites.noresults" : "sites.none")) + "</strong><br>" + esc(t(state.q ? "sites.noresults.hint" : "sites.none.hint")) + "</td></tr>";
     }
     d.sites.forEach(function(s){
       var tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" + esc(s.name || t("sites.unnamed")) + "</td>" +
-        "<td>" + (s.slug ? '<a href="/' + esc(s.slug) +
+        '<td><div class="site-name"><span class="site-monogram" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h4"/></svg></span><div><strong>' + esc(s.name || t("sites.unnamed")) + '</strong><small>' + esc((s.site_id || "").slice(0,8)) + '</small></div></div></td>' +
+        "<td>" + (s.slug ?  '<a class="site-url" href="/' + esc(s.slug) +
                   '" target="_blank" rel="noopener">' + esc(s.slug) +
                   "</a>" : '<span class="badge">' + esc(t("sites.noslug")) +
                   "</span>") + "</td>" +
         "<td>" + esc(s.owner || "—") + "</td>" +
         '<td><span class="badge ' + esc(s.role) + '">' +
-          esc(s.role || "—") + "</span></td>" +
+          esc(s.role ? t("role." + s.role) : "—") + "</span></td>" +
         "<td>" + fmtBytes(s.size) + "</td>" +
-        "<td>" + esc((s.updated_at || "").replace("T", " ")) + "</td>" +
+        '<td class="date-cell">' + esc((s.updated_at || "").replace("T", " ").slice(0,19)) + "</td>" +
         '<td class="actions"><button data-act="open">' +
           esc(t("btn.detail")) + "</button></td>";
       tr.querySelector('[data-act="open"]').addEventListener(
@@ -1816,12 +3502,21 @@ function loadSites(){
       tb.appendChild(tr);
     });
     $("site-count").textContent = t("sites.count", {n: d.total});
+    loadOverview();
     var pages = Math.max(1, Math.ceil(d.total / state.size));
     $("site-page").textContent = state.page + " / " + pages;
     $("site-prev").disabled = state.page <= 1;
     $("site-next").disabled = state.page >= pages;
-  }).catch(function(e){ toast(e.message, true); });
+  }).catch(function(e){
+    if (requestId !== siteRequest) return;
+    $("site-rows").innerHTML = '<tr><td colspan="7" class="empty">' + esc(t("sites.loadfailed")) + '</td></tr>';
+    toast(e.message, true);
+  }).finally(function(){
+    if (requestId === siteRequest){ $("site-search").disabled = false; $("site-rows").removeAttribute("aria-busy"); }
+  });
 }
+$("site-clear").addEventListener("click", function(){ $("site-q").value = ""; state.q = ""; state.page = 1; loadSites(); });
+$("site-q").addEventListener("search", function(){ if (!this.value) $("site-clear").click(); });
 $("site-search").addEventListener("click", function(){
   state.q = $("site-q").value.trim();
   state.page = 1;
@@ -1865,9 +3560,12 @@ function openDrawer(ref){
     $("d-del-confirm").value = "";
     $("drawer").classList.add("open");
     $("drawer-mask").classList.add("open");
+    focusOverlay("drawer");
   }).catch(function(e){ toast(e.message, true); });
 }
 function closeDrawer(){
+  releaseOverlay("drawer");
+  $("drawer").inert = true;
   $("drawer").classList.remove("open");
   $("drawer-mask").classList.remove("open");
   state.current = null;
@@ -2183,11 +3881,14 @@ function openRowModal(row, mode){
   } catch (_e){ $("dm-json").value = String(content); }
   $("dm-json").readOnly = isView;
   $("dm-err").style.display = "none";
+  $("dm-json").removeAttribute("aria-invalid");
   $("dm-save").style.display = isView ? "none" : "";
   $("dm-mask").style.display = "block";
   $("dm").style.display = "block";
+  focusOverlay("dm");
 }
 function closeRowModal(){
+  releaseOverlay("dm");
   $("dm-mask").style.display = "none";
   $("dm").style.display = "none";
   state.dmRow = null;
@@ -2201,6 +3902,8 @@ $("dm-save").addEventListener("click", function(){
   } catch (e){
     $("dm-err").textContent = t("data.err.json") + e.message;
     $("dm-err").style.display = "block";
+    $("dm-json").setAttribute("aria-invalid", "true");
+    $("dm-json").focus();
     return;
   }
   if (parsed === null || typeof parsed !== "object" ||
@@ -2213,7 +3916,13 @@ $("dm-save").addEventListener("click", function(){
   var done = function(){
     toast(t("msg.saved"));
     closeRowModal();
-    if (state.dmMode === "create") initData(); else loadDataRows();
+    if (state.dmMode === "create"){
+      state.dataModel = $("dm-model").value.trim();
+      state.dataPage = 1;
+      state.dataQ = "";
+      $("data-q").value = "";
+      initData();
+    } else loadDataRows();
   };
   var fail = function(e){
     $("dm-err").textContent = e.message;
@@ -3006,11 +4715,55 @@ function loadDataBackend() {
   });
 }
 
+function clearBackendErrors(){
+  ["db-sb-url", "db-sb-key"].forEach(function(id){
+    $(id).removeAttribute("aria-invalid");
+    $(id).removeAttribute("aria-describedby");
+  });
+}
 $("db-new-type").addEventListener("change", function() {
-  var showSb = this.value === "supabase";
-  $("db-supabase-opts").style.display = showSb ? "" : "none";
+  $("db-supabase-opts").style.display = this.value === "supabase" ? "" : "none";
+  $("db-test-result").style.display = "none";
+  clearBackendErrors();
+  $("migrate-cmd-preview").textContent = this.value === "none" ? "" : "golive migrate data --to " + this.value + " --dry-run";
 });
-
+function renderBackendCheck(d){
+  var res = $("db-test-result");
+  res.style.display = "block";
+  res.removeAttribute("aria-busy");
+  var code = d.code || "";
+  var key = "dbcheck." + code;
+  var dict = I18N[state.lang] || I18N.en;
+  var message = dict[key] || I18N.en[key] || d.error || t("dbcheck.request_failed");
+  if (code === "backend_disabled"){
+    res.className = "test-result";
+    res.textContent = message;
+    return;
+  }
+  if (d.ok === true){
+    res.className = "test-result ok";
+    var html = "<b>" + esc(message) + "</b>";
+    if (d.table_count != null) html += "<br>" + esc(t("databackend.test.ok.tables", {n:d.table_count}));
+    if (d.location) html += '<div class="endpoint">' + esc(t("dbcheck.location")) + ": " + esc(d.location) + "</div>";
+    if (d.latency_ms != null) html += '<div class="endpoint">' + esc(t("dbcheck.latency")) + ": " + esc(d.latency_ms) + " ms</div>";
+    html += "<br>" + esc(t(code === "sqlite_ok" ? "dbcheck.sqlite_note" : "dbcheck.supabase_note"));
+    res.innerHTML = html;
+    return;
+  }
+  var fields = d.fields || [];
+  if (code === "supabase_config_required"){
+    var labels = fields.map(function(field){ return field === "url" ? "Supabase URL" : t("dbcheck.key"); });
+    message = t("dbcheck.required", {fields:labels.join(state.lang === "zh" ? "、" : ", ")});
+  }
+  res.className = "test-result fail";
+  res.innerHTML = "<b>" + esc(t(fields.length ? "dbcheck.configuration" : "dbcheck.failed")) + "</b><br>" + esc(message) +
+    (d.http_status ? '<div class="endpoint">' + esc(t("dbcheck.http")) + ": " + esc(d.http_status) + "</div>" : "");
+  fields.forEach(function(field){
+    var input = field === "url" ? $("db-sb-url") : field === "key" ? $("db-sb-key") : null;
+    if (input){ input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-describedby", "db-test-result"); }
+  });
+  if (fields.length){ var first = fields[0] === "url" ? $("db-sb-url") : $("db-sb-key"); first.focus(); }
+}
 $("db-test").addEventListener("click", function() {
   var newType = $("db-new-type").value;
   var body = {backend: newType};
@@ -3019,38 +4772,26 @@ $("db-test").addEventListener("click", function() {
     var key = $("db-sb-key").value;
     if (key) body.service_key = key;
   }
+  clearBackendErrors();
   var btn = $("db-test");
-  btn.disabled = true;
-  btn.textContent = "...";
-  api("POST", "/api/admin/test/data-backend", body).then(function(d) {
-    btn.disabled = false;
+  var controls = [btn, $("db-switch"), $("db-new-type"), $("db-sb-url"), $("db-sb-key")];
+  controls.forEach(function(control){ control.disabled = true; });
+  btn.textContent = t("dbcheck.running");
+  var res = $("db-test-result");
+  res.style.display = "block";
+  res.className = "test-result";
+  res.setAttribute("aria-busy", "true");
+  res.textContent = t("dbcheck.running");
+  api("POST", "/api/admin/test/data-backend", body).then(renderBackendCheck)
+  .catch(function(e){
+    var code = e.code || (e.status === 401 ? "admin_unauthorized" : e.status === 403 ? "admin_forbidden" : e.status === 404 ? "endpoint_unavailable" : "request_failed");
+    renderBackendCheck({ok:false, code:code, error:e.message,
+      fields:e.fields, hint:e.hint, http_status:e.http_status});
+  }).finally(function(){
+    controls.forEach(function(control){ control.disabled = false; });
     btn.textContent = t("databackend.test");
-    var res = $("db-test-result");
-    res.style.display = "block";
-    if (d.ok === false) {
-      res.className = "test-result fail";
-      res.innerHTML = "<b>" + esc(t("databackend.test.fail")) + "</b><br>" +
-        esc(d.error || "unknown error") +
-        (d.hint ? "<br><br>" + esc(d.hint) : "");
-      return;
-    }
-    res.className = "test-result ok";
-    var html = "<b>" + esc(t("databackend.test.ok")) + "</b>";
-    if (d.tables != null) {
-      html += "<br>" + esc(t("databackend.test.ok.tables", {n: d.tables}));
-    }
-    if (d.latency_ms) {
-      html += '<div class="endpoint">latency: ' + d.latency_ms + "ms</div>";
-    }
-    res.innerHTML = html;
-  }).catch(function(e) {
-    btn.disabled = false;
-    btn.textContent = t("databackend.test");
-    var res = $("db-test-result");
-    res.style.display = "block";
-    res.className = "test-result fail";
-    res.innerHTML = "<b>" + esc(t("databackend.test.fail")) + "</b><br>" +
-      esc(e.message);
+    var invalid = document.querySelector('#db-supabase-opts [aria-invalid="true"]');
+    if (invalid) invalid.focus();
   });
 });
 
@@ -3058,9 +4799,8 @@ $("db-switch").addEventListener("click", function() {
   var newType = $("db-new-type").value;
   var body = {"data.backend": newType};
   if (newType === "supabase") {
-    body["supabase.url"] = $("db-sb-url").value.trim();
-    var key = $("db-sb-key").value;
-    if (key) body["supabase.service_key"] = key;
+    toast(t("databackend.configure.supabase"), true);
+    return;
   }
   api("PUT", "/api/admin/settings", body).then(function() {
     toast(t("msg.saved"));
@@ -3295,7 +5035,7 @@ $("ai-save").addEventListener("click", function() {
 
 // ── global settings page (v0.8.0) ─────────────────────────────
 function loadSettings() {
-  api("GET", "/api/admin/settings").then(function(d) {
+  return api("GET", "/api/admin/settings").then(function(d) {
     $("settings-degraded").style.display = "none";
     $("settings-main").style.display = "";
     renderSettings(d);
@@ -3308,144 +5048,229 @@ function loadSettings() {
   });
 }
 
+function settingText(prefix, key, fallback){
+  var name = prefix + key;
+  return (I18N[state.lang] || {})[name] || I18N.en[name] || fallback;
+}
+function settingMessage(key, restart){
+  var el = $("settings-feedback");
+  el.textContent = t(key);
+  el.className = restart ? "restart" : "";
+  el.hidden = false;
+}
+function settingValue(s){
+  if (s.secret && s.value) return "••••••••";
+  if (s.type === "bool") return t(s.value ? "settings.enabled" : "settings.disabled");
+  if (s.value == null || s.value === "") return t("settings.empty");
+  return typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value);
+}
+function makeSettingRow(s){
+  var row = document.createElement("div");
+  row.className = "setting-row";
+  row.dataset.key = s.key;
+  var label = settingText("settings.label.", s.key, s.label || s.key);
+  var description = settingText("settings.description.", s.key, s.description || "");
+  var source = s.source || "default";
+  var fromDatabase = source === "database" || source === "db";
+  var readOnly = !!s.readonly || source === "environment";
+  var sourceClass = fromDatabase ? "db" : (source === "yaml" || source === "file") ? "file" : "default";
+  row.innerHTML = '<div class="s-label"><div class="setting-name">' + esc(label) + '</div>' +
+    '<div class="setting-key">' + esc(s.key) + '</div>' +
+    '<div class="setting-description">' + esc(description) + '</div>' +
+    '<div class="setting-meta"><span class="src-badge ' + sourceClass + '">' +
+      esc(settingText("settings.source.", source, source)) + '</span>' +
+    (s.scope ? '<span class="scope-badge ' + esc(s.scope) + '">' +
+      esc(settingText("settings.scope.", s.scope, s.scope)) + '</span>' : '') + '</div></div>' +
+    '<div class="s-value">' + esc(settingValue(s)) + '</div>';
+  var actions = document.createElement("div");
+  actions.className = "setting-actions";
+  row.appendChild(actions);
+  if (readOnly){
+    var lockNote = document.createElement("span");
+    lockNote.className = "setting-description";
+    lockNote.textContent = t(source === "environment" ? "settings.environment" : "settings.readonly");
+    actions.appendChild(lockNote);
+    return row;
+  }
+  var edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "setting-edit";
+  edit.textContent = t("settings.edit");
+  edit.setAttribute("aria-label", t("settings.edit") + " " + label);
+  edit.setAttribute("aria-expanded", "false");
+  actions.appendChild(edit);
+  var editor = document.createElement("form");
+  editor.className = "setting-editor";
+  editor.hidden = true;
+  var input = document.createElement(s.type === "bool" || s.options ? "select" : s.type === "json" ? "textarea" : "input");
+  input.id = "setting-" + s.key.replace(/[^a-z0-9-]/gi, "-");
+  input.name = s.key;
+  input.setAttribute("aria-label", t("settings.value.label", {key:label}));
+  edit.setAttribute("aria-controls", input.id + "-editor");
+  editor.id = input.id + "-editor";
+  if (input.tagName === "SELECT"){
+    var options = s.type === "bool" ? [true, false] : s.options;
+    options.forEach(function(value){
+      var option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = s.type === "bool" ? t(value ? "settings.enabled" : "settings.disabled") : value;
+      input.appendChild(option);
+    });
+  } else if (input.tagName === "INPUT"){
+    input.type = s.type === "int" || s.type === "float" ? "number" : s.secret ? "password" : "text";
+    input.maxLength = 4096;
+    if (s.type === "int" || s.type === "float"){
+      input.required = true;
+      input.step = s.step != null ? String(s.step) : s.type === "int" ? "1" : "any";
+      if (s.min != null) input.min = String(s.min);
+      if (s.max != null) input.max = String(s.max);
+    }
+    if (s.key === "server.host") input.required = true;
+    input.autocomplete = "off";
+  }
+  var inputLabel = document.createElement("label");
+  inputLabel.className = "setting-editor-label";
+  inputLabel.htmlFor = input.id;
+  inputLabel.textContent = label;
+  editor.appendChild(inputLabel);
+  editor.appendChild(input);
+  var note = document.createElement("p");
+  note.className = "setting-edit-note";
+  note.textContent = t(s.scope === "restart" ? "settings.restart.needed" : "settings.inherited");
+  editor.appendChild(note);
+  var error = document.createElement("p");
+  error.className = "setting-error";
+  error.id = input.id + "-error";
+  error.setAttribute("role", "alert");
+  error.hidden = true;
+  input.setAttribute("aria-describedby", error.id);
+  editor.appendChild(error);
+  input.addEventListener("invalid", function(ev){
+    ev.preventDefault();
+    error.textContent = input.validationMessage;
+    error.hidden = false;
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+  });
+  input.addEventListener("input", function(){ error.hidden = true; input.removeAttribute("aria-invalid"); });
+  var controls = document.createElement("div");
+  controls.className = "setting-editor-controls";
+  var save = document.createElement("button");
+  save.type = "submit";
+  save.className = "primary";
+  save.textContent = t("btn.save");
+  var cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = t("btn.cancel");
+  controls.appendChild(save);
+  controls.appendChild(cancel);
+  editor.appendChild(controls);
+  row.appendChild(editor);
+  function closeEditor(){ editor.hidden = true; edit.setAttribute("aria-expanded", "false"); edit.focus(); }
+  edit.addEventListener("click", function(){
+    editor.hidden = !editor.hidden;
+    edit.setAttribute("aria-expanded", String(!editor.hidden));
+    if (!editor.hidden){
+      input.value = s.secret ? "" : s.type === "json" ? JSON.stringify(s.value, null, 2) : String(s.value == null ? "" : s.value);
+      error.hidden = true;
+      input.removeAttribute("aria-invalid");
+      input.focus();
+    }
+  });
+  cancel.addEventListener("click", closeEditor);
+  editor.addEventListener("keydown", function(ev){ if (ev.key === "Escape" && !save.disabled){ ev.stopPropagation(); closeEditor(); } });
+  editor.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    if (save.disabled || !editor.reportValidity()) return;
+    var value = input.value;
+    try {
+      if (s.type === "bool") value = value === "true";
+      else if (s.type === "int" || s.type === "float"){
+        value = Number(value);
+        if (!Number.isFinite(value)) throw new Error(t("settings.invalid.number"));
+        if (s.type === "int" && !Number.isSafeInteger(value)) throw new Error(t("settings.invalid.int"));
+      } else if (s.type === "json"){
+        try { value = JSON.parse(value); } catch (e){ throw new Error(t("settings.invalid.json")); }
+      }
+    } catch (e){ error.textContent = e.message; error.hidden = false; input.setAttribute("aria-invalid", "true"); input.focus(); return; }
+    var payload = {};
+    payload[s.key] = value;
+    // Lock before dispatch so keyboard submission has the same protection as a click.
+    save.disabled = true;
+    cancel.disabled = true;
+    edit.disabled = true;
+    input.disabled = true;
+    save.textContent = t("settings.saving");
+    save.setAttribute("aria-busy", "true");
+    api("PUT", "/api/admin/settings", payload).then(function(result){
+      var restart = (result.needs_restart || []).length > 0;
+      settingMessage(restart ? "settings.saved.restart" : "settings.saved.hot", restart);
+      return loadSettings();
+    }).catch(function(e){
+      error.textContent = e.message;
+      error.hidden = false;
+      input.setAttribute("aria-invalid", "true");
+    }).finally(function(){
+      save.disabled = cancel.disabled = edit.disabled = input.disabled = false;
+      save.textContent = t("btn.save");
+      save.removeAttribute("aria-busy");
+      if (row.isConnected) input.focus();
+      else focusSetting(s.key);
+    });
+  });
+  if (fromDatabase){
+    var reset = document.createElement("button");
+    reset.type = "button";
+    reset.textContent = t("settings.reset");
+    reset.className = "setting-reset";
+    reset.addEventListener("click", function(){
+      if (!window.confirm(t("settings.reset.confirm", {key:label}))) return;
+      reset.disabled = true;
+      edit.disabled = true;
+      api("DELETE", "/api/admin/settings/" + encodeURIComponent(s.key)).then(function(){
+        var restart = s.scope === "restart";
+        settingMessage(restart ? "settings.reset.restart" : "settings.reset.hot", restart);
+        return loadSettings();
+      }).catch(function(e){ toast(e.message, true); })
+        .finally(function(){ reset.disabled = edit.disabled = false; focusSetting(s.key); });
+    });
+    actions.appendChild(reset);
+  }
+  return row;
+}
+function focusSetting(key){
+  var rows = document.querySelectorAll(".setting-row");
+  Array.prototype.some.call(rows, function(row){
+    if (row.dataset.key !== key) return false;
+    var button = row.querySelector(".setting-edit");
+    if (button) button.focus();
+    return true;
+  });
+}
 function renderSettings(data) {
-  // A group's API returns {settings: {group: [{key,value,source,scope,...}]}, total: N}
-  // The settings field is a dict of group→list, not a flat array
   var grouped = {};
-  var settings = data.settings || {};
-  
-  if (Array.isArray(settings)) {
-    // Flat array (fallback/old format)
-    settings.forEach(function(s) {
-      var g = s.group || s.section || s.category || "general";
-      if (!grouped[g]) grouped[g] = [];
-      grouped[g].push(s);
+  var settings = data.settings || data.groups || {};
+  if (Array.isArray(settings)){
+    settings.forEach(function(s){
+      var group = s.group || s.section || s.category || "general";
+      (grouped[group] || (grouped[group] = [])).push(s);
     });
-  } else if (typeof settings === "object") {
-    // Grouped dict (A group's format): {server: [...], auth: [...], ...}
-    grouped = settings;
-  }
-  // Also merge data.groups if present
-  if (data.groups && typeof data.groups === "object" && !Array.isArray(data.groups)) {
-    Object.keys(data.groups).forEach(function(g) {
-      if (!grouped[g]) grouped[g] = data.groups[g];
-    });
-  }
-
+  } else grouped = settings;
+  var order = ["server", "auth", "storage", "registry", "data", "watermark", "security", "admin", "general"];
+  Object.keys(grouped).forEach(function(group){ if (order.indexOf(group) < 0) order.push(group); });
   var box = $("settings-groups");
   box.innerHTML = "";
-  var groupOrder = ["server", "auth", "storage", "registry", "data",
-    "security", "admin", "general"];
-  var seen = {};
-
-  groupOrder.forEach(function(g) {
-    if (!grouped[g] || seen[g]) return;
-    seen[g] = true;
-    var gkey = "settings.group." + g;
-    var label = I18N[state.lang][gkey] || I18N.en[gkey] || g;
-    var hb = document.createElement("div");
-    hb.className = "settings-group";
-    hb.innerHTML = "<h3>" + esc(label) + "</h3>";
-    var container = document.createElement("div");
-    grouped[g].forEach(function(s) {
-      var row = document.createElement("div");
-      row.className = "setting-row";
-      var srcRaw = s.source || "default";
-      var srcKey = "settings.source." + srcRaw;
-      var srcLabel = I18N[state.lang][srcKey] || I18N.en[srcKey] || srcRaw;
-      var srcClass = "src-badge " + (srcRaw === "yaml" ? "file" :
-        srcRaw === "database" ? "db" : "default");
-      var scopeRaw = s.scope || "";
-      var scopeKey = scopeRaw ? ("settings.scope." + scopeRaw) : "";
-      var scopeLabel = scopeKey ? (I18N[state.lang][scopeKey] || I18N.en[scopeKey] || scopeRaw) : "";
-      var scopeClass = scopeRaw ? ("scope-badge " + scopeRaw) : "";
-      var readOnly = srcRaw === "yaml" || srcRaw === "file" || s.readonly;
-      var valDisplay = s.value;
-      // Mask secrets
-      if (s.secret && s.value) valDisplay = "••••••••";
-      var srcKey = "settings.source." + (s.source || "default");
-      var srcLabel = I18N[state.lang][srcKey] || I18N.en[srcKey] || (s.source || "default");
-      var scopeKey = s.scope ? ("settings.scope." + s.scope) : "";
-      var scopeLabel = scopeKey ? (I18N[state.lang][scopeKey] || I18N.en[scopeKey] || s.scope) : "";
-      row.innerHTML =
-        '<div class="s-label">' + esc(s.label || s.key || "") +
-          (s.description ? '<div style="font-size:11px;color:var(--muted)">' +
-            esc(s.description) + "</div>" : "") +
-        "</div>" +
-        '<div class="s-value">' + esc(valDisplay != null ? valDisplay : "—") + "</div>" +
-        '<div class="s-source"><span class="' + srcClass + '">' +
-          esc(srcLabel) +
-        "</span>" +
-        (s.scope ? ' <span class="' + scopeClass + '">' +
-          esc(scopeLabel) + "</span>" : "") +
-        "</div>";
-      // Add edit/delete actions for database-sourced settings
-      if ((s.source === "database" || s.source === "db") && !readOnly) {
-        var actions = document.createElement("div");
-        actions.className = "s-source";
-        var delBtn = document.createElement("button");
-        delBtn.className = "danger";
-        delBtn.textContent = "×";
-        delBtn.title = t("settings.delete.confirm");
-        delBtn.addEventListener("click", function() {
-          if (!window.confirm(t("settings.delete.confirm"))) return;
-          api("DELETE", "/api/admin/settings", {key: s.key}).then(function() {
-            toast(t("msg.removed"));
-            loadSettings();
-          }).catch(function(e) { toast(e.message, true); });
-        });
-        actions.appendChild(delBtn);
-        row.appendChild(actions);
-      }
-      if (readOnly) {
-        var note = document.createElement("div");
-        note.style.cssText = "flex:0 0 auto;font-size:11px;color:var(--muted)";
-        note.textContent = t("settings.readonly");
-        row.appendChild(note);
-      }
-      if (s.scope === "restart") {
-        var rn = document.createElement("div");
-        rn.style.cssText = "flex:0 0 auto;font-size:11px;color:var(--warn)";
-        rn.textContent = t("settings.restart.needed");
-        row.appendChild(rn);
-      }
-      container.appendChild(row);
-    });
-    hb.appendChild(container);
-    box.appendChild(hb);
+  order.forEach(function(group){
+    if (!Array.isArray(grouped[group]) || !grouped[group].length) return;
+    var section = document.createElement("section");
+    section.className = "settings-group";
+    var heading = document.createElement("h3");
+    heading.textContent = settingText("settings.group.", group, group);
+    section.appendChild(heading);
+    grouped[group].forEach(function(s){ section.appendChild(makeSettingRow(s)); });
+    box.appendChild(section);
   });
-
-  // Add any remaining groups not in groupOrder
-  Object.keys(grouped).forEach(function(g) {
-    if (seen[g]) return;
-    seen[g] = true;
-    var hb = document.createElement("div");
-    hb.className = "settings-group";
-    hb.innerHTML = "<h3>" + esc(g) + "</h3>";
-    var container = document.createElement("div");
-    grouped[g].forEach(function(s) {
-      var row = document.createElement("div");
-      row.className = "setting-row";
-      var srcClass = "src-badge " + (s.source || "default");
-      var valDisplay = s.value;
-      if (s.secret && s.value) valDisplay = "••••••••";
-      var srcRaw = s.source || "default";
-      var srcKey2 = "settings.source." + srcRaw;
-      var srcLabel2 = I18N[state.lang][srcKey2] || I18N.en[srcKey2] || srcRaw;
-      // Map source to CSS class (yaml->file, database->db)
-      var srcClass2 = "src-badge " + (srcRaw === "yaml" ? "file" :
-        srcRaw === "database" ? "db" : "default");
-      row.innerHTML =
-        '<div class="s-label">' + esc(s.label || s.key || "") + "</div>" +
-        '<div class="s-value">' + esc(valDisplay != null ? valDisplay : "—") + "</div>" +
-        '<div class="s-source"><span class="' + srcClass2 + '">' +
-          esc(srcLabel2) +
-        "</span></div>";
-      container.appendChild(row);
-    });
-    hb.appendChild(container);
-    box.appendChild(hb);
-  });
+  enhanceControls();
 }
 
 initPrefs();

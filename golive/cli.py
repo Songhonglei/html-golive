@@ -645,7 +645,8 @@ def cmd_serve(args) -> int:
             host = get_config().server.host or "127.0.0.1"
         except Exception:
             host = "127.0.0.1"
-    serve(host=host, port=args.port or DEFAULT_SERVE_PORT)
+    from golive.config import get_config
+    serve(host=host, port=args.port or get_config().server.port or DEFAULT_SERVE_PORT)
     return 0
 
 
@@ -666,7 +667,8 @@ def _serve_manage(action: str, args) -> int:
 
     cfg_path = getattr(args, "config", "") or ""
     port_given = getattr(args, "port", None)
-    port = port_given or service.DEFAULT_PORT
+    from golive.config import get_config
+    port = port_given or get_config().server.port or service.DEFAULT_PORT
 
     if action == "start":
         res = service.start(host=_serve_default_host(args), port=port,
@@ -717,8 +719,12 @@ def _serve_manage(action: str, args) -> int:
         return 0 if res["ok"] else 1
 
     if action == "restart":
-        res = service.restart(host=getattr(args, "host", None),
-                              port=port_given,
+        from golive.backends.registry.settings_store import get_database_overrides
+        overrides = get_database_overrides()
+        host = getattr(args, "host", None) or overrides.get("server.host")
+        restart_port = port_given or overrides.get("server.port")
+        res = service.restart(host=host,
+                              port=restart_port,
                               config_path=cfg_path)
         if res.get("stop", {}).get("message"):
             print(f"   {res['stop']['message']}")

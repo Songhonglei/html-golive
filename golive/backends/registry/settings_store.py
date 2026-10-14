@@ -19,7 +19,11 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
+import os
+import re
 import sqlite3
+from urllib.parse import urlsplit
 from typing import Optional
 
 _SCHEMA = """
@@ -60,7 +64,7 @@ SETTING_DEFINITIONS = {
         "category": "server",
     },
     "data.backend": {
-        "description": "Data layer backend: sqlite | supabase | none",
+        "description": "Data layer backend: sqlite | postgres | supabase | none",
         "scope": "restart",
         "type": "string",
         "default": "sqlite",
@@ -181,6 +185,106 @@ SETTING_DEFINITIONS = {
     },
 }
 
+_CONSTRAINTS = {
+    "server.port": {"min": 1, "max": 65535},
+    "data.backend": {"options": ["sqlite", "postgres", "supabase", "none"]},
+    "auth.provider": {"options": ["none", "token", "oidc", "proxy"]},
+    "watermark.opacity": {"min": 0, "max": 1, "step": 0.01},
+    "watermark.font_size": {"min": 1, "max": 256},
+    "watermark.rotation": {"min": -360, "max": 360},
+    "admin.audit_max_bytes": {"min": 0, "max": 9223372036854775807},
+    "admin.audit_keep": {"min": 1, "max": 100},
+}
+
+ENV_SETTING_OVERRIDES = {
+    "auth.provider": "GOLIVE_TOKEN",
+    "watermark.text": "GOLIVE_WATERMARK_TEXT",
+    "watermark.enabled": "GOLIVE_WATERMARK_OFF",
+    "security.llm.base_url": "GOLIVE_LLM_BASE_URL",
+    "security.llm.model": "GOLIVE_LLM_MODEL",
+    "admin.audit_max_bytes": "GOLIVE_AUDIT_MAX_BYTES",
+    "admin.audit_keep": "GOLIVE_AUDIT_KEEP",
+}
+
+
+def environment_locked_keys():
+    result = set()
+    for key, name in ENV_SETTING_OVERRIDES.items():
+        value = os.environ.get(name, "").strip()
+        if not value or (name == "GOLIVE_WATERMARK_OFF" and value != "1"):
+            continue
+        if key.startswith("admin.audit_"):
+            try:
+                int(value)
+            except ValueError:
+                continue
+        result.add(key)
+    return result
+
+
+def _validate_value(key, value):
+    if key not in SETTING_DEFINITIONS:
+        raise KeyError(f"unknown setting: {key}")
+    kind = SETTING_DEFINITIONS[key]["type"]
+    if kind == "bool":
+        if type(value) is not bool:
+            raise ValueError(f"{key}: expected a boolean")
+    elif kind in ("int", "float"):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{key}: expected a {kind}")
+        if (isinstance(value, float) and not math.isfinite(value)) or (
+            kind == "int" and int(value) != value
+        ):
+            raise ValueError(f"{key}: expected a finite {kind}")
+        try:
+            value = int(value) if kind == "int" else float(value)
+        except OverflowError:
+            raise ValueError(f"{key}: expected a finite {kind}") from None
+    elif kind == "string":
+        if not isinstance(value, str):
+            raise ValueError(f"{key}: expected a string")
+        if len(value) > 4096:
+            raise ValueError(f"{key}: value is too long (max 4096 characters)")
+    constraints = _CONSTRAINTS.get(key, {})
+    if "options" in constraints and value not in constraints["options"]:
+        raise ValueError(f"{key}: choose one of {', '.join(constraints['options'])}")
+    for bound in ("min", "max"):
+        if bound in constraints:
+            limit = constraints[bound]
+            if (bound == "min" and value < limit) or (bound == "max" and value > limit):
+                raise ValueError(f"{key}: {bound} is {limit}")
+    if key == "server.host" and (not value.strip() or re.search(r"\s", value)):
+        raise ValueError(f"{key}: enter a hostname or IP address")
+    if key in ("server.public_base", "auth.oidc.issuer", "security.llm.base_url") and value:
+        parsed = urlsplit(value)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError(f"{key}: expected an absolute http(s) URL")
+    if key == "watermark.color":
+        if not re.fullmatch(r"\d{1,3},\d{1,3},\d{1,3}", value) or any(
+            int(channel) > 255 for channel in value.split(",")
+        ):
+            raise ValueError(f"{key}: expected R,G,B with each channel from 0 to 255")
+    return value
+
+
+def get_database_overrides() -> dict:
+    """Read overrides without creating a home, database, or settings table."""
+    from golive.core.paths import peek_home
+    db_path = peek_home() / "registry.db"
+    if not db_path.is_file():
+        return {}
+    conn = sqlite3.connect(db_path.as_uri() + "?mode=ro", uri=True, timeout=10)
+    try:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='settings'").fetchone():
+            return {}
+        rows = conn.execute("SELECT key,value FROM settings").fetchall()
+    finally:
+        conn.close()
+    return {
+        key: _validate_value(key, _coerce_value(value, SETTING_DEFINITIONS[key]["type"]))
+        for key, value in rows if key in SETTING_DEFINITIONS
+    }
+
 
 def _now() -> str:
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -243,11 +347,15 @@ class SettingsStore:
         """
         yaml_values = yaml_values or {}
         db_rows = self._get_db_all()
+        env_keys = environment_locked_keys()
         result = {}
         for key, defn in SETTING_DEFINITIONS.items():
             yaml_val = yaml_values.get(key, ...)
             db_val = db_rows.get(key, None)
-            if db_val is not None:
+            if key in env_keys and key in yaml_values:
+                value = yaml_val
+                source = "environment"
+            elif db_val is not None:
                 value = _coerce_value(db_val, defn["type"])
                 source = "database"
             elif yaml_val is not ... and yaml_val != defn["default"]:
@@ -267,6 +375,8 @@ class SettingsStore:
                 "scope": defn["scope"],
                 "type": defn["type"],
                 "description": defn["description"],
+                "readonly": source == "environment",
+                **_CONSTRAINTS.get(key, {}),
             })
         return result
 
@@ -288,18 +398,27 @@ class SettingsStore:
 
     def set(self, key: str, value, updated_by: str = "") -> dict:
         """Set a setting in the database. Returns the stored item."""
-        if key not in SETTING_DEFINITIONS:
-            raise KeyError(f"unknown setting: {key}")
-        defn = SETTING_DEFINITIONS[key]
-        value_str = _serialize_value(value, defn["type"])
+        return self.set_many({key: value}, updated_by)["updated"][0]
+
+    def set_many(self, items: dict, updated_by: str = "") -> dict:
+        """Validate the complete batch before writing it in one transaction."""
+        items = {key: _validate_value(key, value) for key, value in items.items()}
+        now = _now()
         with self._conn() as c:
-            c.execute(
-                "INSERT INTO settings (key, value, updated_by, updated_at) "
-                "VALUES (?,?,?,?) "
+            c.executemany(
+                "INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
                 "updated_by=excluded.updated_by, updated_at=excluded.updated_at",
-                (key, value_str, (updated_by or "").strip(), _now()),
+                [(key, _serialize_value(value, SETTING_DEFINITIONS[key]["type"]),
+                  (updated_by or "").strip(), now) for key, value in items.items()],
             )
+        updated = [self._stored_item(key, value) for key, value in items.items()]
+        return {"updated": updated,
+                "needs_restart": [item["key"] for item in updated if item["needs_restart"]]}
+
+    @staticmethod
+    def _stored_item(key, value):
+        defn = SETTING_DEFINITIONS[key]
         return {
             "key": key,
             "value": value,
@@ -309,19 +428,6 @@ class SettingsStore:
             "description": defn["description"],
             "needs_restart": defn["scope"] == "restart",
         }
-
-    def set_many(self, items: dict, updated_by: str = "") -> dict:
-        """Set multiple settings. Returns {updated: [...], needs_restart: [...]}."""
-        updated = []
-        needs_restart = []
-        for key, value in items.items():
-            if key not in SETTING_DEFINITIONS:
-                raise KeyError(f"unknown setting: {key}")
-            item = self.set(key, value, updated_by=updated_by)
-            updated.append(item)
-            if item["needs_restart"]:
-                needs_restart.append(key)
-        return {"updated": updated, "needs_restart": needs_restart}
 
     def delete(self, key: str) -> bool:
         """Remove a DB override (falls back to yaml/default)."""
@@ -357,8 +463,8 @@ def get_settings_store() -> SettingsStore:
 
 def get_yaml_snapshot() -> dict:
     """Return a flat dict of yaml-sourced values for the known settings."""
-    from golive.config import get_config
-    cfg = get_config()
+    from golive.config import get_config, load_config
+    cfg = load_config(cli_path=get_config().source_path or None, apply_settings=False)
     return {
         "server.host": cfg.server.host,
         "server.port": cfg.server.port,
@@ -377,7 +483,7 @@ def get_yaml_snapshot() -> dict:
         "security.llm.base_url": cfg.security.llm.base_url,
         "security.llm.model": cfg.security.llm.model,
         "security.llm.strict_mode": cfg.security.llm.strict_mode,
-        "security.ai_review_enabled": True,  # derived; no direct config field
+        "security.ai_review_enabled": cfg.security.ai_review_enabled,
         "admin.audit_max_bytes": cfg.admin.audit_max_bytes,
         "admin.audit_keep": cfg.admin.audit_keep,
     }

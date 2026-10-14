@@ -226,6 +226,11 @@ def verify_skill_dir(skill_dir) -> dict:
                    for p in skill_dir.rglob("*") if p.is_file())
     if "SKILL.md" not in files:  # pragma: no cover — read_skill_meta covers it
         raise SkillInstallError("SKILL.md missing after copy")
+    required = {"references/cli.md", "references/data-layer.md"}
+    for rel in sorted(required):
+        ref = skill_dir / rel
+        if not ref.is_file() or not ref.read_text(encoding="utf-8").strip():
+            raise SkillInstallError(f"incomplete html-golive skill: {rel} missing or empty")
     meta["files"] = files
     return meta
 
@@ -408,7 +413,8 @@ def install(target: Optional[str] = None, from_github: bool = False,
             "Reinstall html-golive, or use --target with a manual copy of "
             "the skill directory.")
 
-    meta = read_skill_meta(source)
+    # Validate before backing up or replacing a working installation.
+    meta = verify_skill_dir(source)
     if target:
         target_dir, how = Path(target).expanduser(), "explicit"
     else:

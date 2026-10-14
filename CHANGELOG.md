@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.6] - 2026-10-14
+
+Documentation-only patch; runtime behavior is unchanged from 0.9.5.
+
+- Replace old admin screenshots with the current workspace in light/dark themes and both languages; refresh mobile and settings previews.
+- Use absolute GitHub documentation and raw image links so the README works on PyPI, including the Chinese README link.
+- Keep only future work in the English and Chinese roadmaps.
+
+
 ## [0.9.5] - 2026-10-14
 
 Based on v0.9.4, retaining its security gate, portability commands and clean wheel packaging.

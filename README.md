@@ -3,7 +3,7 @@
 [![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
 [![PyPI](https://img.shields.io/pypi/v/html-golive)](https://pypi.org/project/html-golive/)
 [![Python](https://img.shields.io/pypi/pyversions/html-golive)](https://pypi.org/project/html-golive/)
-[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](https://github.com/Songhonglei/html-golive/blob/main/LICENSE)
 
 > **Self-hosted one-command HTML deployment — Vercel-lite for your intranet.**
 
@@ -25,7 +25,7 @@ golive publish report.html --name "Q3 Report" --slug q3
 ```
 
 <p align="center">
-  <img src="docs/assets/demo.svg" alt="install, publish and serve an HTML page in three commands" width="760">
+  <img src="https://raw.githubusercontent.com/Songhonglei/html-golive/main/docs/assets/demo.svg" alt="install, publish and serve an HTML page in three commands" width="760">
 </p>
 
 Something not working? Run `golive verify` and paste the output into an issue.
@@ -45,11 +45,18 @@ Something not working? Run `golive verify` and paste the output into an issue.
 - [Docker](#docker)
 - [Roadmap](#roadmap)
 
-> 📖 **Full user manual**: [docs/manual.md](docs/manual.md) — every feature,
+> 📖 **Full user manual**: [docs/manual.md](https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md) — every feature,
 > organised by task (publishing, editor, access control, data, security,
 > identity, migration, FAQ).
 
-![The admin portal — site management](docs/assets/admin-portal.png)
+![The admin portal — light theme](https://raw.githubusercontent.com/Songhonglei/html-golive/main/docs/assets/admin-portal.png)
+
+<details>
+<summary>Dark theme</summary>
+
+![The admin portal — dark theme](https://raw.githubusercontent.com/Songhonglei/html-golive/main/docs/assets/admin-workspace/dark-en.png)
+
+</details>
 
 <sub>The built-in admin portal at `/admin`: sites, data, permissions,
 stats, audit log, identity, data backend, security and settings —
@@ -163,7 +170,7 @@ signature-verified against the IdP's published keys (requires `pip install
 >   admins: [alice@corp.example]
 > ```
 > A common slip is putting `admins:` at the top level — it has no effect
-> there. See [manual §16](docs/manual.md#16-identity--login) for details.
+> there. See [manual §16](https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md#16-identity--login) for details.
 
 ---
 
@@ -183,7 +190,7 @@ Two things bite people:
   force-pushed `main` and rewrote history. Recovery commands are in the
   guide below (force pushes to `main` are now blocked).
 
-📖 **[docs/upgrading.md](docs/upgrading.md)** — PyPI / pipx / git paths, the
+📖 **[docs/upgrading.md](https://github.com/Songhonglei/html-golive/blob/main/docs/upgrading.md)** — PyPI / pipx / git paths, the
 v0.7.0 history-rewrite recovery (with and without local changes), the
 0.6→0.7 SQLite data-layer default change, and how to roll back.
 
@@ -298,7 +305,7 @@ With the default backends the three SQLite/filesystem entries above are
 the entire persistence story — no external service is involved. Pages
 using `TemplateAPI` reach `data.db` through `golive serve`'s
 `/api/data` endpoint, so they must be loaded from the server rather than
-opened as `file://`. See [docs/data-layer.md](docs/data-layer.md).
+opened as `file://`. See [docs/data-layer.md](https://github.com/Songhonglei/html-golive/blob/main/docs/data-layer.md).
 
 ## Configuration
 
@@ -309,8 +316,8 @@ wins over yaml**:
 
 Lookup order: `--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
 `$GOLIVE_HOME/golive.yaml`. Full annotated example:
-[golive.example.yaml](golive.example.yaml) · backend combinations:
-[docs/backends.md](docs/backends.md)
+[golive.example.yaml](https://github.com/Songhonglei/html-golive/blob/main/golive.example.yaml) · backend combinations:
+[docs/backends.md](https://github.com/Songhonglei/html-golive/blob/main/docs/backends.md)
 
 ### Environment variables
 
@@ -373,7 +380,7 @@ HTML, so RLS is mandatory there.
 
 API signatures are **stable contracts** — pages built on any golive
 deployment run unchanged on yours. Full guide, including the RLS notes:
-[docs/data-layer.md](docs/data-layer.md).
+[docs/data-layer.md](https://github.com/Songhonglei/html-golive/blob/main/docs/data-layer.md).
 
 > **Note**: if no data backend is configured, `--data-model` publishes
 > still succeed — the page gets a stub API that raises a clear
@@ -382,7 +389,7 @@ deployment run unchanged on yours. Full guide, including the RLS notes:
 
 Porting pages from another deployment?
 `golive migrate-check page.html` reports anything deployment-specific
-([migration guide](docs/migrate-from-intranet.md)).
+([migration guide](https://github.com/Songhonglei/html-golive/blob/main/docs/migrate-from-intranet.md)).
 
 ## Security scanning
 
@@ -393,7 +400,7 @@ from any OpenAI-compatible LLM (`security.llm.base_url`; works with
 OpenAI / Azure / Ollama / self-hosted gateways). Unconfigured installs
 keep pure rule verdicts; `strict_mode: true` refuses to publish without
 AI review. Extend with your own YAML rules, or bypass a false positive
-for content warnings with `--skip-content-scan`; credentials always block. Details: [docs/security.md](docs/security.md)
+for content warnings with `--skip-content-scan`; credentials always block. Details: [docs/security.md](https://github.com/Songhonglei/html-golive/blob/main/docs/security.md)
 
 ## Docker
 
@@ -404,37 +411,17 @@ docker compose --profile minio up -d        # + local S3 stack for images
 
 ## Roadmap
 
-- ~~**M1 — core**: publish/serve/rollback, styles, clone, preview, scan~~ ✅ v0.1
-- ~~**M2 — data layer**: Supabase backend trio, TemplateAPI/SupabaseAPI
-  injection, S3 adapters, migrate-check, Docker Compose~~ ✅ v0.2
-- ~~**M3 — editing & identity**: inline editor with versioned save API,
-  watermarking, OpenAI-compatible LLM security review, generic OIDC~~ ✅ v0.3
-- ~~**M4 — docs & polish**: OIDC provider presets, editor image upload,
-  persistent cookie secret, full user manual~~ ✅ v0.4
-- ~~**M5 — admin portal**: web operations console at `/admin`, role model
-  (superadmin/owner/maintainer), ownership transfer, audit trail~~ ✅ v0.5
-- ~~**M6 — data management**: data tab in the portal, audit log
-  rotation~~ ✅ v0.6
-- ~~**M7 — production identity & config**: id_token signature verification
-  for OIDC, trusted reverse-proxy auth, four admin pages (identity / data
-  backend / security / settings), settings & scan rules in the database,
-  English-by-default CLI, shareable LAN URLs~~ ✅ v0.7.5
-- ~~**M8 — data portability & self-check**: `golive export` / `import` /
-  `migrate` across sqlite, postgres and supabase, and `golive verify` for a
-  real end-to-end test of the data path~~ ✅ v0.8
+- WebDAV storage support.
+- Large-table aggregation and multi-instance sessions.
+- Editing conflict handling and group-based permissions.
 
-**Beyond v0.8** — the groundwork is complete, so what comes next is driven
-by what people actually run into. Candidates, roughly in order of likely
-demand: more storage channels (WebDAV), aggregation for very large tables, a
-shared session store (redis) for multi-instance setups, multi-user editing
-conflict UX, and group-based ACLs. If you hit a wall or want one of these sooner,
-[open an issue](https://github.com/Songhonglei/html-golive/issues) — real
-use cases decide the order.
+[Open an issue](https://github.com/Songhonglei/html-golive/issues) to help
+prioritise the next improvement.
 
 ## Contributing
 
 Issues and pull requests are welcome — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, code
+[CONTRIBUTING.md](https://github.com/Songhonglei/html-golive/blob/main/CONTRIBUTING.md) for the development setup, code
 conventions and what a good bug report looks like. The whole test suite
 runs offline with no cloud account:
 
@@ -445,8 +432,8 @@ python -m pytest tests/ -q
 
 ## License
 
-[MIT](LICENSE) © 2026 Songhonglei
+[MIT](https://github.com/Songhonglei/html-golive/blob/main/LICENSE) © 2026 Songhonglei
 
 ---
 
-中文文档请见 [README.zh-CN.md](README.zh-CN.md)。
+中文文档请见 [README.zh-CN.md](https://github.com/Songhonglei/html-golive/blob/main/README.zh-CN.md)。

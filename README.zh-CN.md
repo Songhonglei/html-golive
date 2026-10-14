@@ -3,7 +3,7 @@
 [![CI](https://github.com/Songhonglei/html-golive/actions/workflows/ci.yml/badge.svg)](https://github.com/Songhonglei/html-golive/actions)
 [![PyPI](https://img.shields.io/pypi/v/html-golive)](https://pypi.org/project/html-golive/)
 [![Python](https://img.shields.io/pypi/pyversions/html-golive)](https://pypi.org/project/html-golive/)
-[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/Songhonglei/html-golive)](https://github.com/Songhonglei/html-golive/blob/main/LICENSE)
 
 > **自部署的一键 HTML 发布工具 —— 你的内网 Vercel-lite。**
 
@@ -42,10 +42,17 @@ golive publish report.html --name "季度报告" --slug q3
 - [Docker](#docker)
 - [路线图](#路线图)
 
-> 📖 **完整用户手册**：[docs/manual.md](docs/manual.md)（英文）—— 按任务组织
+> 📖 **完整用户手册**：[docs/manual.md](https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md)（英文）—— 按任务组织
 > 的全功能指南：发布、在线编辑、权限、数据、安全、身份登录、迁移、FAQ。
 
-![管理后台 —— 站点管理](docs/assets/admin-portal.png)
+![管理后台 —— 浅色主题](https://raw.githubusercontent.com/Songhonglei/html-golive/main/docs/assets/admin-workspace/light.png)
+
+<details>
+<summary>深色主题</summary>
+
+![管理后台 —— 深色主题](https://raw.githubusercontent.com/Songhonglei/html-golive/main/docs/assets/admin-workspace/dark.png)
+
+</details>
 
 <sub>内置管理后台 `/admin`：站点、数据、权限、统计、审计日志、身份认证、
 数据后端、安全扫描、全局参数 —— 支持亮/暗主题、中英双语（右上角切换）。</sub>
@@ -155,7 +162,7 @@ auth:
 >   admins: [alice@corp.example]
 > ```
 > 常见错误：把 `admins:` 写在顶层——那样不生效。详见
-> [手册 §16](docs/manual.md#16-identity--login)。
+> [手册 §16](https://github.com/Songhonglei/html-golive/blob/main/docs/manual.md#16-identity--login)。
 
 ## 升级
 
@@ -173,7 +180,7 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
   重写了 `main` 的历史。恢复命令见下面的文档（现在 `main` 已禁止
   force push）。
 
-📖 **[docs/upgrading.md](docs/upgrading.md)** —— PyPI / pipx / git 三条升级
+📖 **[docs/upgrading.md](https://github.com/Songhonglei/html-golive/blob/main/docs/upgrading.md)** —— PyPI / pipx / git 三条升级
 路径、v0.7.0 历史重写的恢复步骤（有无本地改动两种）、0.6→0.7 数据层默认
 改为 SQLite 的行为变化，以及如何回退。
 
@@ -282,7 +289,7 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
 默认后端下，以上 SQLite 文件与目录就是全部持久化——不依赖任何外部服务。
 使用 `TemplateAPI` 的页面通过 `golive serve` 的 `/api/data` 端点读写
 `data.db`，因此页面必须由服务端访问，直接以 `file://` 打开无效。
-详见 [docs/data-layer.md](docs/data-layer.md)。
+详见 [docs/data-layer.md](https://github.com/Songhonglei/html-golive/blob/main/docs/data-layer.md)。
 
 ## 配置
 
@@ -292,8 +299,8 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
 
 查找顺序：`--config <path>` → `$GOLIVE_CONFIG` → `./golive.yaml` →
 `$GOLIVE_HOME/golive.yaml`。完整注释样例：
-[golive.example.yaml](golive.example.yaml) · 后端组合实例：
-[docs/backends.md](docs/backends.md)
+[golive.example.yaml](https://github.com/Songhonglei/html-golive/blob/main/golive.example.yaml) · 后端组合实例：
+[docs/backends.md](https://github.com/Songhonglei/html-golive/blob/main/docs/backends.md)
 
 ### 环境变量
 
@@ -353,14 +360,14 @@ golive 自己的 `/api/data`，凭据和 Postgres DSN 都不会进入浏览器�
 **页面直连**型（supabase）把 anon key 嵌进 HTML，因此必须配置 RLS。
 
 API 签名是**稳定契约**——在任何 golive 部署上开发的页面，换个部署零改
-动可跑。完整指南（含 RLS 安全须知）：[docs/data-layer.md](docs/data-layer.md)。
+动可跑。完整指南（含 RLS 安全须知）：[docs/data-layer.md](https://github.com/Songhonglei/html-golive/blob/main/docs/data-layer.md)。
 
 > **说明**：未配置 data backend 时 `--data-model` 发布依然成功——页面
 > 注入的是 stub API，调用时报清晰的"data backend 未配置"错误（发布时
 > 也会打印警告提示）。
 
 从其他部署迁移页面？先跑 `golive migrate-check page.html`，它会报告
-所有部署专属引用（[迁移指南](docs/migrate-from-intranet.md)）。
+所有部署专属引用（[迁移指南](https://github.com/Songhonglei/html-golive/blob/main/docs/migrate-from-intranet.md)）。
 
 ## 安全扫描
 
@@ -369,7 +376,7 @@ API 签名是**稳定契约**——在任何 golive 部署上开发的页面，�
 LLM 做语义二次判定（`security.llm.base_url`，OpenAI / Azure / Ollama /
 自建网关均可）。未配置时维持纯规则判定；`strict_mode: true` 则"没有 AI
 复核不发布"。可用自己的 YAML 扩展规则，内容提示可用 `--skip-content-scan` 静音；强凭证命中始终拦截。
-详见 [docs/security.md](docs/security.md)
+详见 [docs/security.md](https://github.com/Songhonglei/html-golive/blob/main/docs/security.md)
 
 ## Docker
 
@@ -380,33 +387,16 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 
 ## 路线图
 
-- ~~**M1 — 内核**：发布/托管/回滚、风格、克隆、预览、安全扫描~~ ✅ v0.1
-- ~~**M2 — 数据层**：Supabase 后端三件套、TemplateAPI/SupabaseAPI 注入、
-  S3 适配器、migrate-check、Docker Compose~~ ✅ v0.2
-- ~~**M3 — 编辑与身份**：在线编辑器（版本化保存 API）、水印、OpenAI 兼容
-  LLM 安全复核、通用 OIDC~~ ✅ v0.3
-- ~~**M4 — 文档与打磨**：OIDC 常见 IdP 快捷预设、编辑器图片上传、cookie
-  密钥持久化、完整用户手册~~ ✅ v0.4
-- ~~**M5 — 运营管理门户**：`/admin` 网页控制台、三级角色（超管 / 站点
-  owner / maintainer）、所有权移交、审计日志~~ ✅ v0.5
-- ~~**M6 — 数据管理**：门户内数据管理页、审计日志轮转~~ ✅ v0.6
-- ~~**M7 — 生产级身份与配置**：OIDC 的 id_token 签名验证、受信任反代认证、
-  四个管理页（身份 / 数据后端 / 安全 / 全局参数）、配置与安全规则入库、
-  CLI 默认英文、可分享的局域网链接~~ ✅ v0.7.5
-- ~~**M8 — 数据可携带与端到端自检**：`golive export` / `import` / `migrate`
-  覆盖 sqlite、postgres、supabase 三种后端，以及真正跑完整链路的
-  `golive verify`~~ ✅ v0.8
+- WebDAV 存储支持。
+- 大表聚合与多实例共享会话。
+- 编辑冲突处理与基于组的权限。
 
-**v0.8 之后** —— 基础能力已经完整，接下来做什么由真实需求驱动。候选项
-（大致按需求可能性排序）：更多存储渠道（WebDAV）、超大表聚合优化、多实例场景的
-共享会话存储（redis）、多人编辑冲突体验、基于组的权限。如果你撞上了某个问题、
-或希望某项提前，[提个 issue](https://github.com/Songhonglei/html-golive/issues)
-—— 真实用例决定优先级。
+欢迎[提交 issue](https://github.com/Songhonglei/html-golive/issues)，帮助确定后续优先级。
 
 ## 参与贡献
 
 欢迎提 issue 和 PR——开发环境搭建、代码约定、以及怎样算一份好的缺陷报告，
-都写在 [CONTRIBUTING.md](CONTRIBUTING.md) 里。整套测试离线即可运行，不需要
+都写在 [CONTRIBUTING.md](https://github.com/Songhonglei/html-golive/blob/main/CONTRIBUTING.md) 里。整套测试离线即可运行，不需要
 任何云账号：
 
 ```bash
@@ -416,8 +406,8 @@ python -m pytest tests/ -q
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 Songhonglei
+[MIT](https://github.com/Songhonglei/html-golive/blob/main/LICENSE) © 2026 Songhonglei
 
 ---
 
-English documentation: [README.md](README.md).
+English documentation: [README.md](https://github.com/Songhonglei/html-golive/blob/main/README.md).

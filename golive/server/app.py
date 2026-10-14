@@ -263,6 +263,12 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             self._send_admin_page()
             return
 
+        if path == "/admin/favicon.svg":
+            from golive.server.brand import FAVICON_SVG
+            self._send(200, FAVICON_SVG.encode("utf-8"), "image/svg+xml",
+                       {"Cache-Control": "public, max-age=3600"})
+            return
+
         if path.startswith("/api/admin"):
             self._handle_admin_api("GET", parsed)
             return

@@ -1,0 +1,21 @@
+"""Shared, dependency-free rocket artwork for the console and browser tab."""
+
+ROCKET_PATHS = (
+    '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2"/>'
+    '<path d="m12 15-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2Z"/>'
+    '<path d="M9 12H4s.5-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.5 4-2c1.1-1.6 0-5 0-5"/>'
+    '<circle cx="16" cy="8" r="1.5"/>'
+)
+
+ROCKET_MARK = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + ROCKET_PATHS + '</svg>'
+)
+
+FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 28 28" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    '<style>:root{color:#285c42}@media(prefers-color-scheme:dark){:root{color:#a5e0c3}}</style>'
+    + ROCKET_PATHS + '</svg>'
+)

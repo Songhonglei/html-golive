@@ -778,7 +778,7 @@ def _settings_dispatch(method, rest, query, body, identity) -> tuple:
             return _settings_update(body, identity)
         if len(rest) == 1 and method == "DELETE":
             return _settings_delete(rest[0], identity)
-    except KeyError as e:
+    except (KeyError, ValueError) as e:
         return _err(400, str(e))
     except Exception as e:  # noqa: BLE001
         return 500, {"error": f"settings store error: {e}"}
@@ -811,11 +811,17 @@ def _settings_update(body, identity) -> tuple:
         return _err(400, "body must be a JSON object")
     if not data:
         return _err(400, "empty body — provide at least one setting")
+    from golive.backends.registry.settings_store import environment_locked_keys
+    locked = sorted(set(data) & environment_locked_keys())
+    if locked:
+        return _err(400, "settings controlled by environment: " + ", ".join(locked))
     store = _settings_store()
     try:
         result = store.set_many(data, updated_by=_who(identity))
-    except KeyError as e:
+    except (KeyError, ValueError) as e:
         return _err(400, str(e))
+    from golive.config import refresh_hot_settings
+    refresh_hot_settings()
     # Audit
     record(_who(identity), "settings.update", "",
            {"keys": sorted(data.keys()),
@@ -834,6 +840,8 @@ def _settings_delete(key, identity) -> tuple:
         return _err(400, str(e))
     if not removed:
         return _err(404, f"no database override for {key}")
+    from golive.config import refresh_hot_settings
+    refresh_hot_settings()
     record(_who(identity), "settings.delete", "", {"key": key})
     return 200, {"success": True, "key": key,
                  "note": "value reverted to yaml/default"}
@@ -960,6 +968,10 @@ def _test_dispatch(method, rest, body, identity) -> tuple:
         if rest == ["llm"]:
             return _test_llm(body, identity)
     except Exception as e:  # noqa: BLE001
+        if rest == ["data-backend"]:
+            return 502, {"ok": False, "code": "backend_internal_error",
+                         "error": "The connection check could not be completed.",
+                         "hint": "An internal diagnostic error occurred. Retry or inspect the server logs."}
         return 502, {"error": str(e)}
     return _err(404, "unknown test endpoint")
 
@@ -1083,86 +1095,19 @@ def _test_oidc(body, identity) -> tuple:
 
 
 def _test_data_backend(body, identity) -> tuple:
-    """Test Supabase connectivity: list tables, report latency."""
+    """Probe the selected backend without changing its saved configuration."""
+    from golive.config import get_config
+    from golive.server.connection_checks import check_data_backend
     data = _parse_body(body)
     if data is None:
         return _err(400, "body must be a JSON object")
-    url = str(data.get("url") or "").strip().rstrip("/")
-    key = str(data.get("key") or str(data.get("service_key") or "")).strip()
-
-    if not url:
-        return _err(400, "body.url is required")
-    if not key:
-        return _err(400, "body.key (or body.service_key) is required")
-
-    import time as _time
-    import requests as _requests
-
-    start = _time.monotonic()
-    try:
-        # PostgREST: GET / with API-KEY header
-        resp = _requests.get(
-            url + "/rest/v1/",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-            },
-            timeout=15,
-        )
-        latency_ms = int((_time.monotonic() - start) * 1000)
-
-        if resp.status_code == 200:
-            # The response contains available tables in the schema
-            try:
-                tables = list(resp.json().get("definitions", {}).keys())
-            except (ValueError, TypeError):
-                tables = []
-            result = {
-                "ok": True,
-                "url": url,
-                "latency_ms": latency_ms,
-                "table_count": len(tables),
-                "tables": tables[:50],  # cap at 50 for display
-            }
-        else:
-            result = {
-                "ok": False,
-                "url": url,
-                "latency_ms": latency_ms,
-                "error": f"HTTP {resp.status_code}",
-                "hint": "Check the URL and key. The key should be the "
-                        "service_role key for full access, or anon key "
-                        "for RLS-scoped access.",
-            }
-    except _requests.ConnectionError:
-        return 200, {
-            "ok": False,
-            "url": url,
-            "error": "connection refused",
-            "hint": "The Supabase URL is not reachable. Check network "
-                    "connectivity, DNS, and firewall rules.",
-        }
-    except _requests.Timeout:
-        return 200, {
-            "ok": False,
-            "url": url,
-            "error": "timeout (15s)",
-            "hint": "The Supabase instance did not respond in time. "
-                    "It may be down or behind a slow network.",
-        }
-    except Exception as e:
-        return 200, {
-            "ok": False,
-            "url": url,
-            "error": str(e),
-            "hint": "Unexpected error. The URL may be malformed.",
-        }
-
-    # Audit (key never logged)
-    record(_who(identity), "test.data-backend", "",
-           {"url": url, "ok": result["ok"],
-            "latency_ms": result.get("latency_ms", 0)})
-    return 200, result
+    status, result = check_data_backend(data, get_config())
+    record(_who(identity), "test.data-backend", "", {
+        "backend": result.get("backend", data.get("backend", "")),
+        "ok": result.get("ok"), "code": result.get("code"),
+        "latency_ms": result.get("latency_ms"),
+    })
+    return status, result
 
 
 def _test_llm(body, identity) -> tuple:

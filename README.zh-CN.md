@@ -368,7 +368,7 @@ API 签名是**稳定契约**——在任何 golive 部署上开发的页面，�
 强特征命中直接阻断发布；弱特征命中仅告警——还可以选配任意 OpenAI 兼容
 LLM 做语义二次判定（`security.llm.base_url`，OpenAI / Azure / Ollama /
 自建网关均可）。未配置时维持纯规则判定；`strict_mode: true` 则"没有 AI
-复核不发布"。可用自己的 YAML 扩展规则，确认误报时 `--skip-scan` 跳过。
+复核不发布"。可用自己的 YAML 扩展规则，内容提示可用 `--skip-content-scan` 静音；强凭证命中始终拦截。
 详见 [docs/security.md](docs/security.md)
 
 ## Docker

@@ -13,7 +13,9 @@ Global flags, valid before any subcommand:
 
 Config lookup order: `--config` → `$GOLIVE_CONFIG` → `./golive.yaml` →
 `$GOLIVE_HOME/golive.yaml` → built-in defaults. Environment variables
-always beat the file.
+always beat database overrides, which beat the file. Admin settings are
+stored in the local registry; listener/backend settings take effect after
+a restart, while settings marked hot apply immediately.
 
 ## publish
 
@@ -36,7 +38,8 @@ archive.
 | `--enable-editor` | inject the in-browser editor and mark the site editable |
 | `--watermark [TEXT]` | inject a page watermark |
 | `--compress` | recompress inline images |
-| `--skip-scan` | skip the security scan — only on explicit request |
+| `--skip-content-scan` | silence content warnings only, on explicit request; credentials still block |
+| `--skip-scan` | deprecated alias of `--skip-content-scan`; never bypasses credentials |
 | `--port N` | port used when printing the resulting URL |
 
 Publishing prints `site_id`, `slug` and the URL. Quote them verbatim
@@ -68,7 +71,9 @@ the most recent ones per site are retained.
 golive serve [--port 8787] [--host 127.0.0.1]
 ```
 
-Serves every published site plus `/admin`. Defaults to loopback.
+Serves every published site plus `/admin`. Built-in defaults use loopback;
+saved configuration can override the listener. For local verification use
+`golive serve --host 127.0.0.1 --port 8787` explicitly.
 `--host 0.0.0.0` publishes to the whole network — pair it with
 `GOLIVE_TOKEN` or OIDC. Single-process stdlib server; use a real reverse
 proxy for TLS or load.
@@ -257,3 +262,10 @@ $GOLIVE_HOME/
 ├── logs/                         operation logs
 └── cache/                        style backups and caches
 ```
+
+## Environment and verification
+
+Use `golive init` for guided setup, `golive context --json` for effective
+configuration, `golive doctor --json` for health, and `golive verify --help`
+for a temporary end-to-end data check. `golive demo install` publishes
+a sample CRUD page. Check each command with `--help` before automation.

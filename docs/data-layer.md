@@ -216,9 +216,13 @@ document.addEventListener('templateapi:ready', function () {
   <script>
     function refresh() {
       TemplateAPI.listAll({pageSize: 100}).then(r => {
-        document.getElementById('list').innerHTML = r.list
-          .map(t => '<li>' + t.templateName + ': '
-               + JSON.parse(t.templateContent).text + '</li>').join('');
+        const items = r.list.map(t => {
+          const item = document.createElement('li');
+          item.textContent = t.templateName + ': '
+            + JSON.parse(t.templateContent).text;
+          return item;
+        });
+        document.getElementById('list').replaceChildren(...items);
       });
     }
     function save() {

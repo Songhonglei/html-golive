@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.5] - 2026-10-14
+
+Based on v0.9.4, retaining its security gate, portability commands and clean wheel packaging.
+
+### Changed
+- Redesigned the admin workspace with restrained light/dark/system themes, a shared rocket logo/favicon, responsive navigation and accessible dialogs.
+- Global settings now support validated editing/reset, atomic batch updates, live application of hot settings and clear restart requirements; environment-controlled values remain protected.
+- SQLite connection checks now exercise local read/write and integrity without requiring a URL. Supabase checks distinguish missing configuration, authentication, network, TLS and HTTP failures without leaking keys.
+
+### Fixed
+- Render note content as plain text in the bundled skill and data-layer documentation.
+- Reject incomplete skill references before replacing an existing installation.
+- Align CLI/skill versions and document explicit loopback binding, effective configuration and content-only scan flags.
+
+
 ## [0.9.4] - 2026-08-21
 
 One finding from the independent verification of 0.9.3: DSN/JWT leak fixes

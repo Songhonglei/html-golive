@@ -230,6 +230,7 @@ class SecurityConfig:
     GOLIVE_REDACT_MODE.
     """
     extra_rules: list = field(default_factory=list)
+    ai_review_enabled: bool = True
     llm: LLMConfig = field(default_factory=LLMConfig)
     scan_keep: int = 20
     redact_mode: str = "locator"
@@ -648,14 +649,43 @@ def check_unknown_sections(raw: dict) -> list:
     return warnings
 
 
-def load_config(cli_path: Optional[str] = None) -> Config:
+def _setting_target(cfg, key):
+    if key.startswith("auth.oidc."):
+        return cfg.auth, "oidc_" + key[len("auth.oidc."):]
+    parts = key.split(".")
+    obj = cfg
+    for part in parts[:-1]:
+        obj = getattr(obj, part)
+    return obj, parts[-1]
+
+
+def load_config(cli_path: Optional[str] = None, apply_settings: bool = True) -> Config:
     """Load config fresh (no cache). Raises ConfigError on broken files."""
     path = _find_config_file(cli_path)
     raw = _parse_yaml(path) if path else {}
     for warning in check_unknown_sections(raw):
         print("⚠️  {}: {}".format(path or "golive.yaml", warning), file=sys.stderr)
     cfg = _build(raw, str(path) if path else "")
+    cfg.security.ai_review_enabled = bool(
+        _get(raw, "security", "ai_review_enabled", default=True))
+    if apply_settings:
+        from golive.backends.registry.settings_store import get_database_overrides
+        for key, value in get_database_overrides().items():
+            target, attr = _setting_target(cfg, key)
+            setattr(target, attr, value)
     return _apply_env_overrides(cfg)
+
+
+def refresh_hot_settings() -> None:
+    """Apply live settings only; listener, authentication and backends stay put."""
+    from golive.backends.registry.settings_store import SETTING_DEFINITIONS
+    current = get_config()
+    fresh = load_config(cli_path=current.source_path or None)
+    for key, definition in SETTING_DEFINITIONS.items():
+        if definition["scope"] == "hot":
+            source, attr = _setting_target(fresh, key)
+            target, _ = _setting_target(current, key)
+            setattr(target, attr, getattr(source, attr))
 
 
 def set_config(cfg: Config) -> None:

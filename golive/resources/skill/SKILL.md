@@ -1,17 +1,9 @@
 ---
 name: html-golive
-description: >-
-  Publish, update and manage HTML pages on a self-hosted golive instance
-  through the local `golive` CLI. golive runs entirely on the user's own
-  machine or server — it is not a hosted service and has no relation to
-  any online deployment platform or to any similarly named internal tool.
-  Use when the user wants to put an HTML file, project directory or
-  archive online on their own infrastructure, update or roll back a site
-  they already published, give a static page real data persistence via
-  `window.TemplateAPI`, or administer sites, owners and maintainers.
-  Trigger phrases include "publish this page", "deploy this HTML",
-  "put this on golive", "update the site", "roll it back", "golive".
-version: 0.9.4
+slug: html-golive
+displayName: html-golive
+description: Publish, update and manage HTML pages on a self-hosted golive instance through the local `golive` CLI. golive runs entirely on the user's own machine or server — it is not a hosted service and has no relation to any online deployment platform or to any similarly named internal tool. Use when the user wants to put an HTML file, project directory or archive online on their own infrastructure, update or roll back a site they already published, give a static page real data persistence via `window.TemplateAPI`, or administer sites, owners and maintainers. Trigger phrases include "publish this page", "deploy this HTML", "put this on golive", "update the site", "roll it back", "golive".
+version: 0.9.5
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---
@@ -50,6 +42,12 @@ Read the output before planning:
   broken home directory produces confusing failures.
 - `golive list` shows an existing slug → updating is almost always what
   the user wants, not creating a second site.
+
+The bundled skill and CLI are released together. If an installed skill
+reports a different version, use `golive skill install --force --target
+<skills-directory>` to refresh it (the old copy is backed up). For a
+project virtual environment, activate it before running these commands.
+Use `golive context` to inspect effective paths and backends.
 
 ## Step 2 — core workflows
 
@@ -98,9 +96,12 @@ restoring.
 ### Serve
 
 ```bash
-golive serve --port 8787            # 127.0.0.1 only — local access
+golive serve --host 127.0.0.1 --port 8787  # explicit local access
 golive serve --port 8787 --host 0.0.0.0
 ```
+
+When `--host` or `--port` is omitted, saved settings and configuration
+can change the listener. Pass both explicitly for a local verification.
 
 `--host 0.0.0.0` exposes every published site to the whole network. Only
 use it when the user explicitly asks to share, and when you do, say so
@@ -158,9 +159,13 @@ A `Template` row carries `templateId`, `templateName`, `templateDesc`,
   <script>
     function refresh() {
       TemplateAPI.listAll({ pageSize: 100 }).then(function (r) {
-        document.getElementById('list').innerHTML = r.list.map(function (t) {
-          return '<li>' + JSON.parse(t.templateContent).text + '</li>';
-        }).join('');
+        var list = document.getElementById('list');
+        var items = r.list.map(function (t) {
+          var item = document.createElement('li');
+          item.textContent = JSON.parse(t.templateContent).text;
+          return item;
+        });
+        list.replaceChildren.apply(list, items);
       });
     }
     function save() {

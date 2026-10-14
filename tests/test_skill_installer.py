@@ -69,6 +69,18 @@ class TestPackagedSkill(unittest.TestCase):
         with self.assertRaises(si.SkillInstallError):
             si.verify_skill_dir(empty)
 
+    def test_verify_rejects_missing_or_empty_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "html-golive"
+            shutil.copytree(si.packaged_skill_dir(), dest)
+            ref = dest / "references/data-layer.md"
+            ref.unlink()
+            with self.assertRaisesRegex(si.SkillInstallError, "data-layer.md"):
+                si.verify_skill_dir(dest)
+            ref.write_text("   ", encoding="utf-8")
+            with self.assertRaisesRegex(si.SkillInstallError, "data-layer.md"):
+                si.verify_skill_dir(dest)
+
     def test_read_meta_rejects_frontmatter_without_name(self):
         d = Path(tempfile.mkdtemp())
         (d / "SKILL.md").write_text("---\nversion: 1\n---\nbody\n",
@@ -297,6 +309,7 @@ class TestFromGithubOffline(unittest.TestCase):
                 "description: remote copy\n---\nremote body\n",
             "html-golive-main/golive/resources/skill/references/cli.md":
                 "remote cli reference",
+            "html-golive-main/golive/resources/skill/references/data-layer.md": "data docs",
             "html-golive-main/README.md": "ignored",
         })
         self._install_fake(_FakeRequests(payload=tarball))
@@ -335,6 +348,8 @@ class TestFromGithubOffline(unittest.TestCase):
             "html-golive-main/golive/resources/skill/SKILL.md":
                 "---\nname: html-golive\nversion: 1.0.0\n"
                 "description: d\n---\nbody\n",
+            "html-golive-main/golive/resources/skill/references/cli.md": "cli docs",
+            "html-golive-main/golive/resources/skill/references/data-layer.md": "data docs",
             "html-golive-main/golive/resources/skill/../../../evil.md":
                 "pwned",
         })

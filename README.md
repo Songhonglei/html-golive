@@ -393,7 +393,7 @@ from any OpenAI-compatible LLM (`security.llm.base_url`; works with
 OpenAI / Azure / Ollama / self-hosted gateways). Unconfigured installs
 keep pure rule verdicts; `strict_mode: true` refuses to publish without
 AI review. Extend with your own YAML rules, or bypass a false positive
-with `--skip-scan`. Details: [docs/security.md](docs/security.md)
+for content warnings with `--skip-content-scan`; credentials always block. Details: [docs/security.md](docs/security.md)
 
 ## Docker
 

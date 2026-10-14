@@ -24,6 +24,10 @@ golive publish report.html --name "Q3 Report" --slug q3
 # → http://localhost:8787/q3
 ```
 
+<p align="center">
+  <img src="docs/assets/demo.svg" alt="install, publish and serve an HTML page in three commands" width="760">
+</p>
+
 Something not working? Run `golive verify` and paste the output into an issue.
 
 ---

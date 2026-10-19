@@ -52,6 +52,7 @@ TARGET_CONVENTIONS = (
     # (relative-to, path template, label, agent marker relative to the root)
     ("cwd",  ".codex/skills",            "project skills directory", ".codex"),
     ("cwd",  ".claude/skills",           "project skills directory", ".claude"),
+    ("cwd",  ".codebuddy/skills",       "project skills directory", ".codebuddy"),
     ("cwd",  ".cursor/skills",           "project skills directory", ".cursor"),
     ("cwd",  ".agent/skills",            "project skills directory", ".agent"),
     ("cwd",  ".config/agent/skills",     "project skills directory", ".config/agent"),
@@ -69,6 +70,7 @@ AGENT_NAMES = {
     ".codex": "Codex",
     ".claude": "Claude Code",
     ".cursor": "Cursor",
+    ".codebuddy": "CodeBuddy / WorkBuddy",
     ".agent": "generic agent",
     ".config/agent": "generic agent (XDG)",
     ".local/share/agent": "generic agent (XDG data)",

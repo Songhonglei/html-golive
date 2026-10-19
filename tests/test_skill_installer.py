@@ -410,5 +410,32 @@ class TestPackaging(unittest.TestCase):
         self.assertIn("resources/skill/references/*.md", text)
 
 
+
+
+class TestWorkBuddyProject(unittest.TestCase):
+    def test_codebuddy_marker_is_detected_as_project_skill_location(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / 'project'; home = Path(tmp) / 'home'
+            (cwd / '.codebuddy').mkdir(parents=True); home.mkdir()
+            candidates = si.viable_targets(cwd=cwd, home=home)
+            matched = [c for c in candidates if c.path == cwd / '.codebuddy/skills']
+            self.assertEqual(len(matched), 1)
+            self.assertTrue(matched[0].agent_present)
+            self.assertEqual(matched[0].agent, 'CodeBuddy / WorkBuddy')
+            self.assertEqual(si.resolve_target(cwd=cwd, home=home, interactive=False),
+                             cwd / '.codebuddy/skills')
+
+    def test_explicit_workbuddy_install_is_reported_in_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / 'project'; home = Path(tmp) / 'home'
+            cwd.mkdir(); home.mkdir()
+            result = si.install(target=str(cwd / '.codebuddy/skills'), cwd=cwd, home=home)
+            status = si.status(cwd=cwd, home=home)
+            self.assertEqual(status['install_count'], 1)
+            self.assertTrue(status['in_sync'])
+            self.assertEqual(status['installs'][0]['path'], result['installed_to'])
+            self.assertTrue((Path(result['installed_to']) / 'references/mysql.md').is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

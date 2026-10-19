@@ -3,7 +3,7 @@ name: html-golive
 slug: html-golive
 displayName: html-golive
 description: Publish, update and manage HTML pages on a self-hosted golive instance through the local `golive` CLI. golive runs entirely on the user's own machine or server — it is not a hosted service and has no relation to any online deployment platform or to any similarly named internal tool. Use when the user wants to put an HTML file, project directory or archive online on their own infrastructure, update or roll back a site they already published, give a static page real data persistence via `window.TemplateAPI`, or administer sites, owners and maintainers. Trigger phrases include "publish this page", "deploy this HTML", "put this on golive", "update the site", "roll it back", "golive".
-version: 0.9.6
+version: 0.9.7
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---
@@ -48,6 +48,11 @@ reports a different version, use `golive skill install --force --target
 <skills-directory>` to refresh it (the old copy is backed up). For a
 project virtual environment, activate it before running these commands.
 Use `golive context` to inspect effective paths and backends.
+
+For CodeBuddy / WorkBuddy projects, open the project in that agent and run
+`golive skill install --target .codebuddy/skills` from its root. Reload the
+project so the agent loads this skill. MySQL setup and acceptance:
+`references/mysql.md`.
 
 ## Step 2 — core workflows
 

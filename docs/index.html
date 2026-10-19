@@ -27,6 +27,7 @@ a:hover{text-decoration:underline}
 nav{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 nav .wrap{display:flex;align-items:center;gap:28px;height:60px}
 .brand{font-weight:700;font-size:16px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;color:var(--text)}
+.brand{white-space:nowrap;flex-shrink:0}
 .brand:hover{text-decoration:none}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
 nav .links{display:flex;gap:22px;margin-left:auto;font-size:14px}
@@ -35,6 +36,7 @@ nav .links a:hover{color:var(--text);text-decoration:none}
 nav .links a.lang-link{border:1px solid var(--line);border-radius:6px;padding:2px 9px;font-size:13px}
 nav .links a.lang-link:hover{border-color:var(--dim);color:var(--text)}
 @media(max-width:720px){nav .links a.hide-sm{display:none}}
+@media(max-width:480px){nav .wrap{gap:12px}nav .links{gap:12px}nav .links a:first-child,nav .links a[href^="https:"]{display:none}}
 
 /* ── hero ────────────────────────────────────────── */
 header{padding:88px 0 64px;border-bottom:1px solid var(--line);

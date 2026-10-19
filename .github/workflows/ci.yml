@@ -221,7 +221,12 @@ jobs:
           for target, source in [('URL', 'API_URL'), ('DB_DSN', 'DB_URL'),
                                  ('ANON_KEY', 'PUBLISHABLE_KEY'), ('SERVICE_KEY', 'SECRET_KEY')]:
               env['GOLIVE_TEST_SUPABASE_' + target] = settings[source]
-          env['GOLIVE_PG_DSN'] = settings['DB_URL']
+          # PostgreSQL and PostgREST must not address the same source table.
+          import psycopg
+          from psycopg.conninfo import make_conninfo
+          with psycopg.connect(settings['DB_URL'], autocommit=True) as db:
+              db.execute('CREATE DATABASE golive_sql_acceptance')
+          env['GOLIVE_PG_DSN'] = make_conninfo(settings['DB_URL'], dbname='golive_sql_acceptance')
           result = subprocess.run([sys.executable, '-m', 'pytest', 'tests/test_supabase_live.py',
                                    'tests/test_sql_backend_migration.py', '-q', '--tb=short',
                                    '--timeout=60', '--junitxml=supabase-results.xml'], env=env)

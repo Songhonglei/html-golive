@@ -86,4 +86,4 @@ GOLIVE_TEST_SUPABASE_SERVICE_KEY
 python3 -m pytest tests/test_supabase_live.py -q -rs
 ```
 
-该套件创建随机命名的独立表和私有 bucket，设置专用 RLS，测试公开密钥 CRUD、越权拒绝、registry、Storage 中文内容和回滚、发布、导入导出，以及与另外三种数据库往返迁移，最后删除测试资源。MySQL / PostgreSQL 往返还需各自的 DSN。只配置部分 Supabase 变量会直接失败，避免配置错误被当成跳过。CI 用固定版本的 Supabase CLI 启动隔离的真实 Postgres、PostgREST、Auth、Storage 服务，不需要云端凭证。
+该套件创建随机命名的独立表和私有 bucket，设置专用 RLS，测试公开密钥 CRUD、越权拒绝、registry、Storage 中文内容和回滚、发布、导入导出，以及与另外三种数据库往返迁移，最后删除测试资源。MySQL / PostgreSQL 往返还需各自的 DSN，并指向与 Supabase 源数据独立的测试数据库。只配置部分 Supabase 变量会直接失败，避免配置错误被当成跳过。CI 用固定版本的 Supabase CLI 启动隔离的真实 Postgres、PostgREST、Auth、Storage 服务，不需要云端凭证。

@@ -87,6 +87,7 @@ pip install 'html-golive[oidc]'      # + SSO / OpenID Connect login
 pip install 'html-golive[image]'     # + image compression (Pillow)
 pip install 'html-golive[s3]'        # + S3-compatible backends (boto3)
 pip install 'html-golive[postgres]' # + self-hosted Postgres (psycopg3)
+pip install 'html-golive[mysql]'    # + MySQL 8.4+ (PyMySQL)
 ```
 
 ### 2 · Publish
@@ -218,8 +219,8 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
   get a real database with zero backend code
 - Three independent backend layers, each switchable on its own:
   - **storage** (site HTML): `local` *(default)* / `s3` / `supabase`
-  - **registry** (site metadata): `sqlite` *(default)* / `postgres` / `supabase`
-  - **data** (TemplateAPI rows): `sqlite` *(default)* / `postgres` /
+  - **registry** (site metadata): `sqlite` *(default)* / `postgres` / `mysql` / `supabase`
+  - **data** (TemplateAPI rows): `sqlite` *(default)* / `postgres` / `mysql` /
     `supabase` / `none`
   Defaults are fully local — SQLite files under `GOLIVE_HOME`, nothing
   to register. One Supabase project can back all three when you want
@@ -282,7 +283,7 @@ v0.7.0 history-rewrite recovery (with and without local changes), the
   StorageBackend    RegistryBackend     DataBackend
   site HTML/assets  site metadata       TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    sqlite / postgres /   sqlite (local file) /
+  local-fs / s3 /    sqlite / postgres / mysql /   sqlite (local file) /
   supabase storage   supabase             postgres / supabase (PostgREST) / none
        │
   AuthProvider: none (default) / token (GOLIVE_TOKEN) / oidc (generic OIDC)
@@ -358,23 +359,24 @@ Your page then simply calls:
 
 ```js
 // namespaced record store
-await TemplateAPI.upsert({ templateName: 'vote:alice', templateContent: {n: 1} });
+await TemplateAPI.upsert({ name: 'vote:alice', content: {n: 1} });
 const { total, list } = await TemplateAPI.listAll();
 
 // or direct table access
 const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
 ```
 
-Three backends, two shapes:
+Four backends, two shapes:
 
 | Backend | Shape | Setup |
 |---|---|---|
 | `sqlite` | server-proxied | none — the default |
 | `postgres` | server-proxied | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
+| `mysql` | server-proxied | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN` (MySQL 8.4+) |
 | `supabase` | page-direct | Supabase project + anon key |
 
 **Server-proxied** backends keep the database connection on the server; the
-page calls golive's `/api/data` and no credentials (no Postgres DSN) ever
+page calls golive's `/api/data` and no credentials (no database DSN) ever
 reach the browser. **Page-direct** (Supabase) embeds the anon key in the
 HTML, so RLS is mandatory there.
 
@@ -437,3 +439,5 @@ python -m pytest tests/ -q
 ---
 
 中文文档请见 [README.zh-CN.md](https://github.com/Songhonglei/html-golive/blob/main/README.zh-CN.md)。
+
+[Four-backend setup and acceptance guide](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md).

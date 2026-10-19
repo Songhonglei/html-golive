@@ -751,7 +751,8 @@ def scan_html(html: str, rules: dict = None) -> ScanResult:
     if rules is None:
         rules = load_rules()
     result = ScanResult()
-    content = _extract_text_content(html)
+    from golive.security.supabase_keys import mask_public_keys
+    content = mask_public_keys(_extract_text_content(html))
     seen = set()
 
     # Collect every secret value on the page before cutting any context

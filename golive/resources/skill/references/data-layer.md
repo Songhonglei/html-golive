@@ -226,8 +226,8 @@ exposed to whatever the anon key may do.
 2. Calls reject immediately → read the console message; it names the
    cause. `_blocked: true` in `TemplateAPI._config` confirms stub mode.
 3. HTTP 401/403 (supabase) → RLS policies reject the anon key.
-4. HTTP 404 on `/api/data/...` (sqlite / postgres) → the page is not being
+4. HTTP 404 on `/api/data/...` (sqlite / postgres / mysql) → the page is not being
    served by golive, or `data.backend` on the server is not a server-proxied
-   backend (`sqlite` or `postgres`).
+   backend (`sqlite`, `postgres` or `mysql`).
 5. Writes succeed but reads look empty → `list` is user-scoped; try
    `listAll`, or check `modelCode` matches what was written.

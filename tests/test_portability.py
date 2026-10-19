@@ -21,6 +21,7 @@ import shutil
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -460,11 +461,12 @@ class TestMigrate(unittest.TestCase):
         store = TemplateStore()
         _make_data_rows(store, 10)
 
-        result = migrate_backend("data", "postgres", dry_run=True)
+        with mock.patch.dict(os.environ, {"GOLIVE_PG_DSN": ""}):
+            result = migrate_backend("data", "postgres", dry_run=True)
 
         self.assertTrue(result.get("dry_run"))
         self.assertEqual(result["source_count"], 10)
-        # There is no psycopg here, so the target was never opened. It must
+        # The target DSN is deliberately absent, so it was never opened. It must
         # report None ("unknown") rather than 0: a real Supabase target with
         # rows in it used to be previewed as "Target existing: 0", which
         # reads as "the target is empty — safe to migrate into".
@@ -485,7 +487,7 @@ class TestMigrate(unittest.TestCase):
         result = migrate_backend("data", "postgres")
 
         self.assertFalse(result["ok"])
-        self.assertIn("pip install", result["error"])
+        self.assertTrue("pip install" in result["error"] or "GOLIVE_PG_DSN" in result["error"])
 
         # Restore
         if old_dsn:

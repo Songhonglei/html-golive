@@ -84,8 +84,9 @@ class StorageConfig:
 
 @dataclass
 class RegistryConfig:
-    backend: str = "sqlite"          # sqlite | postgres | supabase
+    backend: str = "sqlite"          # sqlite | postgres | mysql | supabase
     postgres_dsn_env: str = "GOLIVE_PG_DSN"
+    mysql_dsn_env: str = "GOLIVE_MYSQL_DSN"
     supabase_table: str = "golive_sites"
 
 
@@ -106,7 +107,7 @@ class DataConfig:
       none     — data layer disabled; TemplateAPI is injected as a stub
                  that errors with a configuration hint.
     """
-    backend: str = "sqlite"          # sqlite | postgres | supabase | none
+    backend: str = "sqlite"          # sqlite | postgres | mysql | supabase | none
     templates_table: str = "golive_templates"
     user_id: str = ""                # identity stamped on rows ('' = anonymous)
     sqlite_path: str = ""            # override the data.db location
@@ -371,14 +372,14 @@ def _build(raw: dict, source_path: str) -> Config:
     rg.backend = str(_get(raw, "registry", "backend", default="sqlite") or "sqlite").lower()
     rg.postgres_dsn_env = str(_get(raw, "registry", "postgres", "dsn_env",
                                    default=rg.postgres_dsn_env))
+    rg.mysql_dsn_env = str(_get(raw, "registry", "mysql", "dsn_env", default=rg.mysql_dsn_env))
     rg.supabase_table = str(_get(raw, "registry", "supabase", "table",
                                  default=rg.supabase_table))
 
     # data layer
     dt = cfg.data
     dt.backend = str(_get(raw, "data", "backend", default="sqlite") or "sqlite").lower()
-    dt.templates_table = str(_get(raw, "data", "supabase", "templates_table",
-                                  default=dt.templates_table))
+    dt.templates_table = str(_get(raw, "data", "templates_table", default=_get(raw, "data", "supabase", "templates_table", default=dt.templates_table)))
     dt.user_id = str(_get(raw, "data", "supabase", "user_id", default=""))
     dt.sqlite_path = str(_get(raw, "data", "sqlite", "path", default="") or "")
     dt.api_base = str(_get(raw, "data", "api_base", default="") or "").rstrip("/")

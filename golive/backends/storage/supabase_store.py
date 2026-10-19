@@ -55,10 +55,14 @@ class SupabaseStorage:
     # ── plumbing ────────────────────────────────────────────────────────────
 
     def _headers(self, ctype: str = "") -> dict:
-        h = {"apikey": self.key, "Authorization": f"Bearer {self.key}"}
+        from golive.backends.postgrest import supabase_headers
+        h = supabase_headers(self.key)
         if ctype:
             h["Content-Type"] = ctype
         return h
+
+    def _safe_error(self, response):
+        return str(response.text).replace(self.key, "[REDACTED]")[:500]
 
     def _obj_url(self, path: str) -> str:
         return f"{self.base}/storage/v1/object/{self.bucket}/{path}"
@@ -68,14 +72,14 @@ class SupabaseStorage:
             self._obj_url(path), data=content.encode("utf-8"),
             headers={**self._headers("text/html; charset=utf-8"),
                      "x-upsert": "true"},
-            timeout=DEFAULT_TIMEOUT)
-        if resp.status_code >= 400:
+            timeout=DEFAULT_TIMEOUT, allow_redirects=False)
+        if resp.status_code >= 300:
             raise SupabaseStorageError(
-                f"upload {path} failed (HTTP {resp.status_code}): {resp.text}")
+                f"upload {path} failed (HTTP {resp.status_code}): {self._safe_error(resp)}")
 
     def _download(self, path: str) -> Optional[str]:
         resp = requests.get(self._obj_url(path), headers=self._headers(),
-                            timeout=DEFAULT_TIMEOUT)
+                            timeout=DEFAULT_TIMEOUT, allow_redirects=False)
         if resp.status_code == 200:
             # Decode explicitly as UTF-8 — never resp.text. The authenticated
             # object endpoint answers with "text/plain" and no charset, and
@@ -93,22 +97,22 @@ class SupabaseStorage:
         if resp.status_code in (400, 404):
             return None
         raise SupabaseStorageError(
-            f"download {path} failed (HTTP {resp.status_code}): {resp.text}")
+            f"download {path} failed (HTTP {resp.status_code}): {self._safe_error(resp)}")
 
     def _list(self, prefix: str) -> list:
         resp = requests.post(
             f"{self.base}/storage/v1/object/list/{self.bucket}",
             json={"prefix": prefix, "limit": 100,
                   "sortBy": {"column": "name", "order": "desc"}},
-            headers=self._headers("application/json"), timeout=DEFAULT_TIMEOUT)
-        if resp.status_code >= 400:
+            headers=self._headers("application/json"), timeout=DEFAULT_TIMEOUT, allow_redirects=False)
+        if resp.status_code >= 300:
             raise SupabaseStorageError(
-                f"list {prefix} failed (HTTP {resp.status_code}): {resp.text}")
+                f"list {prefix} failed (HTTP {resp.status_code}): {self._safe_error(resp)}")
         return resp.json() or []
 
     def _remove(self, path: str) -> None:
         requests.delete(self._obj_url(path), headers=self._headers(),
-                        timeout=DEFAULT_TIMEOUT)
+                        timeout=DEFAULT_TIMEOUT, allow_redirects=False)
 
     # ── read ────────────────────────────────────────────────────────────────
 
@@ -195,8 +199,8 @@ class SupabaseStorage:
             resp = requests.post(
                 self._obj_url(path), data=payload.encode("utf-8"),
                 headers={**self._headers("application/json"), "x-upsert": "true"},
-                timeout=DEFAULT_TIMEOUT)
-            return resp.status_code < 400
+                timeout=DEFAULT_TIMEOUT, allow_redirects=False)
+            return resp.status_code < 300
         except requests.RequestException:
             return False
 

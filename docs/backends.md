@@ -42,6 +42,7 @@ Site metadata: id, name, slug, timestamps, owner.
 | `sqlite` | ✅ v0.1 | `$GOLIVE_HOME/registry.db` |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_sites` |
 | `postgres` | ✅ v0.7.7 | direct DSN from `$GOLIVE_PG_DSN`; table `sites` |
+| `mysql` | ✅ | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN` (MySQL 8.4+) |
 
 Required methods (see `golive/backends/registry/sqlite_store.py`):
 `create`, `update`, `touch`, `delete`, `get`, `get_by_slug`, `resolve`,
@@ -58,6 +59,7 @@ against them run unchanged across implementations. Full guide:
 |---|---|---|
 | `sqlite` | ✅ v0.7 | **default** — table `golive_templates` in `$GOLIVE_HOME/data.db`, created on first use |
 | `postgres` | ✅ v0.7.7 | self-hosted PostgreSQL via `$GOLIVE_PG_DSN`; table `golive_templates`, `content` as JSONB |
+| `mysql` | ✅ | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN` (MySQL 8.4+) |
 | `supabase` | ✅ v0.2 | PostgREST table `golive_templates` in your Supabase project |
 | `none` | ✅ | data layer disabled — pages using the APIs get a stub with clear errors |
 
@@ -74,9 +76,9 @@ and the injected JS behave the same either way.
 Data backends come in two shapes, and this is the distinction that matters
 when you pick one:
 
-* **server-proxied** (`sqlite`, `postgres`) — the server owns the connection
+* **server-proxied** (`sqlite`, `postgres`, `mysql`) — the server owns the connection
   and published pages call the local `/api/data` endpoint. No credentials
-  (and no Postgres DSN) ever reach the browser.
+  (and no database DSN) ever reach the browser.
 * **page-direct** (`supabase`) — the page talks to your Supabase project
   directly, using the URL and anon key embedded in the HTML.
 
@@ -252,3 +254,7 @@ signatures identical, and register it in
 `get_registry` in a wrapper script). Cloud-vendor Supabase-alikes that
 speak PostgREST usually work with the `supabase` backends as-is — point
 `supabase.url` at the compatible REST root.
+
+## Validation
+
+See [four-backend setup and acceptance](backend-validation.md) for configuration, real database tests, and what each diagnostic proves.

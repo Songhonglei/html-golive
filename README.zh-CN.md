@@ -80,6 +80,7 @@ pip install 'html-golive[oidc]'      # + SSO / OpenID Connect 登录
 pip install 'html-golive[image]'     # + 图片压缩（Pillow）
 pip install 'html-golive[s3]'        # + S3 兼容后端（boto3）
 pip install 'html-golive[postgres]' # + 自托管 Postgres（psycopg3）
+pip install 'html-golive[mysql]'    # + MySQL 8.4+（PyMySQL）
 ```
 
 ### 2 · 发布
@@ -208,8 +209,8 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
   代码获得真实数据库
 - 三层后端各自独立切换：
   - **storage**（站点 HTML）：`local`（默认）/ `s3` / `supabase`
-  - **registry**（站点元信息）：`sqlite`（默认）/ `postgres` / `supabase`
-  - **data**（TemplateAPI 数据行）：`sqlite`（默认）/ `postgres` /
+  - **registry**（站点元信息）：`sqlite`（默认）/ `postgres` / `mysql` / `supabase`
+  - **data**（TemplateAPI 数据行）：`sqlite`（默认）/ `postgres` / `mysql` /
     `supabase` / `none`
   默认三层全本地——SQLite 文件落在 `GOLIVE_HOME` 下，无需注册任何服务；
   需要多机共享时，一个 Supabase 项目可以同时承载三层。
@@ -267,7 +268,7 @@ golive doctor            # 确认 CLI 版本与运行中服务版本一致
   StorageBackend    RegistryBackend     DataBackend
   站点 HTML/资源     站点元信息          TemplateAPI/SupabaseAPI
        │                  │                  │
-  local-fs / s3 /    sqlite / postgres /   sqlite（本地文件）/
+  local-fs / s3 /    sqlite / postgres / mysql /   sqlite（本地文件）/
   supabase storage   supabase             postgres / supabase（PostgREST）/ none
        │
   AuthProvider: none（默认）/ token（GOLIVE_TOKEN）/ oidc（通用 OIDC）
@@ -340,22 +341,23 @@ golive serve
 
 ```js
 // 命名空间化记录存储
-await TemplateAPI.upsert({ templateName: 'vote:alice', templateContent: {n: 1} });
+await TemplateAPI.upsert({ name: 'vote:alice', content: {n: 1} });
 const { total, list } = await TemplateAPI.listAll();
 
 // 或直连表操作
 const { rows } = await SupabaseAPI.query('feedback', { limit: 50 });
 ```
 
-三种后端，两种形态：
+四种后端，两种形态：
 
 | 后端 | 形态 | 配置 |
 |---|---|---|
 | `sqlite` | 服务端代理 | 无需配置——默认 |
 | `postgres` | 服务端代理 | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
+| `mysql` | 服务端代理 | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN`（MySQL 8.4+） |
 | `supabase` | 页面直连 | Supabase 项目 + anon key |
 
-**服务端代理**型（sqlite、postgres）由服务端持有数据库连接，页面调用
+**服务端代理**型（sqlite、postgres、mysql）由服务端持有数据库连接，页面调用
 golive 自己的 `/api/data`，凭据和 Postgres DSN 都不会进入浏览器。
 **页面直连**型（supabase）把 anon key 嵌进 HTML，因此必须配置 RLS。
 
@@ -411,3 +413,5 @@ python -m pytest tests/ -q
 ---
 
 English documentation: [README.md](https://github.com/Songhonglei/html-golive/blob/main/README.md).
+
+[四种数据库后端的配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md)。

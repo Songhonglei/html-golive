@@ -79,7 +79,7 @@ saved configuration can override the listener. For local verification use
 proxy for TLS or load.
 
 Routes: `/` index · `/<slug>` · `/s/<site_id>` · `/health` ·
-`/admin` · `/api/admin/*` · `/api/data/<table>` (server-proxied data backends: sqlite, postgres).
+`/admin` · `/api/admin/*` · `/api/data/<table>` (server-proxied data backends: sqlite, postgres, mysql).
 
 ## preview
 
@@ -239,7 +239,7 @@ against path traversal before extraction.
 ## migrate
 
 ```bash
-golive migrate <data|registry> --to sqlite|postgres|supabase [--dry-run]
+golive migrate <data|registry> --to sqlite|postgres|mysql|supabase [--dry-run]
 ```
 
 Copies data or registry rows from the current backend to a target

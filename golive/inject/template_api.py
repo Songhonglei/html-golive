@@ -94,7 +94,9 @@ _JS_TEMPLATE = r"""
     var h = {{ 'Content-Type': 'application/json' }};
     if (CFG.mode === 'supabase') {{
       h['apikey'] = CFG.apiKey;
-      h['Authorization'] = 'Bearer ' + CFG.apiKey;
+      if (CFG.apiKey.indexOf('eyJ') === 0 && CFG.apiKey.split('.').length === 3) {{
+        h['Authorization'] = 'Bearer ' + CFG.apiKey;
+      }}
     }}
     if (extra) for (var k in extra) h[k] = extra[k];
     return h;
@@ -357,6 +359,10 @@ def generate_js(model_code: str, data_version: str = "1.0.0",
         raise ValueError(
             f"modelCode is a placeholder ({model_code}) — refusing to inject. "
             f"Pass a real modelCode via --data-model.")
+
+    if mode == "supabase":
+        from golive.security.supabase_keys import require_public_key
+        require_public_key(anon_key)
 
     from datetime import datetime
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

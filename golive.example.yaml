@@ -38,12 +38,15 @@ storage:
 
 # ── registry backend (site metadata) ─────────────────────────────────────────
 registry:
-  backend: sqlite         # sqlite | postgres | supabase
+  backend: sqlite         # sqlite | postgres | mysql | supabase
   # postgres:
   #   # DSN comes from the environment, never from this file:
   #   #   export GOLIVE_PG_DSN='postgresql://user:pass@host:5432/dbname'
   #   # Creates a `sites` table on first use.
-  #   postgres_dsn_env: GOLIVE_PG_DSN
+  #   dsn_env: GOLIVE_PG_DSN
+  # mysql:
+  #   # MySQL 8.4+; set GOLIVE_MYSQL_DSN outside this file.
+  #   dsn_env: GOLIVE_MYSQL_DSN
   # supabase:
   #   table: golive_sites  # see `golive db init --print-sql` for the schema
 
@@ -62,13 +65,17 @@ data:
   #            `pip install 'html-golive[postgres]'` and
   #            `export GOLIVE_PG_DSN='postgresql://user:pass@host/db'`.
   #            The table is created on first use; content is JSONB.
+  # mysql    — MySQL 8.4+; install html-golive[mysql] and set
+  #            GOLIVE_MYSQL_DSN=mysql://user:password@host:3306/database.
+  #            Credentials stay server-side; content uses JSON.
   # supabase — rows live in your Supabase project; pages call PostgREST
   #            directly with the anon key embedded in the HTML, so RLS
   #            policies are mandatory. Use this to share one dataset
   #            across machines or to host pages outside golive.
   # none     — data layer disabled; TemplateAPI is injected as a stub
   #            that rejects every call with a configuration hint.
-  backend: sqlite         # sqlite | postgres | supabase | none
+  backend: sqlite         # sqlite | postgres | mysql | supabase | none
+  # templates_table: golive_templates  # all backends (legacy supabase.templates_table also accepted)
   # sqlite:
   #   path: ""            # override the data.db location
   # api_base: ""          # absolute /api/data URL when pages are served

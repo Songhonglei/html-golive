@@ -89,7 +89,7 @@ jobs:
         env:
           GOLIVE_PG_DSN: postgresql://golive:golive_ci@127.0.0.1:5432/golive_test
         run: |
-          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py \
+          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py tests/test_sql_backend_contract.py tests/test_backend_http_contract.py \
             -q --timeout=60 --timeout-method=signal -rs
 
       - name: Assert the suite actually ran
@@ -113,6 +113,132 @@ jobs:
               sys.exit(f"expected the Postgres suite to run, got {passed} "
                        f"passed / {skipped} skipped — is GOLIVE_PG_DSN set?")
           EOF
+
+  mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: golive_test
+          MYSQL_USER: golive
+          MYSQL_PASSWORD: golive_ci
+          MYSQL_ROOT_PASSWORD: golive_root_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pgolive_root_ci --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install MySQL dependencies
+        run: pip install -e '.[image,dev,mysql]'
+      - name: Run real MySQL store and HTTP contracts
+        env:
+          GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
+        run: |
+          python -m pytest tests/test_mysql_config.py tests/test_sql_backend_contract.py \
+            tests/test_backend_http_contract.py tests/test_data_layer_e2e.py \
+            -q --timeout=45 --junitxml=mysql-results.xml
+      - name: Require actual MySQL cases (never accept all-skipped)
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = ET.parse("mysql-results.xml").findall(".//testcase")
+          actual = [c for c in cases if "[mysql]" in c.get("name", "")
+                    and c.find("skipped") is None]
+          assert len(actual) >= 9, f"expected >=9 live MySQL cases, got {len(actual)}"
+          assert all(c.find("failure") is None and c.find("error") is None for c in actual)
+          print(f"{len(actual)} real MySQL contract cases passed")
+          PY
+
+  supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_HOME: ${{ runner.temp }}/golive-supabase-home
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: golive_test
+          MYSQL_USER: golive
+          MYSQL_PASSWORD: golive_ci
+          MYSQL_ROOT_PASSWORD: golive_root_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pgolive_root_ci --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+      - name: Install all database drivers
+        run: pip install -e '.[image,dev,postgres,mysql]'
+      - name: Start isolated real Supabase services
+        run: |
+          supabase --workdir "$RUNNER_TEMP/golive-supabase" init --yes
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'golive-supabase/supabase/config.toml'
+          source = path.read_text()
+          assert '[experimental]' in source
+          path.write_text(source.replace('[experimental]', '[experimental]\nstack = true', 1))
+          PY
+          supabase --workdir "$RUNNER_TEMP/golive-supabase" start \
+            --runtime native --stack golive-ci --eager \
+            --exclude realtime,functions,studio,mail,analytics,pooler --yes > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          umask 077
+          supabase --workdir "$RUNNER_TEMP/golive-supabase" stack status \
+            --stack golive-ci --output-format json > "$RUNNER_TEMP/supabase-status.json"
+      - name: Verify real PostgREST, Storage, RLS and all migration pairs
+        env:
+          GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          status = json.loads((Path(os.environ['RUNNER_TEMP']) / 'supabase-status.json').read_text())
+          assert status['readiness'] == 'ready'
+          settings = status['env']
+          for name in ('PUBLISHABLE_KEY', 'SECRET_KEY', 'ANON_KEY', 'SERVICE_ROLE_KEY', 'DB_URL'):
+              print('::add-mask::' + settings[name], flush=True)
+          env = os.environ.copy()
+          for target, source in [('URL', 'API_URL'), ('DB_DSN', 'DB_URL'),
+                                 ('ANON_KEY', 'PUBLISHABLE_KEY'), ('SERVICE_KEY', 'SECRET_KEY')]:
+              env['GOLIVE_TEST_SUPABASE_' + target] = settings[source]
+          env['GOLIVE_PG_DSN'] = settings['DB_URL']
+          result = subprocess.run([sys.executable, '-m', 'pytest', 'tests/test_supabase_live.py',
+                                   'tests/test_sql_backend_migration.py', '-q', '--tb=short',
+                                   '--timeout=60', '--junitxml=supabase-results.xml'], env=env)
+          sys.exit(result.returncode)
+          PY
+      - name: Require every live Supabase case
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = ET.parse('supabase-results.xml').findall('.//testcase')
+          live = [c for c in cases if c.get('classname', '').endswith('test_supabase_live')]
+          assert len(live) == 6 and all(c.find('skipped') is None for c in live)
+          assert all(c.find('failure') is None and c.find('error') is None for c in live)
+          PY
+      - name: Stop only this test stack
+        if: always()
+        run: supabase --workdir "$RUNNER_TEMP/golive-supabase" stack stop --stack golive-ci
 
   build:
     runs-on: ubuntu-latest

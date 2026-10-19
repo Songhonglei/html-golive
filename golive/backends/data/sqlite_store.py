@@ -150,8 +150,8 @@ class TemplateStore:
             where.append("user_id = ?")
             params.append(user_id)
         if name_prefix:
-            where.append("name LIKE ?")
-            params.append(name_prefix.replace("%", r"\%") + "%")
+            where.append("name LIKE ? ESCAPE '!'")
+            params.append(name_prefix.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%")
         clause = " AND ".join(where)
         offset = (max(int(page_no), 1) - 1) * int(page_size)
         with self._conn() as c:

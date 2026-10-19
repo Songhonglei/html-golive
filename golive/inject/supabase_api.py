@@ -80,9 +80,11 @@ _JS_TEMPLATE = r"""
   function _headers(extra) {{
     var h = {{
       'apikey'        : CFG.apiKey,
-      'Authorization' : 'Bearer ' + CFG.apiKey,
       'Content-Type'  : 'application/json',
     }};
+    if (CFG.apiKey.indexOf('eyJ') === 0 && CFG.apiKey.split('.').length === 3) {{
+      h['Authorization'] = 'Bearer ' + CFG.apiKey;
+    }}
     if (extra) for (var k in extra) h[k] = extra[k];
     return h;
   }}
@@ -255,6 +257,8 @@ def generate_js(supabase_url: str = "", anon_key: str = "",
     clear configuration hint (publish is never blocked).
     """
     from datetime import datetime
+    from golive.security.supabase_keys import require_public_key
+    require_public_key(anon_key or "")
     supabase_url = (supabase_url or "").rstrip("/")
     rest_url = supabase_url + "/rest/v1" if supabase_url else ""
     project_display = supabase_url.split("//")[-1] if supabase_url else "(unconfigured)"

@@ -888,8 +888,15 @@ def migrate_backend(
                 "hint": "Fix the above and re-run:\n"
                         f"  golive migrate {layer} --to {target}",
             }
-    elif target not in ("sqlite", "supabase", "postgres"):
+    elif target not in ("sqlite", "supabase", "postgres", "mysql"):
         raise ValueError(f"unknown target backend: {target!r}")
+
+    if not dry_run and target == "mysql":
+        import importlib.util
+        from golive.backends.factory import sql_dsn_env
+        dsn_env = sql_dsn_env(cfg, "mysql")
+        if importlib.util.find_spec("pymysql") is None or not os.environ.get(dsn_env, "").strip():
+            return {"ok": False, "error": f"MySQL requires {dsn_env} and pip install 'html-golive[mysql]'"}
 
     # ── get source backend (current) ───────────────────────────────────────
     if layer == "data":

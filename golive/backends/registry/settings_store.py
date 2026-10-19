@@ -64,7 +64,7 @@ SETTING_DEFINITIONS = {
         "category": "server",
     },
     "data.backend": {
-        "description": "Data layer backend: sqlite | postgres | supabase | none",
+        "description": "Data layer backend: sqlite | postgres | mysql | supabase | none",
         "scope": "restart",
         "type": "string",
         "default": "sqlite",
@@ -187,7 +187,7 @@ SETTING_DEFINITIONS = {
 
 _CONSTRAINTS = {
     "server.port": {"min": 1, "max": 65535},
-    "data.backend": {"options": ["sqlite", "postgres", "supabase", "none"]},
+    "data.backend": {"options": ["sqlite", "postgres", "mysql", "supabase", "none"]},
     "auth.provider": {"options": ["none", "token", "oidc", "proxy"]},
     "watermark.opacity": {"min": 0, "max": 1, "step": 0.01},
     "watermark.font_size": {"min": 1, "max": 256},

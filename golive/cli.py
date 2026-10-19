@@ -2038,7 +2038,7 @@ def _run_verify(args):
             table = cfg.data.templates_table or "golive_templates"
             try:
                 import uuid as _uuid
-                content = {"verify": True, "text": "中文 · 🧪", "ts": time.time()}
+                content = {"verify": True, "text": "中文 · 🧪", "ts": time.time_ns() // 1_000_000}
                 rows = remote_verify_client.insert(table, {
                     "model_code": "verify_test", "name": "verify-" + _uuid.uuid4().hex,
                     "user_id": cfg.data.user_id or "", "content": content})
@@ -2065,7 +2065,8 @@ def _run_verify(args):
         elif proxied:
             # sqlite / postgres: real write → read → delete via /api/data
             table = cfg.data.templates_table or "golive_templates"
-            test_content = {"verify": True, "ts": time.time()}
+            # Integer milliseconds survive MySQL binary JSON without float rounding.
+            test_content = {"verify": True, "ts": time.time_ns() // 1_000_000}
 
             try:
                 # Write — over a real socket, exactly like a published page

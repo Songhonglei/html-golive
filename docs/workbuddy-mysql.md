@@ -1,32 +1,32 @@
 # WorkBuddy / 其他 Agent：MySQL 安装、初始化与验证
 
-适用版本：html-golive **v0.9.7**；数据库：**MySQL 8.4+**。这是一套本机自部署工具，不需要 golive 平台账号。Python 的 MySQL extra 安装驱动，不会自动安装数据库服务。
+适用版本：html-golive **v0.9.7.post1**；数据库：**MySQL 8.4+**。这是一套本机自部署工具，不需要 golive 平台账号。Python 的 MySQL extra 安装驱动，不会自动安装数据库服务。
 
 WorkBuddy 官方支持[项目级 `.codebuddy/skills`](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project)，也可在[技能界面上传本地技能包](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Skills-Market)。请使用真实受支持的入口，不要猜测 `~/.workbuddy` 等安装目录。
 
 ## 安装 Skill 的两种方式
 
-- **项目级（推荐验证使用）**：在 WorkBuddy 中打开一个独立项目，创建 Python 虚拟环境并安装 `html-golive[mysql]==0.9.7`，然后运行 `golive skill install --target .codebuddy/skills`。重新打开项目任务，确认读取到 `html-golive v0.9.7`。这里 `golive` 必须来自该虚拟环境。
-- **界面导入**：从 [v0.9.7 Release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7) 下载 `html-golive-skill-0.9.7.zip`，在 WorkBuddy 的“技能 → 添加技能 → 上传技能”导入并启用。仍需在 agent 实际执行命令的环境中安装同版本 Python 包和 MySQL 驱动。
+- **项目级（推荐验证使用）**：在 WorkBuddy 中打开一个独立项目，创建 Python 虚拟环境并安装 `html-golive[mysql]==0.9.7.post1`，然后运行 `golive skill install --target .codebuddy/skills`。重新打开项目任务，确认读取到 `html-golive v0.9.7.post1`。这里 `golive` 必须来自该虚拟环境。
+- **界面导入**：从 [v0.9.7.post1 Release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1) 下载 `html-golive-skill-0.9.7.post1.zip`，在 WorkBuddy 的“技能 → 添加技能 → 上传技能”导入并启用。仍需在 agent 实际执行命令的环境中安装同版本 Python 包和 MySQL 驱动。
 
 其他 Agent 使用 `golive skill install --target <实际 skills 父目录>`。CLI 不负责证明第三方 Agent 已加载技能；需在该 Agent 里确认名称与版本。
 
 ## 直接复制给 WorkBuddy
 
 ```text
-请安装并验收 html-golive v0.9.7，数据库必须使用真实 MySQL 8.4+。
+请安装并验收 html-golive v0.9.7.post1，数据库必须使用真实 MySQL 8.4+。
 项目：https://github.com/Songhonglei/html-golive
 完整操作手册：https://github.com/Songhonglei/html-golive/blob/main/golive/resources/skill/references/mysql.md
 
 请直接执行下列步骤，使用独立项目目录，不改现有业务环境：
 
 1. 探测操作系统、Python、pip、Docker、端口及已有 golive。创建项目虚拟环境，
-   用该环境的 Python 安装 'html-golive[mysql]==0.9.7'，确认 CLI 版本。
+   用该环境的 Python 安装 'html-golive[mysql]==0.9.7.post1'，确认 CLI 版本。
    全程使用同一虚拟环境；Windows 使用 Scripts 路径，macOS/Linux 使用 bin 路径。
 
 2. 在项目根目录运行 golive skill install --target .codebuddy/skills，
    用 golive skill status 检查版本。重新加载项目并读取 html-golive 的 SKILL.md
-   和 references/mysql.md，确认 agent 实际加载了 v0.9.7。
+   和 references/mysql.md，确认 agent 实际加载了 v0.9.7.post1。
    已有同名旧 Skill 时备份后用 --force 更新。
 
 3. 优先使用我已授权的专用 MySQL 测试连接。若没有且 Docker 可用，创建隔离的
@@ -45,7 +45,7 @@ WorkBuddy 官方支持[项目级 `.codebuddy/skills`](https://www.codebuddy.cn/d
 5. 依次执行 golive db init、golive context、
    golive serve start --host 127.0.0.1 --port <端口>、
    golive doctor --port <端口> --json、golive verify --json。
-   确认 registry/data 都是 mysql，CLI/Skill/运行服务均为 0.9.7，verify 返回 ok:true。
+   确认 registry/data 都是 mysql，CLI/Skill/运行服务均为 0.9.7.post1，verify 返回 ok:true。
 
 6. 使用唯一测试 model 完成 CLI 的 create/list/get/update/upsert/delete；
    数据包含中文、emoji 和嵌套 JSON。创建一个调用 TemplateAPI 的 HTML 页面，

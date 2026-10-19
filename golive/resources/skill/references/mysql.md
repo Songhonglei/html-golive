@@ -1,4 +1,4 @@
-# MySQL setup and acceptance (v0.9.7+)
+# MySQL setup and acceptance (v0.9.7.post1+)
 
 Use an isolated project home and a dedicated MySQL 8.4+ test database. The
 registry and business data both support MySQL; HTML remains in local files or
@@ -11,7 +11,7 @@ environment with Python 3.9+ and install the exact version:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade 'html-golive[mysql]==0.9.7'
+.venv/bin/python -m pip install --upgrade 'html-golive[mysql]==0.9.7.post1'
 .venv/bin/golive --version
 .venv/bin/golive skill install --target .codebuddy/skills
 .venv/bin/golive skill status
@@ -25,7 +25,7 @@ Do not silently use another globally installed CLI.
 WorkBuddy project skills live in `.codebuddy/skills/<skill-name>/SKILL.md`.
 Open this directory as a WorkBuddy project and reload/reopen its task so the
 skill is actually loaded. Verify the loaded name is `html-golive` and its
-version is `0.9.7`. For other agents, use their documented skills directory
+version is `0.9.7.post1`. For other agents, use their documented skills directory
 with `--target`; the target is the **parent** of `html-golive`, not the skill
 folder itself. `--force` backs up an old installed copy before replacing it.
 
@@ -84,7 +84,7 @@ golive verify --json
 
 Use `db init` for the configured MySQL tables; the general `init` quickstart is
 not needed here. Confirm `registry.backend` and `data.backend` are both mysql,
-CLI/skill/running-service versions are all 0.9.7, doctor reports MySQL, and
+CLI/skill/running-service versions are all 0.9.7.post1, doctor reports MySQL, and
 verify returns `ok: true` with exit code 0. A running service retains its
 startup environment: after changing the DSN, stop/start it with that env loaded.
 

@@ -10,9 +10,9 @@
 一条命令把 HTML 文件、项目文件夹或压缩包变成可分享的 URL，跑在你自己的
 电脑、NAS、VPS 或内网服务器上。
 
-**v0.9.7：四种数据库，同一套页面 API。** SQLite 零配置起步，PostgreSQL、MySQL 8.4+、Supabase 随需切换；保留克制的亮/暗管理工作台。
+**v0.9.7.post1：四种数据库，同一套页面 API。** SQLite 零配置起步，PostgreSQL、MySQL 8.4+、Supabase 随需切换；保留克制的亮/暗管理工作台。
 
-[四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [WorkBuddy + MySQL 指南](https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md) · [v0.9.7 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7)
+[四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [WorkBuddy + MySQL 指南](https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 ### 30 秒快速开始
 

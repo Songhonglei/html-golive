@@ -24,6 +24,7 @@ import unittest
 from golive.core.migrate_check import scan_html
 from golive.inject import (
     ATTR_LAYER,
+    LAYER_SCHEMA,
     LAYERS,
     LEGACY_SCRIPT_IDS,
     all_script_ids,
@@ -63,10 +64,13 @@ class TestEveryInjectorTagsItself(unittest.TestCase):
                 found = re.search(
                     r'data-golive-layer="(\w+)"[^>]*'
                     r'data-golive-schema="(\d+)"[^>]*'
-                    r'data-golive-version="([\d.]+)"', html)
+                    r'data-golive-version="([^"]+)"', html)
                 self.assertIsNotNone(
                     found, f"{layer.kind} injected no identifying attributes")
                 self.assertEqual(found.group(1), layer.kind)
+                self.assertEqual(found.group(2), LAYER_SCHEMA)
+                from golive import __version__
+                self.assertEqual(found.group(3), __version__)
 
     def test_injection_is_still_idempotent(self):
         """Adding attributes must not break the same-id replacement."""

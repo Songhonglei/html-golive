@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.7.post1] - 2026-10-19
+
+- Use integer millisecond timestamps in verification probes so MySQL binary JSON numeric normalization cannot cause a false content mismatch.
+- Add a deterministic regression at the observed floating-point boundary, including real MySQL HTTP verification.
+- Synchronize package, CLI, bundled Skill, installation guide and release assets to the corrected version. v0.9.7 remains available; use this revision for MySQL verification.
+
 ## [0.9.7] - 2026-10-19
 
 Based on v0.9.6, including the current admin workspace and documentation updates.

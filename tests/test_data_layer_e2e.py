@@ -161,6 +161,13 @@ class TestPostgresChain(_BackendCase):
     backend = "postgres"
 
 
+@unittest.skipUnless(
+    bool(os.environ.get("GOLIVE_MYSQL_DSN", "").strip()),
+    "GOLIVE_MYSQL_DSN not set — skipping MySQL e2e")
+class TestMySQLChain(_BackendCase):
+    backend = "mysql"
+
+
 class TestRegistryTouchAdvancesTheTimestamp(unittest.TestCase):
     """touch() must always move updated_at, even in the same second.
 

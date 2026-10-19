@@ -51,7 +51,7 @@ def pg_connect(dsn_env: str = "GOLIVE_PG_DSN"):
         raise _missing_dep() from None
 
     dsn = get_dsn(dsn_env)
-    conn = psycopg.connect(dsn, autocommit=False)
+    conn = psycopg.connect(dsn, autocommit=False, connect_timeout=10)
     # psycopg3 returns RealDictCursor when configured via row_factory
     from psycopg.rows import dict_row
     conn.row_factory = dict_row

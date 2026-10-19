@@ -1934,6 +1934,8 @@ td.actions button:hover{
             <label data-i18n="databackend.newtype"></label>
             <select id="db-new-type">
               <option value="sqlite">sqlite</option>
+              <option value="postgres">postgres</option>
+              <option value="mysql">mysql</option>
               <option value="supabase">supabase</option>
               <option value="none">none</option>
             </select>
@@ -2223,13 +2225,22 @@ en: {
   "dbcheck.running": "Checking…",
   "dbcheck.configuration": "Complete the connection configuration",
   "dbcheck.failed": "Connection check failed",
+  "dbcheck.sql_ok": "Database read/write check passed.",
+  "dbcheck.sql_note": "The probe row was rolled back. Application data was preserved.",
+  "dbcheck.sql_config_required": "Configure GOLIVE_PG_DSN (PostgreSQL) or GOLIVE_MYSQL_DSN (MySQL) in the server environment and restart. No connection was attempted.",
+  "dbcheck.sql_driver_missing": "Install html-golive[postgres] or html-golive[mysql] in the server environment.",
+  "dbcheck.sql_config_invalid": "Check the server-side DSN format, table name and TLS options.",
+  "dbcheck.sql_auth_failed": "Database authentication failed. Check the server-side user and password.",
+  "dbcheck.sql_permission_denied": "Database permissions are insufficient. Check table creation and read/write privileges.",
+  "dbcheck.sql_connection_failed": "Cannot connect to the database. Check the server host, port, database name, network and TLS settings.",
+  "dbcheck.sql_probe_failed": "The read/write probe failed. Check the configured table schema and permissions.",
   "dbcheck.sqlite_ok": "SQLite read/write and integrity checks passed.",
   "dbcheck.sqlite_note": "Probe writes were rolled back; existing application data was not changed.",
   "dbcheck.supabase_ok": "The Supabase Data API responded successfully.",
   "dbcheck.supabase_note": "This checks Data API reachability and visible schema metadata, not table write permissions or RLS policies.",
   "dbcheck.required": "Provide {fields}. No remote connection test has been started.",
   "dbcheck.key": "API key",
-  "dbcheck.location": "Database file",
+  "dbcheck.location": "Database location",
   "dbcheck.latency": "Elapsed time",
   "dbcheck.http": "HTTP status",
   "dbcheck.backend_disabled": "The data layer is disabled; there is no connection to test.",
@@ -2259,7 +2270,7 @@ en: {
   "settings.description.server.host": "Bind address for the HTTP server",
   "settings.description.server.port": "HTTP server port",
   "settings.description.server.public_base": "Public base URL for publish links",
-  "settings.description.data.backend": "Data layer backend: sqlite | postgres | supabase | none",
+  "settings.description.data.backend": "Data layer backend: sqlite | postgres | mysql | supabase | none",
   "settings.description.auth.provider": "Authentication provider: none | token | oidc | proxy",
   "settings.description.auth.oidc.issuer": "OIDC IdP issuer URL",
   "settings.description.auth.oidc.client_id": "OIDC client ID",
@@ -2575,7 +2586,7 @@ en: {
   "databackend.sb.key.ph": "Used for this test only; leave blank to use the matching server configuration",
   "databackend.test": "Test connection",
   "databackend.switch": "Save backend",
-  "databackend.configure.supabase": "Configure supabase.url in golive.yaml and GOLIVE_SUPABASE_SERVICE_KEY on the server, then select Supabase in Global settings and restart. Test inputs are never saved.",
+  "databackend.configure.supabase": "Configure supabase.url in golive.yaml and GOLIVE_SUPABASE_ANON_KEY (public key) on the server; add GOLIVE_SUPABASE_SERVICE_KEY for server operations if needed, then select Supabase in Global settings and restart. Test inputs are never saved.",
   "databackend.migrate.warn.title": "Data will not be migrated.",
   "databackend.migrate.warn.body": "Switching backends does not copy existing data. Use the command below to migrate data to the new backend. Source data is not deleted.",
   "databackend.migrate.hint": "Run this command to migrate:",
@@ -2646,13 +2657,22 @@ zh: {
   "dbcheck.running": "正在检查…",
   "dbcheck.configuration": "请完善连接配置",
   "dbcheck.failed": "连接检查未通过",
+  "dbcheck.sql_ok": "数据库读写检查通过。",
+  "dbcheck.sql_note": "探测记录已回滚，已有业务数据未修改。",
+  "dbcheck.sql_config_required": "请在服务端设置 GOLIVE_PG_DSN（PostgreSQL）或 GOLIVE_MYSQL_DSN（MySQL）后重启。尚未发起数据库连接。",
+  "dbcheck.sql_driver_missing": "请在服务端安装 html-golive[postgres] 或 html-golive[mysql]。",
+  "dbcheck.sql_config_invalid": "请检查服务端连接串格式、表名及 TLS 配置。",
+  "dbcheck.sql_auth_failed": "数据库认证失败，请检查服务端配置的账号与密码。",
+  "dbcheck.sql_permission_denied": "数据库权限不足，请检查建表及业务表读写权限。",
+  "dbcheck.sql_connection_failed": "无法连接数据库，请检查地址、端口、数据库名、网络及 TLS 配置。",
+  "dbcheck.sql_probe_failed": "数据库读写探测失败，请检查业务表结构及访问权限。",
   "dbcheck.sqlite_ok": "SQLite 本地读写与完整性检查通过。",
   "dbcheck.sqlite_note": "测试写入已回滚，未修改现有应用数据。",
   "dbcheck.supabase_ok": "Supabase Data API 已正常响应。",
   "dbcheck.supabase_note": "本次检查接口可达性与可见表元数据，不代表各表写入权限或 RLS 策略已通过验证。",
   "dbcheck.required": "请填写{fields}；尚未发起远程连接测试。",
   "dbcheck.key": "API 密钥",
-  "dbcheck.location": "数据库文件",
+  "dbcheck.location": "数据库位置",
   "dbcheck.latency": "检查耗时",
   "dbcheck.http": "HTTP 状态",
   "dbcheck.backend_disabled": "数据层已禁用，无需进行连接测试。",
@@ -2998,7 +3018,7 @@ zh: {
   "databackend.sb.key.ph": "仅用于本次测试；同一项目可留空使用服务端已有密钥",
   "databackend.test": "测试连接",
   "databackend.switch": "保存后端类型",
-  "databackend.configure.supabase": "请先在 golive.yaml 配置 supabase.url，并在服务端设置 GOLIVE_SUPABASE_SERVICE_KEY；再到全局参数选择 Supabase 后重启。连接测试中的 URL 和密钥不会保存。",
+  "databackend.configure.supabase": "请先在 golive.yaml 配置 supabase.url，并在服务端设置公开密钥 GOLIVE_SUPABASE_ANON_KEY（需要服务端权限时另配 GOLIVE_SUPABASE_SERVICE_KEY）；再到全局参数选择 Supabase 后重启。连接测试中的 URL 和密钥不会保存。",
   "databackend.migrate.warn.title": "数据不会自动迁移。",
   "databackend.migrate.warn.body": "切换后端不会复制已有数据。使用下方命令将数据迁移到新后端。源数据不会被删除。",
   "databackend.migrate.hint": "运行此命令进行迁移：",
@@ -4020,9 +4040,11 @@ en: {
     "supabase:",
     "  url: https://YOUR-PROJECT.supabase.co",
     "  # the key itself never goes in this file — see the env step below",
+    "  anon_key_env: GOLIVE_SUPABASE_ANON_KEY",
     "  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY"
   ].join("\n"),
   env: [
+    "export GOLIVE_SUPABASE_ANON_KEY='your-publishable-or-anon-key'",
     "export GOLIVE_SUPABASE_SERVICE_KEY='your-service-role-key'",
     "# make it permanent: append the line to ~/.bashrc or ~/.zshrc,",
     "# or put it in the environment of whatever supervises golive."
@@ -4044,10 +4066,12 @@ zh: {
     "supabase:",
     "  url: https://YOUR-PROJECT.supabase.co",
     "  # 密钥本身不要写在这个文件里，见下面的环境变量步骤",
+    "  anon_key_env: GOLIVE_SUPABASE_ANON_KEY",
     "  service_key_env: GOLIVE_SUPABASE_SERVICE_KEY"
   ].join("\n"),
   env: [
-    "export GOLIVE_SUPABASE_SERVICE_KEY='你的 service role key'",
+    "export GOLIVE_SUPABASE_ANON_KEY='你的 publishable 或 anon key'",
+    "export GOLIVE_SUPABASE_SERVICE_KEY='仅服务器使用的 service key'",
     "# 想长期生效：把这行追加到 ~/.bashrc 或 ~/.zshrc，",
     "# 或者写进托管 golive 的那个进程的环境变量里。"
   ].join("\n"),
@@ -4080,7 +4104,7 @@ function dataAgentPrompt(){
       (p.resolved ? "" :
         "- 注意：上面的路径没能自动识别，请先运行 `golive doctor` 确认真实路径。"),
       "",
-      "先问我一句想用哪种后端，再往下做：",
+      "选择 SQLite、PostgreSQL、MySQL 8.4+ 或 Supabase，再往下做：",
       "",
       "【方案 A：sqlite，零配置，本机自用推荐】",
       "1. 编辑（或创建）上面的配置文件，加入：",
@@ -4096,6 +4120,10 @@ function dataAgentPrompt(){
         "SQL editor 里执行。",
       "4. 验证：",
       snip("verify"),
+      "",
+      "【方案 C / D：PostgreSQL / MySQL 8.4+】",
+      "安装 html-golive[postgres] 或 html-golive[mysql]，通过服务器环境变量 GOLIVE_PG_DSN 或 GOLIVE_MYSQL_DSN 设置连接。",
+      "配置 registry.backend 与 data.backend 为 postgres 或 mysql，运行 golive db init、golive doctor、golive verify，再重启并重新发布页面。",
       "",
       "参考文档：" + docs,
       "如果哪一步失败，请把报错原文贴给我，不要跳过。"
@@ -4114,7 +4142,7 @@ function dataAgentPrompt(){
       "- Note: those paths could not be detected automatically — run " +
       "`golive doctor` first to confirm the real ones."),
     "",
-    "Ask me which backend I want, then proceed:",
+    "Choose SQLite, PostgreSQL, MySQL 8.4+ or Supabase, then proceed:",
     "",
     "[Option A: sqlite — zero config, best for a single machine]",
     "1. Edit (or create) the config file above and add:",
@@ -4130,6 +4158,10 @@ function dataAgentPrompt(){
       "execute it in the Supabase SQL editor.",
     "4. Verify:",
     snip("verify"),
+    "",
+    "[Option C / D: PostgreSQL / MySQL 8.4+]",
+    "Install html-golive[postgres] or html-golive[mysql]; set GOLIVE_PG_DSN or GOLIVE_MYSQL_DSN in the server environment.",
+    "Set registry.backend and data.backend to postgres or mysql. Run golive db init, doctor and verify, restart and republish.",
     "",
     "Reference docs: " + docs,
     "If any step fails, paste the exact error back to me instead of skipping it."
@@ -4746,7 +4778,7 @@ function renderBackendCheck(d){
     if (d.table_count != null) html += "<br>" + esc(t("databackend.test.ok.tables", {n:d.table_count}));
     if (d.location) html += '<div class="endpoint">' + esc(t("dbcheck.location")) + ": " + esc(d.location) + "</div>";
     if (d.latency_ms != null) html += '<div class="endpoint">' + esc(t("dbcheck.latency")) + ": " + esc(d.latency_ms) + " ms</div>";
-    html += "<br>" + esc(t(code === "sqlite_ok" ? "dbcheck.sqlite_note" : "dbcheck.supabase_note"));
+    html += "<br>" + esc(t(code === "sqlite_ok" ? "dbcheck.sqlite_note" : code === "sql_ok" ? "dbcheck.sql_note" : "dbcheck.supabase_note"));
     res.innerHTML = html;
     return;
   }

@@ -141,13 +141,66 @@ def check_supabase(data, cfg):
                             "Check the project URL, API key format and server network configuration.")
 
 
+def check_sql(backend, cfg):
+    """Probe the configured application table; rollback every probe row."""
+    import datetime
+    import os
+    from dataclasses import replace
+    from golive.backends.factory import get_template_store, sql_dsn_env
+    env = sql_dsn_env(cfg, backend)
+    if not os.environ.get(env, "").strip():
+        return 400, failure("sql_config_required", "The database DSN is not configured.",
+                            f"Set {env} in the server environment and restart. No database request was made.", backend=backend)
+    started = time.monotonic()
+    try:
+        store = get_template_store(replace(cfg, data=replace(cfg.data, backend=backend)))
+        ident = str(uuid.uuid4())
+        now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        with store._conn() as conn:
+            try:
+                conn.execute(f"INSERT INTO {store.table} "
+                             "(id,model_code,name,user_id,description,content,version,sort_index,created_at,updated_at) "
+                             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                             (ident, "__golive_probe", ident, "", "", '{"probe":true}', "1.0.0", 0, now, now))
+                row = conn.execute(f"SELECT id FROM {store.table} WHERE id=%s", (ident,)).fetchone()
+                if not row or row["id"] != ident:
+                    raise RuntimeError("probe row did not round-trip")
+            finally:
+                conn.rollback()
+        return 200, {"ok": True, "code": "sql_ok", "backend": backend,
+                     "location": f"{store.table} (via ${env})", "table_count": 1,
+                     "checks": ["read", "write", "rollback"],
+                     "latency_ms": int((time.monotonic() - started) * 1000)}
+    except ImportError:
+        return 400, failure("sql_driver_missing", "Database driver is not installed.",
+                            f"Install html-golive[{backend}] in the server environment.", backend=backend)
+    except ValueError:
+        return 400, failure("sql_config_invalid", "The database connection configuration is invalid.",
+                            "Check the DSN format, table name and TLS options on the server.", backend=backend)
+    except Exception as exc:
+        code = getattr(exc, "sqlstate", None)
+        number = exc.args[0] if exc.args and isinstance(exc.args[0], int) else None
+        if code in ("28P01", "28000") or number == 1045:
+            kind, error, hint = "sql_auth_failed", "Database authentication failed.", "Check the server-side database user and password."
+        elif code == "42501" or number in (1044, 1142, 1143):
+            kind, error, hint = "sql_permission_denied", "Database permissions are insufficient.", "Check table creation and read/write privileges."
+        elif number in (2002, 2003, 2006, 2013) or type(exc).__name__ == "OperationalError":
+            kind, error, hint = "sql_connection_failed", "The database connection failed.", "Check host, port, database name, network reachability and TLS settings."
+        else:
+            kind, error, hint = "sql_probe_failed", "The database read/write probe failed.", "Check the configured table schema, permissions and server diagnostics."
+        return 200, failure(kind, error, hint, backend=backend,
+                            latency_ms=int((time.monotonic() - started) * 1000))
+
+
 def check_data_backend(data, cfg):
     backend = str(data.get("backend") or ("supabase" if data.get("url") else cfg.data.backend) or "none")
     if backend == "sqlite":
         return 200, check_sqlite(cfg)
     if backend == "supabase":
         return check_supabase(data, cfg)
+    if backend in ("postgres", "mysql"):
+        return check_sql(backend, cfg)
     if backend == "none":
         return 200, {"ok": None, "status": "skipped", "code": "backend_disabled", "backend": "none"}
     return 400, failure("backend_unsupported", "Connection tests are not implemented for this backend.",
-                        "Choose SQLite or Supabase for this test.")
+                        "Choose SQLite, PostgreSQL, MySQL or Supabase for this test.")

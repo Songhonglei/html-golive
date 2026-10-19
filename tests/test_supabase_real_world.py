@@ -71,7 +71,7 @@ class TestStorageDecodesUtf8(unittest.TestCase):
         st = self._storage()
         captured = {}
 
-        def fake_post(url, data=None, headers=None, timeout=None):
+        def fake_post(url, data=None, headers=None, timeout=None, allow_redirects=False):
             captured["body"] = data
             return _Resp(b"", status=200)
 
@@ -259,7 +259,8 @@ class TestDryRunNeverInventsATargetCount(unittest.TestCase):
             store.create(model_code="m", name=f"r{i}", content={"i": i})
 
         # postgres without psycopg installed → target cannot be opened.
-        res = migrate_backend("data", "postgres", dry_run=True)
+        with mock.patch.dict(os.environ, {"GOLIVE_PG_DSN": ""}):
+            res = migrate_backend("data", "postgres", dry_run=True)
         self.assertTrue(res.get("dry_run"))
         self.assertEqual(res["source_count"], 3)
         self.assertIsNone(res["target_existing"])

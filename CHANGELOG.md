@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.7] - 2026-10-19
+
+Based on v0.9.6, including the current admin workspace and documentation updates.
+
+- Add MySQL 8.4+ data and site registry backends, the mysql optional dependency, server-side DSN configuration, admin diagnostics, HTTP data access and migration support.
+- Share parameter-bound SQL store contracts between PostgreSQL and MySQL and add real database, HTTP and migration acceptance tests plus MySQL and real Supabase CI services.
+- Make Supabase verification exercise public-key create/read/update/delete instead of skipping data; cleanup failures now fail verification.
+- Support opaque Supabase publishable/secret keys across server clients, Storage and injected browser APIs; keep JWT compatibility and reject credential-bearing redirects.
+- Allow public Supabase keys through backup restore scanning while blocking service/secret keys from browser injection.
+- Make SQL schema printing work without a database connection or driver.
+- Fix literal percent/underscore prefix handling consistently across SQLite and SQL backends.
+- Recognize CodeBuddy / WorkBuddy project skills, ship a MySQL agent runbook, and refresh both GitHub landing pages for four-backend setup and verification.
+
+
 ## [0.9.6] - 2026-10-14
 
 Documentation-only patch; runtime behavior is unchanged from 0.9.5.

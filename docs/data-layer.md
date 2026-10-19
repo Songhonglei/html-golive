@@ -11,11 +11,12 @@ Three backends provide it, and they come in two shapes:
 |---|---|---|
 | `sqlite` | server-proxied | none — the default |
 | `postgres` | server-proxied | your own PostgreSQL via `$GOLIVE_PG_DSN` |
+| `mysql` | server-proxied | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN` (MySQL 8.4+) |
 | `supabase` | page-direct | Supabase project + anon key |
 
-**Server-proxied** (`sqlite`, `postgres`): the server owns the database
+**Server-proxied** (`sqlite`, `postgres`, `mysql`): the server owns the database
 connection and the page calls golive's own `/api/data`. No credentials —
-and no Postgres DSN — reach the browser. The injected JS is identical
+and no database DSN — reach the browser. The injected JS is identical
 between the two, so switching is a config change.
 
 **Page-direct** (`supabase`): the page talks to your Supabase project

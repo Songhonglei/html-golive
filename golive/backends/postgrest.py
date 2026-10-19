@@ -20,6 +20,14 @@ import requests
 DEFAULT_TIMEOUT = 15
 
 
+def supabase_headers(key: str) -> dict:
+    """Opaque publishable/secret keys are API keys, not JWT bearer tokens."""
+    headers = {"apikey": key}
+    if key.startswith("eyJ") and key.count(".") == 2:
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
+
+
 class PostgrestError(RuntimeError):
     def __init__(self, message: str, status: int = 0):
         super().__init__(message)
@@ -42,11 +50,7 @@ class PostgrestClient:
     # ── plumbing ────────────────────────────────────────────────────────────
 
     def _headers(self, extra: Optional[dict] = None) -> dict:
-        h = {
-            "apikey": self.key,
-            "Authorization": f"Bearer {self.key}",
-            "Content-Type": "application/json",
-        }
+        h = {**supabase_headers(self.key), "Content-Type": "application/json"}
         if extra:
             h.update(extra)
         return h
@@ -57,13 +61,15 @@ class PostgrestClient:
         resp = requests.request(
             method, url, params=params or {},
             data=json.dumps(body) if body is not None else None,
-            headers=self._headers(headers), timeout=self.timeout)
-        if resp.status_code >= 400:
+            headers=self._headers(headers), timeout=self.timeout,
+            allow_redirects=False)
+        if resp.status_code >= 300:
             try:
                 detail = resp.json()
                 msg = detail.get("message") or detail.get("hint") or resp.text
             except ValueError:
                 msg = resp.text
+            msg = str(msg).replace(self.key, "[REDACTED]")[:500]
             raise PostgrestError(
                 f"PostgREST {method} {table} failed "
                 f"(HTTP {resp.status_code}): {msg}", resp.status_code)

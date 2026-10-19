@@ -295,7 +295,9 @@ def _apply_data_layers(html: str, args) -> str:
                 # Same wire shape for every server-proxied backend, but the
                 # rows land somewhere different — say where, or people go
                 # looking for their data in the wrong database.
-                if cfg.data.backend == "postgres":
+                if cfg.data.backend == "mysql":
+                    print(t("publish.tpl_mysql_hint", env=cfg.registry.mysql_dsn_env))
+                elif cfg.data.backend == "postgres":
                     print(t("publish.tpl_postgres_hint",
                             env=cfg.registry.postgres_dsn_env
                             or "GOLIVE_PG_DSN"))
@@ -931,13 +933,13 @@ def _doctor_registry_info(cfg) -> dict:
             out["backend"] = "sqlite"
             out["location"] = str(get_registry_db())
             reg = SqliteRegistry()
-        elif backend == "postgres":
+        elif backend in ("postgres", "mysql"):
             # Postgres creates a plain `sites` table; golive_sites is the
             # Supabase name and reporting it here misleads operators.
             # Set location before connecting so a connection error still
             # tells the operator which table/env var was being used.
-            dsn_env = getattr(cfg.registry, "postgres_dsn_env",
-                              "") or "GOLIVE_PG_DSN"
+            from golive.backends.factory import sql_dsn_env
+            dsn_env = sql_dsn_env(cfg, backend)
             out["location"] = f"sites (via ${dsn_env})"
             from golive.backends.factory import get_registry
             reg = get_registry(cfg)
@@ -992,32 +994,21 @@ def _doctor_data_info(cfg) -> dict:
             out["detail"] = t("doctor.data.tables_rows",
                               tables=len(names), rows=rows,
                               size=_fmt_bytes(db.stat().st_size))
-        elif backend == "postgres":
-            # Report what an operator can act on: which env var holds the DSN,
-            # whether we can actually connect, the server version and the real
-            # row count. The DSN itself is never echoed (it carries a password).
-            import os as _os
-            table = getattr(cfg.data, "templates_table", "") \
-                or "golive_templates"
-            dsn_env = getattr(cfg.registry, "postgres_dsn_env",
-                              "") or "GOLIVE_PG_DSN"
-            out["location"] = f"{table} (via ${dsn_env})"
-            if not _os.environ.get(dsn_env, "").strip():
+        elif backend in ("postgres", "mysql"):
+            from golive.backends.factory import get_template_store, sql_dsn_env
+            import os
+            dsn_env = sql_dsn_env(cfg, backend)
+            out["location"] = f"{cfg.data.templates_table} (via ${dsn_env})"
+            if not os.environ.get(dsn_env, "").strip():
                 out["error"] = f"${dsn_env} is not set"
                 return out
-            from golive.backends._pg import pg_connect
-            with pg_connect(dsn_env) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SHOW server_version")
-                    row = cur.fetchone()
-                    server = (row[0] if isinstance(row, tuple)
-                              else list(row.values())[0]) if row else "?"
-                    cur.execute(f'SELECT COUNT(*) AS n FROM "{table}"')
-                    row = cur.fetchone()
-                    rows = (row[0] if isinstance(row, tuple)
-                            else row.get("n", 0)) if row else 0
-            out["tables"], out["rows"] = 1, rows
-            out["detail"] = f"connected, PostgreSQL {server}, {rows} rows"
+            store = get_template_store(cfg)
+            with store._conn() as conn:
+                version = conn.execute("SELECT VERSION() AS version").fetchone()["version"]
+                row = conn.execute(f"SELECT COUNT(*) AS n FROM {store.table}").fetchone()
+            out["tables"], out["rows"] = 1, row["n"]
+            label = "PostgreSQL" if backend == "postgres" else "MySQL"
+            out["detail"] = f"connected, {label} {version}, {row['n']} rows"
         elif backend == "supabase":
             out["location"] = (getattr(cfg.data, "templates_table", "")
                                or "golive_templates")
@@ -1474,8 +1465,39 @@ def cmd_db(args) -> int:
     reg_table = cfg.registry.supabase_table or REG_TABLE
     tpl_table = cfg.data.templates_table or TPL_TABLE
 
+    # Rendering DDL must also work before credentials/drivers are installed.
+    if args.print_sql and any(b in ("postgres", "mysql")
+                              for b in (cfg.registry.backend, cfg.data.backend)):
+        import importlib
+        for layer, backend in (("registry", cfg.registry.backend), ("data", cfg.data.backend)):
+            if backend not in ("postgres", "mysql", "supabase"):
+                continue
+            module = ("supabase" if layer == "data" else "supabase_store") if backend == "supabase" else backend + "_store"
+            schema = importlib.import_module(f"golive.backends.{layer}.{module}").CREATE_TABLE_SQL
+            table = tpl_table if layer == "data" else reg_table
+            if layer == "data" and backend == "mysql":
+                import re
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", table):
+                    raise ValueError("Invalid MySQL table name")
+            print(schema.format(table=table))
+        return 0
+
     # Postgres backends create tables on first use (like SQLite) but need
     # psycopg installed and GOLIVE_PG_DSN set.
+    if "mysql" in (cfg.registry.backend, cfg.data.backend):
+        from golive.backends.factory import get_registry, get_template_store
+        try:
+            if cfg.registry.backend == "mysql":
+                get_registry(cfg)
+                print("MySQL registry table ready")
+            if cfg.data.backend == "mysql":
+                get_template_store(cfg)
+                print("MySQL data table ready")
+        except (ImportError, RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if not args.print_sql and "postgres" not in (cfg.registry.backend, cfg.data.backend):
+            return 0
     pg_registry = cfg.registry.backend == "postgres"
     pg_data = cfg.data.backend == "postgres"
     if pg_registry or pg_data:
@@ -1811,7 +1833,7 @@ def _verify_http(port: int, method: str, path: str, body=None,
         return status, raw
 
 
-def cmd_verify(args) -> int:
+def _run_verify(args):
     """golive verify — end-to-end self-check.
 
     Really runs the full chain: start a temporary server, /health, publish
@@ -1829,6 +1851,12 @@ def cmd_verify(args) -> int:
     from golive.backends.factory import (data_backend_ready,
                                          is_server_proxied_data)
     from golive.server.app import make_server, _health_payload
+
+    def _result(steps, want_json, exit_code=0, success_msg=None, keep=False, port=None, site_id=None):
+        # Keep the same steps object so finally/cleanup can affect the outcome
+        # before anything is printed or an exit code is chosen.
+        return dict(steps=steps, exit_code=exit_code, success_msg=success_msg,
+                    keep=keep, port=port, site_id=site_id)
 
     cfg = get_config()
     keep = getattr(args, "keep", False)
@@ -1850,10 +1878,19 @@ def cmd_verify(args) -> int:
     test_site_id = None
     test_row_id = None
     store = None
+    remote_verify_client = None
 
     # Determine backend shape up front for messaging
     ready, backend_label = data_backend_ready(cfg)
     proxied = is_server_proxied_data(cfg)
+
+    if cfg.data.backend == "mysql":
+        from golive.backends.factory import get_template_store
+        try:
+            get_template_store(cfg)
+        except Exception as exc:
+            _record("preflight", False, str(exc))
+            return _result(steps, want_json, exit_code=1)
 
     # ── postgres preflight (before starting a server) ──
     if cfg.data.backend == "postgres":
@@ -1862,13 +1899,13 @@ def cmd_verify(args) -> int:
         if not _os.environ.get(dsn_env, "").strip():
             msg = t("verify.postgres_no_dsn")
             _record("preflight", False, msg)
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
         try:
             import psycopg  # noqa: F401
         except ImportError:
             msg = t("verify.postgres_no_driver")
             _record("preflight", False, msg)
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
 
     # ── data.backend: none ──
     if cfg.data.backend == "none":
@@ -1880,7 +1917,7 @@ def cmd_verify(args) -> int:
         # Supabase configured but not ready (missing url/key)
         msg = t("verify.supabase_skip")
         _record("supabase", False, msg)
-        return _verify_finish(steps, want_json, exit_code=1)
+        return _result(steps, want_json, exit_code=1)
 
     try:
         # 1. Start a temporary server
@@ -1892,7 +1929,7 @@ def cmd_verify(args) -> int:
             _record("server", True, t("verify.server_started", port=port))
         except Exception as e:
             _record("server", False, t("verify.server_failed", error=e))
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
 
         # 2. /health real request
         try:
@@ -1906,12 +1943,12 @@ def cmd_verify(args) -> int:
                         t("verify.health_mismatch",
                           cli_version=cli_version,
                           server_version=srv_version))
-                return _verify_finish(steps, want_json, exit_code=1)
+                return _result(steps, want_json, exit_code=1)
             _record("health", True,
                     t("verify.health_ok", version=srv_version or cli_version))
         except Exception as e:
             _record("health", False, t("verify.health_failed", error=e))
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
 
         # 3. Publish a test page with TemplateAPI injection
         test_html = (
@@ -1941,7 +1978,7 @@ def cmd_verify(args) -> int:
                     t("verify.publish_ok", site_id=test_site_id))
         except Exception as e:
             _record("publish", False, t("verify.publish_failed", error=e))
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
 
         # 4. Inspect injection: check mode, baseUrl, no leaked secrets
         try:
@@ -1966,15 +2003,15 @@ def cmd_verify(args) -> int:
                         t("verify.inject_bad_mode",
                           mode=actual_mode, expected=expected_mode,
                           backend=cfg.data.backend))
-                return _verify_finish(steps, want_json, exit_code=1)
+                return _result(steps, want_json, exit_code=1)
 
             # Check for leaked secrets
-            for secret in ("GOLIVE_PG_DSN", "postgresql://", "postgres://",
+            for secret in ("GOLIVE_MYSQL_DSN", "mysql://", "GOLIVE_PG_DSN", "postgresql://", "postgres://",
                            "GOLIVE_SUPABASE_ANON_KEY", "service_role"):
                 if secret in js and cfg.data.backend != "supabase":
                     _record("inject", False,
                             t("verify.inject_leaked", secret=secret))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
 
             # For supabase, the anon key is expected in the page —
             # only flag it as a leak for server-proxied backends
@@ -1987,15 +2024,44 @@ def cmd_verify(args) -> int:
         except Exception as e:
             _record("inject", False,
                     t("verify.publish_failed", error=f"injection check: {e}"))
-            return _verify_finish(steps, want_json, exit_code=1)
+            return _result(steps, want_json, exit_code=1)
 
         # 5. Data round-trip: write → read → delete
         if cfg.data.backend == "none":
             # No data layer — skip this step, it's not a failure
             _record("data", True, "(data.backend: none — skipped)")
         elif cfg.data.backend == "supabase":
-            # Supabase: pages call Supabase directly, /api/data is not used
-            _record("data", True, t("verify.supabase_skip"))
+            # Use exactly the public key shipped to the browser, never the
+            # service key: a service-role write would not test the RLS path.
+            from golive.backends.postgrest import PostgrestClient
+            remote_verify_client = PostgrestClient(cfg.supabase.url, cfg.supabase.anon_key)
+            table = cfg.data.templates_table or "golive_templates"
+            try:
+                import uuid as _uuid
+                content = {"verify": True, "text": "中文 · 🧪", "ts": time.time()}
+                rows = remote_verify_client.insert(table, {
+                    "model_code": "verify_test", "name": "verify-" + _uuid.uuid4().hex,
+                    "user_id": cfg.data.user_id or "", "content": content})
+                if not rows or not rows[0].get("id"):
+                    raise RuntimeError("INSERT returned no row; check grants and RLS policies")
+                test_row_id = rows[0]["id"]
+                filters = {"id": "eq." + str(test_row_id)}
+                rows, _ = remote_verify_client.select(table, filters)
+                if not rows or rows[0].get("content") != content:
+                    raise RuntimeError("Public-key read did not return the inserted content")
+                changed = {**content, "updated": True}
+                rows = remote_verify_client.update(table, filters, {"content": changed})
+                if not rows or rows[0].get("content") != changed:
+                    raise RuntimeError("Public-key UPDATE did not persist the changed content")
+                deleted = remote_verify_client.delete(table, filters)
+                rows, _ = remote_verify_client.select(table, filters)
+                if deleted != 1 or rows:
+                    raise RuntimeError("Public-key DELETE did not remove the test row")
+                test_row_id = None
+                _record("data", True, "Supabase public-key create/read/update/delete passed (grants + RLS path).")
+            except Exception as exc:
+                _record("data", False, str(exc))
+                return _result(steps, want_json, exit_code=1)
         elif proxied:
             # sqlite / postgres: real write → read → delete via /api/data
             table = cfg.data.templates_table or "golive_templates"
@@ -2014,14 +2080,14 @@ def cmd_verify(args) -> int:
                     _record("data", False,
                             t("verify.data_write_failed",
                               table=table, status=st, detail=detail))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
                 created = payload[0] if isinstance(payload, list) and payload else payload
                 test_row_id = created.get("id")
             except Exception as e:
                 _record("data", False,
                         t("verify.data_write_failed",
                           table=table, status="exc", detail=str(e)))
-                return _verify_finish(steps, want_json, exit_code=1)
+                return _result(steps, want_json, exit_code=1)
 
             try:
                 # Read back
@@ -2033,13 +2099,13 @@ def cmd_verify(args) -> int:
                     _record("data", False,
                             t("verify.data_read_failed",
                               table=table, status=st, detail=detail))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
                 rows = payload if isinstance(payload, list) else []
                 if not rows:
                     _record("data", False,
                             t("verify.data_mismatch",
                               wrote=str(test_content), read="[]"))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
                 read_content = rows[0].get("content")
                 # content may come back as dict or string
                 if isinstance(read_content, str):
@@ -2053,12 +2119,12 @@ def cmd_verify(args) -> int:
                             t("verify.data_mismatch",
                               wrote=str(test_content),
                               read=str(read_content)))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
             except Exception as e:
                 _record("data", False,
                         t("verify.data_read_failed",
                           table=table, status="exc", detail=str(e)))
-                return _verify_finish(steps, want_json, exit_code=1)
+                return _result(steps, want_json, exit_code=1)
 
             try:
                 # Delete
@@ -2069,14 +2135,14 @@ def cmd_verify(args) -> int:
                     _record("data", False,
                             t("verify.data_delete_failed",
                               table=table, status=st, detail=""))
-                    return _verify_finish(steps, want_json, exit_code=1)
+                    return _result(steps, want_json, exit_code=1)
                 test_row_id = None  # mark as cleaned
                 _record("data", True, t("verify.data_ok"))
             except Exception as e:
                 _record("data", False,
                         t("verify.data_delete_failed",
                           table=table, status="exc", detail=str(e)))
-                return _verify_finish(steps, want_json, exit_code=1)
+                return _result(steps, want_json, exit_code=1)
         else:
             _record("data", True, "(skipped — unknown backend shape)")
 
@@ -2089,7 +2155,7 @@ def cmd_verify(args) -> int:
             success_msg = t("verify.success", backend=backend_label)
 
         _record("result", True, success_msg)
-        return _verify_finish(steps, want_json, exit_code=0,
+        return _result(steps, want_json, exit_code=0,
                               success_msg=success_msg, keep=keep,
                               port=port, site_id=test_site_id)
 
@@ -2105,6 +2171,13 @@ def cmd_verify(args) -> int:
                                  f"/api/data/{table}?id=eq.{test_row_id}")
                 except Exception as e:
                     cleanup_errors.append(f"data row: {e}")
+            if test_row_id is not None and remote_verify_client is not None:
+                try:
+                    removed = remote_verify_client.delete(cfg.data.templates_table, {"id": "eq." + str(test_row_id)})
+                    if removed != 1:
+                        cleanup_errors.append(f"Remove test row {test_row_id} from {cfg.data.templates_table}: public-key cleanup was not confirmed")
+                except Exception:
+                    cleanup_errors.append("Supabase test row cleanup failed; remove the verify_test row manually")
             # Delete test site
             if test_site_id is not None:
                 try:
@@ -2130,6 +2203,15 @@ def cmd_verify(args) -> int:
                         t("verify.cleanup_partial",
                           error="; ".join(cleanup_errors)))
             # else: already failing, cleanup note is secondary
+
+
+def cmd_verify(args) -> int:
+    result = _run_verify(args)
+    failed = result["exit_code"] != 0 or any(not step["ok"] for step in result["steps"])
+    return _verify_finish(result["steps"], getattr(args, "json", False),
+                          exit_code=1 if failed else 0,
+                          success_msg=None if failed else result["success_msg"],
+                          keep=result["keep"], port=result["port"], site_id=result["site_id"])
 
 
 def _verify_finish(steps, want_json, exit_code=0, success_msg=None,
@@ -2550,7 +2632,7 @@ def main(argv=None) -> int:
     p.add_argument("layer", choices=["data", "registry"],
                    help="Which layer to migrate")
     p.add_argument("--to", required=True,
-                   choices=["sqlite", "postgres", "supabase"],
+                   choices=["sqlite", "postgres", "mysql", "supabase"],
                    help="Target backend")
     p.add_argument("--dry-run", action="store_true",
                    help="Report what would happen without writing anything")

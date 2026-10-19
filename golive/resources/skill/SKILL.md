@@ -3,7 +3,7 @@ name: html-golive
 slug: html-golive
 displayName: html-golive
 description: Publish, update and manage HTML pages on a self-hosted golive instance through the local `golive` CLI. golive runs entirely on the user's own machine or server — it is not a hosted service and has no relation to any online deployment platform or to any similarly named internal tool. Use when the user wants to put an HTML file, project directory or archive online on their own infrastructure, update or roll back a site they already published, give a static page real data persistence via `window.TemplateAPI`, or administer sites, owners and maintainers. Trigger phrases include "publish this page", "deploy this HTML", "put this on golive", "update the site", "roll it back", "golive".
-version: 0.9.6
+version: 0.9.7
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---
@@ -48,6 +48,11 @@ reports a different version, use `golive skill install --force --target
 <skills-directory>` to refresh it (the old copy is backed up). For a
 project virtual environment, activate it before running these commands.
 Use `golive context` to inspect effective paths and backends.
+
+For CodeBuddy / WorkBuddy projects, open the project in that agent and run
+`golive skill install --target .codebuddy/skills` from its root. Reload the
+project so the agent loads this skill. MySQL setup and acceptance:
+`references/mysql.md`.
 
 ## Step 2 — core workflows
 
@@ -197,6 +202,7 @@ golive data delete --id <row-id>
 |---|---|---|
 | `sqlite` | **default** | none — rows go to `$GOLIVE_HOME/data.db`, table auto-created |
 | `postgres` | the user already has a PostgreSQL they want to use | `pip install 'html-golive[postgres]'` + `GOLIVE_PG_DSN` |
+| `mysql` | an existing MySQL 8.4+ database | `pip install 'html-golive[mysql]'` + `GOLIVE_MYSQL_DSN` (MySQL 8.4+) |
 | `supabase` | shared across machines, or the page is served elsewhere | Supabase project + schema + keys |
 | `none` | disable the data layer entirely | opt-in only |
 
@@ -221,6 +227,13 @@ export GOLIVE_PG_DSN='postgresql://user:pass@host:5432/dbname'
 Tables are created on first use; `content` is stored as JSONB. Never put the
 DSN in `golive.yaml` — it carries a password; keep it in the environment.
 
+For MySQL 8.4+, set both backend values to `mysql`, install
+`html-golive[mysql]`, and set `GOLIVE_MYSQL_DSN=mysql://user:password@host:3306/dbname`.
+Use a real database/user with DDL and CRUD grants. Remote connections verify TLS;
+URL-encode reserved characters in credentials. Run `golive db init`,
+`golive doctor`, then `golive verify --json`. Restart the server and republish
+existing pages after changing backends; switching does not migrate rows.
+
 To switch to Supabase:
 
 ```yaml
@@ -232,7 +245,7 @@ data:
 ```
 
 ```bash
-export GOLIVE_SUPABASE_ANON_KEY=...      # embedded in the page JS
+export GOLIVE_SUPABASE_ANON_KEY=...      # public publishable/anon key, embedded in page JS
 export GOLIVE_SUPABASE_SERVICE_KEY=...   # CLI only, optional
 golive db init --print-sql               # run the SQL in Supabase
 ```

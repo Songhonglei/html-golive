@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>html-golive — self-hosted one-command HTML deployment</title>
-<meta name="description" content="Publish, secure, edit and manage static HTML pages on your own infrastructure. One pip install, one command, no cloud account required.">
+<meta name="description" content="v0.9.7: self-hosted HTML deployment with SQLite, PostgreSQL, MySQL and Supabase, plus a light/dark admin workspace.">
 <link rel="alternate" hreflang="en" href="index.html">
 <link rel="alternate" hreflang="zh-CN" href="index.zh.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
@@ -27,6 +27,7 @@ a:hover{text-decoration:underline}
 nav{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 nav .wrap{display:flex;align-items:center;gap:28px;height:60px}
 .brand{font-weight:700;font-size:16px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;color:var(--text)}
+.brand{white-space:nowrap;flex-shrink:0}
 .brand:hover{text-decoration:none}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
 nav .links{display:flex;gap:22px;margin-left:auto;font-size:14px}
@@ -35,6 +36,7 @@ nav .links a:hover{color:var(--text);text-decoration:none}
 nav .links a.lang-link{border:1px solid var(--line);border-radius:6px;padding:2px 9px;font-size:13px}
 nav .links a.lang-link:hover{border-color:var(--dim);color:var(--text)}
 @media(max-width:720px){nav .links a.hide-sm{display:none}}
+@media(max-width:480px){nav .wrap{gap:12px}nav .links{gap:12px}nav .links a:first-child,nav .links a[href^="https:"]{display:none}}
 
 /* ── hero ────────────────────────────────────────── */
 header{padding:88px 0 64px;border-bottom:1px solid var(--line);
@@ -134,7 +136,8 @@ footer a{color:var(--muted)}
   <p class="tagline">
     Self-hosted, one-command HTML deployment. Publishing, versioned rollback,
     an in-browser editor, a database for static pages, security scanning and an
-    admin console — all on infrastructure you own.
+    light/dark admin workspace. v0.9.7 supports SQLite, PostgreSQL, MySQL 8.4+
+    and Supabase through one stable page API.
   </p>
   <div class="cta">
     <a class="btn primary" href="#quickstart">Get started →</a>
@@ -145,14 +148,14 @@ footer a{color:var(--muted)}
     <div class="term">
       <div class="term-bar"><i></i><i></i><i></i><span>~/reports</span></div>
       <pre><span class="p">$</span> <span class="c">pip install html-golive</span>
-<span class="p">$</span> <span class="c">golive publish q3-report.html</span>
+<span class="p">$</span> <span class="c">golive publish q3-report.html --slug q3-report</span>
 
 <span class="o">🔍 scanning for secrets… clean</span>
 <span class="o">🎨 style: minimal · assets bundled (4 → 1 file)</span>
 <span class="o">📦 published</span>
 
 <span class="k">   slug</span>      q3-report
-<span class="k">   url </span>      <span class="u">http://localhost:8787/s/q3-report</span>
+<span class="k">   url </span>      <span class="u">http://localhost:8787/q3-report</span>
 <span class="k">   size</span>      86 KB · snapshot #1 saved</pre>
     </div>
     <button class="copy" data-copy="pip install html-golive">Copy</button>
@@ -171,10 +174,10 @@ footer a{color:var(--muted)}
   <div class="grid">
     <div class="card"><span class="ic">🔒</span><h3>Your data stays put</h3>
       <p>Runs entirely on your own machine or server. No account, no telemetry, no outbound calls by default — works airgapped.</p></div>
-    <div class="card"><span class="ic">🪶</span><h3>Zero dependencies to start</h3>
-      <p>The core install is standard-library only. Local filesystem plus SQLite; no database or object store to provision.</p></div>
+    <div class="card"><span class="ic">🪶</span><h3>Zero configuration to start</h3>
+      <p>Start with local files and SQLite out of the box. No database service or object store to provision.</p></div>
     <div class="card"><span class="ic">📈</span><h3>Grows with you</h3>
-      <p>Swap in Supabase or any S3-compatible store (MinIO, COS, OSS, TOS) with one yaml file. Same commands, bigger backend.</p></div>
+      <p>Choose SQLite, PostgreSQL, MySQL or Supabase in configuration. Store HTML separately on local files, Supabase Storage or S3-compatible storage.</p></div>
   </div>
 </div></section>
 
@@ -187,13 +190,13 @@ footer a{color:var(--muted)}
     <div class="card"><span class="ic">✏️</span><h3>Edit in the browser</h3>
       <p>Owners and maintainers get an inline editor on the live page — fix a typo without touching the source file. Saves are scanned and snapshotted.</p></div>
     <div class="card"><span class="ic">🗄️</span><h3>A database for static pages</h3>
-      <p><code>window.TemplateAPI</code> and <code>window.SupabaseAPI</code> are injected into your page, so plain HTML can read and write real rows.</p></div>
+      <p>A stable <code>window.TemplateAPI</code> provides CRUD. SQLite / PG / MySQL use a server proxy; Supabase uses public keys governed by RLS.</p></div>
     <div class="card"><span class="ic">🛡️</span><h3>Secrets scanning</h3>
       <p>Rule-based detection of API keys, tokens and personal data before anything goes live — with optional LLM second-pass review.</p></div>
     <div class="card"><span class="ic">🎨</span><h3>19 built-in styles</h3>
       <p>Turn an unstyled document into something presentable with <code>--style</code>. Fonts come from public CDNs or your own mirror.</p></div>
     <div class="card"><span class="ic">🧑‍💼</span><h3>Admin console</h3>
-      <p>A self-contained web portal at <code>/admin</code>: all sites, ownership transfer, maintainers, rollback, stats and an audit trail.</p></div>
+      <p>A light/dark, bilingual workspace at <code>/admin</code>: editable global settings, sites, permissions, data and precise database diagnostics.</p></div>
     <div class="card"><span class="ic">🔑</span><h3>Real authentication</h3>
       <p>Static token for quick setups, or OIDC with one-line presets for Google, Auth0, Okta, Azure AD, Keycloak and Authentik.</p></div>
     <div class="card"><span class="ic">🕸️</span><h3>Clone any page</h3>
@@ -203,12 +206,18 @@ footer a{color:var(--muted)}
   </div>
 </div></section>
 
+<section id="admin"><div class="wrap">
+  <h2>Your admin workspace</h2>
+  <p class="sub">Light/dark themes, English and Chinese, editable global settings and diagnostics for all four databases.</p>
+  <img src="assets/admin-portal.png" alt="Your admin workspace" loading="lazy" style="display:block;width:100%;height:auto;border-radius:12px">
+</div></section>
+
 <section id="quickstart"><div class="wrap">
   <h2>Quickstart</h2>
   <p class="sub">Three steps, about a minute. No configuration file needed to begin.</p>
   <div class="steps">
     <div class="step"><h3>Install</h3>
-      <p>Python 3.9 or newer. Optional extras add image compression and S3 support.</p>
+      <p>Python 3.9+. Use <code>html-golive[mysql]</code> for MySQL or <code>html-golive[postgres]</code> for PostgreSQL.</p>
       <div class="term-wrap"><div class="snip"><span class="p">$</span> pip install html-golive</div>
         <button class="copy" data-copy="pip install html-golive">Copy</button></div></div>
     <div class="step"><h3>Publish a page</h3>
@@ -216,10 +225,10 @@ footer a{color:var(--muted)}
       <div class="term-wrap"><div class="snip"><span class="p">$</span> golive publish report.html --style minimal</div>
         <button class="copy" data-copy="golive publish report.html --style minimal">Copy</button></div></div>
     <div class="step"><h3>Serve it</h3>
-      <p>Binds to localhost by default. Add <code>--host 0.0.0.0</code> when you're ready to share — pair it with a token or OIDC.</p>
-      <div class="term-wrap"><div class="snip"><span class="p">$</span> golive serve
+      <p>Use an explicit <code>127.0.0.1</code> listener for local checks. Saved configuration can change defaults; configure access control before sharing.</p>
+      <div class="term-wrap"><div class="snip"><span class="p">$</span> golive serve --host 127.0.0.1 --port 8787
 <span class="o">🚀 http://localhost:8787/  ·  admin portal: /admin</span></div>
-        <button class="copy" data-copy="golive serve">Copy</button></div></div>
+        <button class="copy" data-copy="golive serve --host 127.0.0.1 --port 8787">Copy</button></div></div>
   </div>
 </div></section>
 
@@ -236,10 +245,12 @@ footer a{color:var(--muted)}
       <li><b>s3</b> MinIO / COS / OSS / TOS</li></ul></div>
     <div class="layer"><h4>Registry</h4><ul>
       <li><b>sqlite</b> single file (default)</li>
-      <li><b>supabase</b> Postgres table</li></ul></div>
+      <li><b>postgres / mysql</b> server-side DSN</li>
+      <li><b>supabase</b> PostgREST table</li></ul></div>
     <div class="layer"><h4>Data</h4><ul>
-      <li><b>none</b> static pages only</li>
-      <li><b>postgrest</b> Supabase / any PostgREST</li></ul></div>
+      <li><b>sqlite / postgres / mysql</b> server proxy</li>
+      <li><b>supabase</b> page-direct, GRANT + RLS</li>
+      <li><b>none</b> optional data-layer disable</li></ul></div>
     <div class="layer"><h4>Identity</h4><ul>
       <li><b>none</b> loopback-only access</li>
       <li><b>token</b> shared bearer token</li>
@@ -247,9 +258,16 @@ footer a{color:var(--muted)}
   </div>
 </div></section>
 
+<section id="mysql"><div class="wrap">
+  <h2>Verify MySQL with your agent</h2>
+  <p class="sub">Pin v0.9.7, initialize a dedicated test database, then confirm real persistence through the browser and SQL.</p>
+  <div class="term-wrap"><div class="snip">python3 -m pip install 'html-golive[mysql]==0.9.7'<br>golive skill install --target .codebuddy/skills</div></div>
+  <div class="cta"><a class="btn primary" href="https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md">WorkBuddy acceptance guide →</a><a class="btn ghost" href="https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md">Four-backend setup</a></div>
+</div></section>
+
 <section id="commands"><div class="wrap">
   <h2>Command reference</h2>
-  <p class="sub">Thirteen commands cover the whole lifecycle. Full detail lives in the user manual.</p>
+  <p class="sub">Publishing, serving, data, migration and diagnostics for the full workflow.</p>
   <table>
     <tr><th>Command</th><th>What it does</th></tr>
     <tr><td><code>publish</code></td><td>Scan, style, bundle and deploy an HTML file</td></tr>
@@ -263,6 +281,9 @@ footer a{color:var(--muted)}
     <tr><td><code>styles</code></td><td>List the 19 built-in visual styles</td></tr>
     <tr><td><code>data</code> / <code>db</code></td><td>Inspect and manage the data backend</td></tr>
     <tr><td><code>migrate-check</code></td><td>Find environment-specific references in an HTML file</td></tr>
+    <tr><td><code>verify</code></td><td>Real HTTP, page injection and database self-checks</td></tr>
+    <tr><td><code>export / import / migrate</code></td><td>Backup, restore and change backends</td></tr>
+    <tr><td><code>skill</code></td><td>Install and check the bundled AgentSkill</td></tr>
     <tr><td><code>doctor</code></td><td>Diagnose configuration and connectivity</td></tr>
   </table>
 </div></section>
@@ -270,7 +291,7 @@ footer a{color:var(--muted)}
 <section id="get"><div class="wrap" style="text-align:center">
   <h2>Try it</h2>
   <p class="sub" style="margin:0 auto 30px">
-    MIT licensed. 413 tests, CI on Python 3.9 / 3.11 / 3.12.
+    MIT licensed. Real tests for all four backends; Linux / macOS CI on Python 3.9 / 3.11 / 3.12.
     Issues and pull requests welcome.
   </p>
   <div class="cta">

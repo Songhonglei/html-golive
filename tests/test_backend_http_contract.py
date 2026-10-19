@@ -75,7 +75,10 @@ def test_publish_page_http_crud_and_admin(live):
     assert requests.get(url,params={'id':'eq.'+ident},timeout=10).json()==[]
 
 
-def test_verify_database_probe_and_no_probe_residue(live):
+def test_verify_database_probe_and_no_probe_residue(live, monkeypatch):
+    # This exact float is normalized by MySQL JSON; random timestamps hid the bug.
+    import time
+    monkeypatch.setattr(time, "time", lambda: 1792415292.8981361)
     from golive.server.connection_checks import check_data_backend
     before=live.data.query({},limit=1000,want_count=True)[1]
     status,result=check_data_backend({'backend':live.backend},live.cfg)

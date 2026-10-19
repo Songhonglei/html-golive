@@ -10,9 +10,9 @@
 Turn any HTML file, project folder or zip archive into a shareable URL on
 your own machine, NAS, VPS or intranet server.
 
-**v0.9.7: four databases, one page API.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. Manage everything in the light/dark admin workspace.
+**v0.9.7.post1: four databases, one page API.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. Manage everything in the light/dark admin workspace.
 
-[Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [WorkBuddy + MySQL guide](https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md) · [v0.9.7 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7)
+[Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [WorkBuddy + MySQL guide](https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md) · [v0.9.7.post1 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 ### 30-second quickstart
 

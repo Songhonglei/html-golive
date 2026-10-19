@@ -117,6 +117,25 @@ class TestVerifySqliteSuccess(_VerifyBase):
         self.assertEqual(after, before,
                          "verify left test data rows behind")
 
+    def test_json_number_normalization_does_not_fail_verification(self):
+        """MySQL binary JSON may round a floating-point epoch by one ULP."""
+        from unittest import mock
+        from golive import cli
+        real_http = cli._verify_http
+
+        def mysql_number_read(*args, **kwargs):
+            status, payload = real_http(*args, **kwargs)
+            if args[1] == "GET" and args[2].startswith("/api/data/"):
+                payload = json.loads(json.dumps(payload),
+                                     parse_float=lambda value: float(format(float(value), ".15g")))
+            return status, payload
+
+        with mock.patch("time.time", return_value=1792415292.8981361), \
+                mock.patch("golive.cli._verify_http", side_effect=mysql_number_read):
+            code, output = self._run_verify(json_out=True)
+        self.assertEqual(code, 0, output)
+        self.assertTrue(json.loads(output)["ok"])
+
     def test_verify_keep_preserves_site(self):
         """With --keep, the test site should still exist after verify."""
         from golive.backends.factory import get_registry

@@ -161,8 +161,6 @@ jobs:
   supabase:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      SUPABASE_HOME: ${{ runner.temp }}/golive-supabase-home
     services:
       mysql:
         image: mysql:8.4
@@ -190,6 +188,8 @@ jobs:
         run: pip install -e '.[image,dev,postgres,mysql]'
       - name: Start isolated real Supabase services
         run: |
+          export SUPABASE_HOME="$RUNNER_TEMP/golive-supabase-home"
+          echo "SUPABASE_HOME=$SUPABASE_HOME" >> "$GITHUB_ENV"
           supabase --workdir "$RUNNER_TEMP/golive-supabase" init --yes
           python - <<'PY'
           import os

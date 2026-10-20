@@ -109,8 +109,8 @@ code{font-family:var(--mono);font-size:.88em}
 .layer ul{list-style:none;display:grid;gap:10px}
 .layer li{font-size:12px;color:var(--muted);line-height:1.8}
 .layer li b{color:var(--text);font-weight:500;font-family:var(--mono);font-size:11px;display:block}
-#mysql .term-wrap{max-width:880px}
-#mysql .snip{padding-right:16px}
+#agents .term-wrap{max-width:880px}
+#agents .snip{padding-right:16px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
 th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font:500 11px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.08em}
@@ -187,7 +187,7 @@ footer a{color:var(--muted)}
     <div class="hero-copy">
       <p class="eyebrow">SELF-HOSTED / OPEN SOURCE</p>
       <h1>Ship an HTML file.<br><span class="highlight">Get a real website.</span></h1>
-      <p class="tagline">Publish reports, dashboards and internal tools from a single HTML file. Keep your pages, data and admin workspace on infrastructure you control.</p>
+      <p class="tagline">Publish reports, dashboards and internal tools with security scanning, site-level permissions and persistent data. Use the CLI or your agent, on infrastructure you control.</p>
       <div class="cta">
         <a class="btn primary" href="#quickstart">Get started <span aria-hidden="true">↗</span></a>
         <a class="btn ghost" href="https://github.com/Songhonglei/html-golive">View on GitHub</a>
@@ -246,22 +246,22 @@ footer a{color:var(--muted)}
 <section id="features"><div class="wrap">
   <p class="section-label">02 / THE TOOLKIT</p>
   <h2>What you get</h2>
-  <p class="sub">Everything below ships in the box — one install, no plugins to hunt down.</p>
+  <p class="sub">Publishing, security scanning, role-based site permissions, four databases and an admin workspace — in one toolkit.</p>
   <div class="grid">
     <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2"/><path d="m12 15-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2Z"/><path d="M9 12H4s.5-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.5 4-2c1.1-1.6 0-5 0-5"/><circle cx="16" cy="8" r="1.5"/></svg></span><h3>Publish &amp; roll back</h3>
       <p>Every publish snapshots the previous version. <code>golive rollback</code> returns to any of them instantly.</p></div>
-    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-4L4 15zM4 15l5 4"/></svg></span><h3>Edit in the browser</h3>
-      <p>Owners and maintainers get an inline editor on the live page — fix a typo without touching the source file. Saves are scanned and snapshotted.</p></div>
+    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3>Security scanning &amp; publish protection</h3>
+      <p>Detect API keys, private keys, database credentials and sensitive personal data before publishing. Strong credential hits block publication. Editor saves and imports run the same scanner, with extensible rules and optional LLM review.</p></div>
+    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="5"/><path d="m12 13 8 8M16 17l3-3M18 19l3-3"/></svg></span><h3>Identity &amp; site permissions</h3>
+      <p>Token or OIDC authentication, with separate owner, maintainer and superadmin roles. Site management and permission changes are recorded in the audit log.</p></div>
     <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 4 16 4 16 0V5M4 12v7c0 4 16 4 16 0v-7"/></svg></span><h3>A database for static pages</h3>
       <p>A stable <code>window.TemplateAPI</code> provides CRUD. SQLite / PG / MySQL use a server proxy; Supabase uses public keys governed by RLS.</p></div>
-    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></svg></span><h3>Secrets scanning</h3>
-      <p>Rule-based detection of API keys, tokens and personal data before anything goes live — with optional LLM second-pass review.</p></div>
-    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 0-9 9h1a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3"/><path d="M7 9h.01M11 6h.01M16 7h.01M6 14h.01"/></svg></span><h3>19 built-in styles</h3>
-      <p>Turn an unstyled document into something presentable with <code>--style</code>. Fonts come from public CDNs or your own mirror.</p></div>
+    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-4L4 15zM4 15l5 4"/></svg></span><h3>Edit in the browser</h3>
+      <p>Owners and maintainers get an inline editor on the live page — fix a typo without touching the source file. Saves are scanned and snapshotted.</p></div>
     <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M6 6.5h.01"/></svg></span><h3>Admin console</h3>
       <p>A light/dark, bilingual workspace at <code>/admin</code>: editable global settings, sites, permissions, data and precise database diagnostics.</p></div>
-    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="5"/><path d="m12 13 8 8M16 17l3-3M18 19l3-3"/></svg></span><h3>Real authentication</h3>
-      <p>Static token for quick setups, or OIDC with one-line presets for Google, Auth0, Okta, Azure AD, Keycloak and Authentik.</p></div>
+    <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 0-9 9h1a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3"/><path d="M7 9h.01M11 6h.01M16 7h.01M6 14h.01"/></svg></span><h3>19 built-in styles</h3>
+      <p>Turn an unstyled document into something presentable with <code>--style</code>. Fonts come from public CDNs or your own mirror.</p></div>
     <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M9 15v4a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4M7 7h4M7 11h2"/></svg></span><h3>Clone any page</h3>
       <p><code>golive clone &lt;url&gt;</code> snapshots a public page, inlines its assets and republishes it as your own.</p></div>
     <div class="card"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h18c0 6-4 9-10 9-5 0-8-3-8-9ZM6 12V8h4v4M10 8V4h4v8M14 12V8h4v4"/></svg></span><h3>Docker ready</h3>
@@ -324,12 +324,12 @@ footer a{color:var(--muted)}
   </div>
 </div></section>
 
-<section id="mysql"><div class="wrap">
+<section id="agents"><span id="mysql" aria-hidden="true"></span><div class="wrap">
   <p class="section-label">06 / WORK WITH YOUR AGENT</p>
-  <h2>Verify MySQL with your agent</h2>
-  <p class="sub">Pin v0.9.7.post1, initialize a dedicated test database, then confirm real persistence through the browser and SQL.</p>
-  <div class="term-wrap"><div class="snip">python3 -m pip install 'html-golive[mysql]==0.9.7.post1'<br>golive skill install --target .codebuddy/skills</div></div>
-  <div class="cta"><a class="btn primary" href="https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md">WorkBuddy acceptance guide →</a><a class="btn ghost" href="https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md">Four-backend setup</a></div>
+  <h2>Let your agent ship it</h2>
+  <p class="sub">Use the CLI and bundled skill with an agent that can run commands. Publish, roll back, manage data and verify your setup; choose the skill directory for your agent.</p>
+  <div class="term-wrap"><div class="snip">python3 -m pip install html-golive<br>golive skill install<br>golive skill status</div></div>
+  <div class="cta"><a class="btn primary" href="https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md">Agent setup &amp; usage guide →</a><a class="btn ghost" href="https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md">Four-backend setup &amp; acceptance</a></div>
 </div></section>
 
 <section id="commands"><div class="wrap">

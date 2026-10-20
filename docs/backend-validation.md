@@ -3,7 +3,7 @@
 SQLite、PostgreSQL、MySQL 和 Supabase 均支持站点目录（registry）和页面业务数据（data）。HTML 文件由独立的 storage 配置保存：前三者可搭配本地目录或 S3，Supabase 还可搭配 Supabase Storage。后台设置、审计、服务运行信息等本机控制数据仍保存在 `GOLIVE_HOME`。
 
 > MySQL 从 v0.9.7 起提供。使用 `python3 -m pip install -U 'html-golive[mysql]==0.9.7.post1'` 安装；v0.9.6 及更早版本不包含 MySQL。推荐 0.9.7.post1，它修正了 0.9.7 的 MySQL verify 浮点时间戳误报。
-> 给 WorkBuddy 等 agent 使用时，见[安装、初始化与验证指南](workbuddy-mysql.md)。
+> 通过 Agent 使用时，见[通用安装与使用指南](agents.md)。MySQL 的完整验收见[随包手册](../golive/resources/skill/references/mysql.md)。
 
 ## 选择与配置
 

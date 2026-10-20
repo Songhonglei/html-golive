@@ -12,7 +12,7 @@
 
 **v0.9.7.post1：四种数据库，同一套页面 API。** SQLite 零配置起步，PostgreSQL、MySQL 8.4+、Supabase 随需切换；保留克制的亮/暗管理工作台。
 
-[四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [WorkBuddy + MySQL 指南](https://github.com/Songhonglei/html-golive/blob/main/docs/workbuddy-mysql.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
+[四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent 安装与使用](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 ### 30 秒快速开始
 

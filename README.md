@@ -33,6 +33,7 @@ golive publish report.html --name "Q3 Report" --slug q3
 </p>
 
 Something not working? Run `golive verify` and paste the output into an issue.
+For optional real-browser, SQL and restart checks, see [full acceptance and diagnostics](docs/acceptance.md) (unreleased source changes).
 
 ---
 

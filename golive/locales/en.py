@@ -84,11 +84,16 @@ TRANSLATIONS = {
     "arg.migrate_check.file": "HTML file to check",
 
     # ── argparse: db ────────────────────────────────────────────────────
-    "arg.db.help": "Database table init (output CREATE TABLE SQL)",
-    "arg.db.action": "init: output CREATE TABLE SQL",
-    "arg.db.print_sql": "Print SQL only (default behaviour, explicit flag)",
+    "arg.db.help": "Initialize configured database tables; preview with --print-sql",
+    "arg.db.action": "init: create SQLite/Postgres/MySQL tables; output Supabase SQL for its SQL editor",
+    "arg.db.print_sql": "Preview CREATE TABLE SQL without connecting or executing DDL",
 
     # ── argparse: data ─────────────────────────────────────────────────
+    "arg.data.limit": "List page size (legacy alias; --page-size takes precedence)",
+    "arg.data.page_no": "Page number, starting at 1",
+    "arg.data.page_size": "Rows per page (overrides --limit)",
+    "arg.data.sort_index": "Sort priority for data sort; larger values appear first",
+    "arg.data.json": "JSON mutation result with ok, operation, id, record and code",
     "arg.data.help": "Data layer (TemplateAPI) row-level CRUD",
     "arg.data.model_code": "modelCode namespace (default: default)",
     "arg.data.id": "Template id (get/update/delete)",
@@ -120,7 +125,7 @@ TRANSLATIONS = {
 
     # ── argparse: context ───────────────────────────────────────────────
     "arg.context.help": "Which config am I actually using? (read-only, creates no directories)",
-    "arg.context.port": "Probe this port for a running server",
+    "arg.context.port": "Override probe port (default: live service record, configuration, then 8787)",
     "arg.context.json": "Output JSON",
 
     # ── argparse: demo ─────────────────────────────────────────────────
@@ -968,6 +973,10 @@ TRANSLATIONS = {
     "verify.keep_hint": "   Test site kept (--keep): http://localhost:{port}/s/{site_id}",
 
     # ── argparse: verify ──────────────────────────────────────────────
+    "arg.verify.full": "Run CLI, real Chromium, SQL evidence and server restart acceptance (requires [verify])",
+    "arg.verify.report_dir": "Create a new private report directory (full mode only)",
+    "arg.verify.browser_channel": "Full mode browser: bundled Chromium or installed Chrome/Edge",
+    "verify.basic_scope": "Basic coverage only. Use golive verify --full for browser, SQL evidence, sorting/pagination/upsert and restart persistence.",
     "arg.verify.help": "End-to-end self-check: start a server, publish, write data, clean up",
     "arg.verify.keep": "Keep the temporary test site for manual inspection",
     "arg.verify.json": "Output machine-readable JSON (for CI / issue templates)",

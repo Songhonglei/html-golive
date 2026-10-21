@@ -1093,7 +1093,9 @@ def _doctor_collect(port: int) -> dict:
         base = ""
     admin_url = f"{base}/admin" if base else f"http://localhost:{port}/admin"
 
+    from golive.core.environment import collect_environment
     return {
+        "environment": collect_environment(cfg) if cfg else {},
         "cli_version": golive.__version__,
         "home": _doctor_home_info(),
         "service": _doctor_service_info(port),
@@ -1260,6 +1262,15 @@ def _doctor_render(rep: dict, port: int) -> None:
             if sc.get("sites_without_scan") else "")
 
     row("admin portal", rep["admin_url"])
+    environment = rep.get("environment") or {}
+    if environment:
+        row("Python SSL", environment["ssl"]["implementation"])
+        row("proxy", ", ".join(environment["proxy"]["environment_variables"]) or "no shell proxy variables", "remote TLS not tested")
+        for warning in environment.get("warnings", []):
+            print("  ⚠️ " + warning)
+        if environment.get("mysql"):
+            row("MySQL preflight", environment["mysql"]["hint"])
+
 
     missing_deps = [d for d in rep["deps"] if not d["available"]]
     if missing_deps:
@@ -1277,17 +1288,9 @@ def _doctor_target_port(args) -> int:
     ``golive serve start --port 9000`` should not be told "not running"
     just because doctor guessed the default.
     """
-    explicit = getattr(args, "port", None)
-    if explicit and explicit != DEFAULT_SERVE_PORT:
-        return int(explicit)
-    try:
-        from golive.core import service
-        recorded = service.recorded_port()
-        if recorded:
-            return int(recorded)
-    except Exception:       # noqa: BLE001 — doctor must never crash
-        pass
-    return int(explicit or DEFAULT_SERVE_PORT)
+    from golive.config import get_config
+    from golive.core.context import resolve_server_port
+    return resolve_server_port(get_config(), getattr(args, "port", None))[0]
 
 
 def _doctor_site_info(ref: str) -> dict:
@@ -1566,62 +1569,97 @@ def cmd_db(args) -> int:
 
 
 def cmd_data(args) -> int:
-    """golive data <list|get|create|update|delete|upsert> — template rows."""
-    import json as _json
-
+    """Template rows; JSON mutations use one stable result envelope."""
+    import json
     from golive.backends.factory import get_template_store
-    store = get_template_store()
-    if store is None:
-        print(t("data.disabled"), file=sys.stderr)
+
+    want_json = getattr(args, "json", False)
+
+    def emit(ok, code, row=None, error=None):
+        result = {"ok": ok, "operation": args.action, "code": code,
+                  "id": row.get("id") if row else (args.id or None), "record": row}
+        if error:
+            result["error"] = error
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+
+    def fail(code, message):
+        if want_json:
+            emit(False, code, error=message)
+        else:
+            print(message, file=sys.stderr)
         return 1
 
-    def _load_content(raw):
+    def load_content(raw):
         if not raw:
             return None
         if raw.startswith("@"):
-            return _json.loads(Path(raw[1:]).read_text(encoding="utf-8"))
-        return _json.loads(raw)
+            raw = Path(raw[1:]).read_text(encoding="utf-8")
+        return json.loads(raw)
 
     try:
+        if args.action in ("get", "update", "delete", "sort") and not args.id:
+            return fail("invalid_arguments", "--id is required")
+        if args.action in ("create", "upsert") and not args.name:
+            return fail("invalid_arguments", "--name is required")
+        if args.action == "sort" and getattr(args, "sort_index", None) is None:
+            return fail("invalid_arguments", "--sort-index is required")
+        page_no = getattr(args, "page_no", 1)
+        page_size = getattr(args, "page_size", None)
+        page_size = page_size if page_size is not None else getattr(args, "limit", 20)
+        if page_no < 1 or page_size < 1:
+            return fail("invalid_arguments", "--page-no and --page-size/--limit must be positive")
+        store = get_template_store()
+        if store is None:
+            return fail("backend_disabled", t("data.disabled"))
         if args.action == "list":
             data = store.list(args.model_code, name_prefix=args.name,
-                              page_size=args.limit)
-            print(_json.dumps(data, ensure_ascii=False, indent=2, default=str))
-        elif args.action == "get":
+                              page_no=page_no, page_size=page_size)
+            print(json.dumps(data, ensure_ascii=False, indent=2, default=str))
+            return 0
+        if args.action == "get":
             row = store.get(args.id)
             if row is None:
-                print(t("data.template_not_found", id=args.id), file=sys.stderr)
-                return 1
-            print(_json.dumps(row, ensure_ascii=False, indent=2, default=str))
-        elif args.action == "create":
+                return fail("not_found", t("data.template_not_found", id=args.id))
+            print(json.dumps(row, ensure_ascii=False, indent=2, default=str))
+            return 0
+        if args.action == "create":
             row = store.create(args.model_code, args.name,
-                               content=_load_content(args.content),
-                               description=args.desc)
-            print(t("data.created", id=row.get('id', '?')))
+                               content=load_content(args.content), description=args.desc)
+            message = t("data.created", id=row["id"])
         elif args.action == "upsert":
-            row = store.upsert(args.model_code, args.name,
-                               content=_load_content(args.content))
-            print(t("data.upserted", id=row.get('id', '?')))
-        elif args.action == "update":
+            row = store.upsert(args.model_code, args.name, content=load_content(args.content))
+            message = t("data.upserted", id=row["id"])
+        elif args.action in ("update", "sort"):
             patch = {}
-            if args.name:
-                patch["name"] = args.name
-            if args.content:
-                patch["content"] = _load_content(args.content)
-            if args.desc:
-                patch["desc"] = args.desc
+            if args.action == "sort":
+                patch["sort_index"] = args.sort_index
+            else:
+                if args.name:
+                    patch["name"] = args.name
+                if args.content:
+                    patch["content"] = load_content(args.content)
+                if args.desc:
+                    patch["desc"] = args.desc
             row = store.update(args.id, patch)
-            print(t("data.updated", id=row.get('id', '?')))
+            message = t("data.updated", id=row["id"])
         elif args.action == "delete":
-            ok = store.delete(args.id)
-            print(t("data.deleted") if ok else t("data.not_found"))
+            if not store.delete(args.id):
+                return fail("not_found", t("data.not_found"))
+            row = {"id": args.id}
+            message = t("data.deleted")
         else:
-            print(t("data.unknown_action", action=args.action), file=sys.stderr)
-            return 1
-    except Exception as e:  # noqa: BLE001 — surface backend errors cleanly
-        print(t("data.operation_failed", e=e), file=sys.stderr)
-        return 1
-    return 0
+            return fail("invalid_arguments", t("data.unknown_action", action=args.action))
+        if want_json:
+            emit(True, "ok", row=row)
+        else:
+            print(message)
+        return 0
+    except KeyError:
+        return fail("not_found", t("data.template_not_found", id=args.id))
+    except (ValueError, OSError):
+        return fail("invalid_input", "Invalid input or connection configuration; check JSON, files and backend settings.")
+    except Exception:  # Backend exceptions can contain DSNs or credentials.
+        return fail("backend_error", "Data operation failed; check backend configuration, connectivity and constraints.")
 
 
 # ═════════════════════════════════ skill ════════════════════════════════════
@@ -2207,6 +2245,17 @@ def _run_verify(args):
 
 
 def cmd_verify(args) -> int:
+    if getattr(args, "full", False):
+        from golive.core.full_verify import run
+        return run(args)
+    if getattr(args, "report_dir", "") or getattr(args, "browser_channel", "chromium") != "chromium":
+        message = "--report-dir and --browser-channel require --full"
+        if getattr(args, "json", False):
+            import json
+            print(json.dumps({"ok": False, "code": "invalid_arguments", "error": message}))
+        else:
+            print(message, file=sys.stderr)
+        return 2
     result = _run_verify(args)
     failed = result["exit_code"] != 0 or any(not step["ok"] for step in result["steps"])
     return _verify_finish(result["steps"], getattr(args, "json", False),
@@ -2222,6 +2271,9 @@ def _verify_finish(steps, want_json, exit_code=0, success_msg=None,
         import json as _json
         result = {
             "ok": exit_code == 0,
+            "mode": "basic",
+            "coverage": {"browser": "not_run", "restart_persistence": "not_run",
+                         "sorting_pagination_upsert": "not_run", "sql_evidence": "not_run"},
             "steps": steps,
         }
         if success_msg:
@@ -2247,6 +2299,7 @@ def _verify_finish(steps, want_json, exit_code=0, success_msg=None,
         if failed:
             print(t("verify.failure", message=failed["detail"]))
     print(t("verify.static_hint"))
+    print(t("verify.basic_scope"))
     return exit_code
 
 
@@ -2521,7 +2574,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("data", help=t("arg.data.help"))
     p.add_argument("action",
                    choices=["list", "get", "create", "update", "delete",
-                            "upsert"])
+                            "upsert", "sort"])
     p.add_argument("--model-code", default="default",
                    help=t("arg.data.model_code"))
     p.add_argument("--id", default="", help=t("arg.data.id"))
@@ -2529,12 +2582,16 @@ def main(argv=None) -> int:
     p.add_argument("--content", default="",
                    help=t("arg.data.content"))
     p.add_argument("--desc", default="", help=t("arg.data.desc"))
-    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--limit", type=int, default=20, help=t("arg.data.limit"))
+    p.add_argument("--page-no", type=int, default=1, help=t("arg.data.page_no"))
+    p.add_argument("--page-size", type=int, default=None, help=t("arg.data.page_size"))
+    p.add_argument("--sort-index", type=int, default=None, help=t("arg.data.sort_index"))
+    p.add_argument("--json", action="store_true", help=t("arg.data.json"))
     p.set_defaults(func=cmd_data)
 
     # doctor
     p = sub.add_parser("doctor", help=t("arg.doctor.help"))
-    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT)
+    p.add_argument("--port", type=int, default=None)
     p.add_argument("--json", action="store_true",
                    help=t("arg.doctor.json"))
     # default None, not "": the handler must tell "flag absent" from
@@ -2578,7 +2635,7 @@ def main(argv=None) -> int:
     # context
     p = sub.add_parser("context",
                        help=t("arg.context.help"))
-    p.add_argument("--port", type=int, default=DEFAULT_SERVE_PORT,
+    p.add_argument("--port", type=int, default=None,
                    help=t("arg.context.port"))
     p.add_argument("--json", action="store_true", help=t("arg.context.json"))
     p.set_defaults(func=cmd_context)
@@ -2599,6 +2656,10 @@ def main(argv=None) -> int:
                    help=t("arg.verify.keep"))
     p.add_argument("--json", action="store_true",
                    help=t("arg.verify.json"))
+    p.add_argument("--full", action="store_true", help=t("arg.verify.full"))
+    p.add_argument("--report-dir", default="", help=t("arg.verify.report_dir"))
+    p.add_argument("--browser-channel", choices=("chromium", "chrome", "msedge"), default="chromium",
+                   help=t("arg.verify.browser_channel"))
     p.set_defaults(func=cmd_verify)
 
     # export

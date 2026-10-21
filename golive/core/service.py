@@ -67,7 +67,8 @@ def log_path() -> Path:
 
 def read_pidfile() -> Optional[Dict[str, Any]]:
     """Parse the pidfile, or ``None`` when absent/corrupt."""
-    p = pidfile_path()
+    from golive.core.paths import peek_home
+    p = peek_home() / PIDFILE_NAME
     try:
         raw = p.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeDecodeError):
@@ -210,7 +211,8 @@ def recorded_port() -> Optional[int]:
     if pid and not pid_alive(int(pid)):
         return None
     try:
-        return int(port)
+        value = int(port)
+        return value if 1 <= value <= 65535 else None
     except (TypeError, ValueError):
         return None
 

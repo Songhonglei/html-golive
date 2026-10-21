@@ -80,7 +80,18 @@ def _config_source(cfg_path: Path) -> str:
     return "from $GOLIVE_HOME/golive.yaml"
 
 
-def collect(cfg=None, port: int = 8787) -> dict:
+def resolve_server_port(cfg, port=None):
+    """Explicit CLI port > live managed service > configuration > default."""
+    if port is not None:
+        return int(port), "cli"
+    from golive.core.service import recorded_port
+    recorded = recorded_port()
+    if recorded:
+        return recorded, "service_record"
+    return int(cfg.server.port or 8787), "config" if cfg.source_path else "default"
+
+
+def collect(cfg=None, port: int | None = None) -> dict:
     """Gather everything ``golive context`` reports. Creates nothing."""
     from golive import __version__
 
@@ -174,7 +185,9 @@ def collect(cfg=None, port: int = 8787) -> dict:
     out["skill"] = _skill_info()
 
     # server
+    port, source = resolve_server_port(cfg, port)
     out["server"] = _server_info(port)
+    out["server"]["port_source"] = source
     return out
 
 
@@ -316,7 +329,8 @@ def render(info: dict) -> str:
     srv = info["server"]
     if not srv["running"]:
         L.append(_line("server", f"not running on port {srv['port']}  "
-                                 f"(golive serve --port {srv['port']})"))
+                                 f"(golive serve --port {srv['port']})",
+                       srv.get("port_source", "")))
     else:
         bits = [f"port {srv['port']}", f"v{srv['version'] or '?'}"]
         if srv.get("pid"):
@@ -327,6 +341,7 @@ def render(info: dict) -> str:
         elif srv.get("same_home") is False:
             warn = (f"  ⚠️  server home is {srv['home']} — "
                     "different from this CLI!")
-        L.append(_line("server", "running (" + ", ".join(bits) + ")" + warn))
+        L.append(_line("server", "running (" + ", ".join(bits) + ")" + warn,
+                       srv.get("port_source", "")))
 
     return "\n".join(L)

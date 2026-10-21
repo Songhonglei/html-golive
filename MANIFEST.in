@@ -7,3 +7,5 @@
 include tests/__init__.py
 recursive-include tests *.py
 recursive-include tests/corpus *.html *.md
+
+include scripts/mysql_sandbox.py

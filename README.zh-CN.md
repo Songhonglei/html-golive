@@ -14,6 +14,8 @@
 
 [四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent 安装与使用](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
+浏览器、SQL 证据与重启持久化验收，以及本轮诊断/CLI 修复，见[完整验收说明](docs/acceptance.md#中文说明)（尚未发布的源码改动）。
+
 ### 30 秒快速开始
 
 ```bash

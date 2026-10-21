@@ -87,11 +87,16 @@ TRANSLATIONS = {
     "arg.migrate_check.file": "要检查的 HTML 文件",
 
     # ── argparse: db ────────────────────────────────────────────────────
-    "arg.db.help": "数据库表初始化（输出建表 SQL）",
-    "arg.db.action": "init：输出建表 SQL",
-    "arg.db.print_sql": "仅打印 SQL（默认行为，显式标记用）",
+    "arg.db.help": "初始化当前数据库表；--print-sql 仅预览 SQL",
+    "arg.db.action": "init：创建 SQLite/Postgres/MySQL 表；Supabase 输出供 SQL 编辑器执行的 SQL",
+    "arg.db.print_sql": "仅预览建表 SQL，不连接数据库、不执行 DDL",
 
     # ── argparse: data ─────────────────────────────────────────────────
+    "arg.data.limit": "列表每页条数（兼容参数；--page-size 优先）",
+    "arg.data.page_no": "页码，从 1 开始",
+    "arg.data.page_size": "每页条数（覆盖 --limit）",
+    "arg.data.sort_index": "data sort 的排序优先级，数值越大越靠前",
+    "arg.data.json": "写入结果输出 JSON：ok、operation、id、record 和 code",
     "arg.data.help": "数据层（TemplateAPI）行级 CRUD",
     "arg.data.model_code": "modelCode 命名空间（默认 default）",
     "arg.data.id": "模板 id（get/update/delete）",
@@ -123,7 +128,7 @@ TRANSLATIONS = {
 
     # ── argparse: context ───────────────────────────────────────────────
     "arg.context.help": "我现在到底在用哪套配置？（只读，不创建任何目录）",
-    "arg.context.port": "探测该端口上是否有服务在跑",
+    "arg.context.port": "指定探测端口（默认依次读取存活服务记录、配置、8787）",
     "arg.context.json": "输出 JSON",
 
     # ── argparse: demo ─────────────────────────────────────────────────
@@ -969,6 +974,10 @@ TRANSLATIONS = {
     "verify.keep_hint": "   测试站点已保留（--keep）：http://localhost:{port}/s/{site_id}",
 
     # ── argparse: verify ──────────────────────────────────────────────
+    "arg.verify.full": "执行 CLI、真实 Chromium、SQL 证据与服务重启验收（需要 [verify]）",
+    "arg.verify.report_dir": "创建独立报告目录（仅 --full 模式）",
+    "arg.verify.browser_channel": "完整验收使用的浏览器：内置 Chromium 或已安装的 Chrome/Edge",
+    "verify.basic_scope": "以上仅为基础覆盖；真实浏览器、SQL 证据、排序/分页/upsert 与重启持久化请运行 golive verify --full。",
     "arg.verify.help": "端到端自检：启动服务、发布页面、写数据、清理",
     "arg.verify.keep": "保留临时测试站点供人工查看",
     "arg.verify.json": "输出机器可读 JSON（供 CI / issue 模板使用）",

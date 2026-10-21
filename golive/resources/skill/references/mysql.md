@@ -134,3 +134,15 @@ Leave the isolated page, service and test database available for user review.
 Provide `golive serve stop` and the exact scoped container/volume cleanup
 commands, but do not remove them before review. Report any skipped/failed step
 with the original error (secrets removed); never claim a fallback backend passed.
+
+
+## 源码后续改进（尚未发布）
+
+新代码支持 `golive context --json` 自动选择配置/服务端口并展示来源，后台默认测试当前后端。
+`golive data sort --id <id> --sort-index 100 --json` 调整排序，
+`golive data list --page-no 2 --page-size 10` 检查分页，写入支持 `--json`。
+安装源码的 `[verify]` 扩展后，使用 `golive verify --full --json --report-dir <新目录>`，
+或加 `--browser-channel chrome`，执行真实浏览器、SQL 证据、后台回滚及重启持久化验收。
+每项都会标注 passed/failed/skipped；基础 verify 的 ok:true 只代表基础覆盖。
+隔离数据库脚本位于源码 `scripts/mysql_sandbox.py`，详细边界、凭证与清理说明见
+[完整验收说明](https://github.com/Songhonglei/html-golive/blob/main/docs/acceptance.md)。

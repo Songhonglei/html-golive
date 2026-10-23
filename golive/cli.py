@@ -1036,6 +1036,7 @@ def _doctor_service_info(port: int) -> dict:
         "version": st["version"], "version_match": st["version_match"],
         "port_owner": st["port_owner"], "stale_pidfile": st["stale_pidfile"],
         "managed": st["managed"], "started_at": st["started_at"],
+        "service_record": st.get("service_record"), "backend_match": st.get("backend_match"),
     })
     health = st.get("health") or {}
     out["home"] = str(health.get("home") or "")
@@ -1211,6 +1212,10 @@ def _doctor_render(rep: dict, port: int) -> None:
             t("doctor.service_start_hint", port=svc['port']))
     if svc["stale_pidfile"]:
         print(t("doctor.service_stale_pidfile", pad=" " * label_w))
+        if svc.get("service_record"):
+            row("service record", "ignored: " + svc["service_record"]["reason"])
+    if svc.get("backend_match") is False:
+        row("server backend", svc["data_backend"], "differs from CLI configuration — restart the server")
 
     home = rep["home"]
     row("GOLIVE_HOME", home["path"] or t("doctor.home_unavailable"),

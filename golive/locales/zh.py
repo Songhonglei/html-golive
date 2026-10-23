@@ -279,7 +279,7 @@ TRANSLATIONS = {
     "doctor.service_port_taken": "⚠️  端口 {port} 被其他程序占用",
     "doctor.service_not_running": "not running",
     "doctor.service_start_hint": "（启动：golive serve start --port {port}）",
-    "doctor.service_stale_pidfile": "{pad} ℹ️  pidfile 里的进程已退出，下次 golive serve start 会自动清理",
+    "doctor.service_stale_pidfile": "{pad} ℹ️  服务记录已失效或无法确认服务身份，已忽略该记录（保留文件）",
     "doctor.home_unavailable": "(不可用)",
     "doctor.home_not_writable": "❌ 不可写：{error}",
     "doctor.home_from_env": "  ← 来自 $GOLIVE_HOME",

@@ -276,7 +276,7 @@ TRANSLATIONS = {
     "doctor.service_port_taken": "⚠️  Port {port} is held by another program",
     "doctor.service_not_running": "not running",
     "doctor.service_start_hint": "(Start with: golive serve start --port {port})",
-    "doctor.service_stale_pidfile": "{pad} ℹ️  The process in the pidfile has exited; the next `golive serve start` will clean it up",
+    "doctor.service_stale_pidfile": "{pad} ℹ️  The service record is stale or its server identity could not be verified; it was ignored (record preserved)",
     "doctor.home_unavailable": "(unavailable)",
     "doctor.home_not_writable": "❌ Not writable: {error}",
     "doctor.home_from_env": "  ← from $GOLIVE_HOME",

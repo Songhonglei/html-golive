@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Validate service-record identity with /health PID and canonical GOLIVE_HOME before giving its port precedence; reused PIDs and unrelated/missing endpoints now fall back to configuration. Context/doctor expose the ignored-record reason without deleting records or signalling processes, while valid services still report version/backend drift.
+
 - Resolve context/doctor probe ports from explicit flags, live service records and configuration, with context port provenance.
 - Align admin connection-test selection with the running backend; show credential-free MySQL targets and separate application-table/model counts.
 - Add CLI sort/page controls and JSON mutation envelopes with stable error codes; correct database init/SQL-preview help.

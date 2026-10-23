@@ -8,6 +8,17 @@ managed service record in the current `GOLIVE_HOME`, `server.port`, then 8787.
 `default`). Stale or invalid records are ignored. The command stays read-only.
 `doctor` follows the same precedence, including explicit `--port 8787`.
 
+A service record is valid only when its PID is alive **and** `/health` at its
+host/port reports `status: ok`, the same PID, and the current canonical
+`GOLIVE_HOME`. An unrelated live PID, unavailable/non-golive endpoint, or
+PID/HOME mismatch cannot override configuration. Both commands expose
+`service_record.valid` and `service_record.reason`; doctor sets
+`stale_pidfile: true` for an existing invalid/unverifiable record and never
+borrows its PID for a free port. Diagnosis preserves the file and process.
+Version and backend differences do not invalidate an otherwise matching
+identity: the service remains discoverable with its actual version/backend,
+version-match fields and `backend_match: false` when appropriate.
+
 The admin Data backend screen uses the **running configuration**, even if a
 saved backend setting still needs a restart. The test selector starts at that
 backend. The button identifies its selected target, and both successful and

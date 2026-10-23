@@ -49,7 +49,9 @@ def test_context_port_precedence_and_stale_record(cfg):
     from golive.core.context import resolve_server_port
     from golive.core.service import write_pidfile
     write_pidfile(os.getpid(), "127.0.0.1", 9876)
-    assert resolve_server_port(cfg) == (9876, "service_record")
+    with patch("golive.core.service.probe_health", return_value={
+            "status": "ok", "pid": os.getpid(), "home": os.environ["GOLIVE_HOME"]}):
+        assert resolve_server_port(cfg) == (9876, "service_record")
     assert resolve_server_port(cfg, 8787) == (8787, "cli")
     with patch("golive.core.service.pid_alive", return_value=False):
         assert resolve_server_port(cfg) == (8788, "config")
@@ -133,7 +135,9 @@ def test_doctor_explicit_default_port_overrides_service_record(cfg):
     from types import SimpleNamespace
     write_pidfile(os.getpid(), "127.0.0.1", 9876)
     assert _doctor_target_port(SimpleNamespace(port=8787)) == 8787
-    assert _doctor_target_port(SimpleNamespace(port=None)) == 9876
+    with patch("golive.core.service.probe_health", return_value={
+            "status": "ok", "pid": os.getpid(), "home": os.environ["GOLIVE_HOME"]}):
+        assert _doctor_target_port(SimpleNamespace(port=None)) == 9876
 
 
 def test_admin_model_counts_are_not_table_counts(cfg):

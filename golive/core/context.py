@@ -80,7 +80,18 @@ def _config_source(cfg_path: Path) -> str:
     return "from $GOLIVE_HOME/golive.yaml"
 
 
-def collect(cfg=None, port: int = 8787) -> dict:
+def resolve_server_port(cfg, port=None, record_info=None):
+    """Explicit CLI port > live managed service > configuration > default."""
+    if port is not None:
+        return int(port), "cli"
+    from golive.core.service import inspect_service_record
+    record_info = record_info if record_info is not None else inspect_service_record()
+    if record_info["valid"]:
+        return int(record_info["record"]["port"]), "service_record"
+    return int(cfg.server.port or 8787), "config" if cfg.source_path else "default"
+
+
+def collect(cfg=None, port: int | None = None) -> dict:
     """Gather everything ``golive context`` reports. Creates nothing."""
     from golive import __version__
 
@@ -174,7 +185,19 @@ def collect(cfg=None, port: int = 8787) -> dict:
     out["skill"] = _skill_info()
 
     # server
-    out["server"] = _server_info(port)
+    from golive.core.service import inspect_service_record
+    record_info = inspect_service_record()
+    port, source = resolve_server_port(cfg, port, record_info=record_info)
+    if source == "service_record":
+        from golive.core.service import _probe_host
+        out["server"] = _server_info(port, host=_probe_host(record_info["record"].get("host") or "127.0.0.1"))
+    else:
+        out["server"] = _server_info(port)
+    out["server"]["port_source"] = source
+    out["server"]["service_record"] = record_info
+    out["server"]["backend_match"] = (
+        out["server"].get("data_backend") == cfg.data.backend
+        if out["server"].get("data_backend") else None)
     return out
 
 
@@ -197,7 +220,7 @@ def _skill_info() -> dict:
                 "in_sync": False, "error": str(e)}
 
 
-def _server_info(port: int) -> dict:
+def _server_info(port: int, host: str = "127.0.0.1") -> dict:
     """Ask a running server who it is (version drift is a real user report)."""
     import json
     import urllib.error
@@ -205,13 +228,16 @@ def _server_info(port: int) -> dict:
 
     info = {"port": port, "running": False, "version": "", "home": "",
             "pid": None, "matches_cli": None}
+    target = f"[{host}]" if ":" in host else host
     try:
         with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/health", timeout=1.5) as r:
+                f"http://{target}:{port}/health", timeout=1.5) as r:
             payload = json.loads(r.read().decode("utf-8", "replace"))
     except (urllib.error.URLError, OSError, ValueError):
         return info
 
+    if not isinstance(payload, dict) or payload.get("status") != "ok":
+        return info
     from golive import __version__
     info.update(running=True,
                 version=str(payload.get("version", "")),
@@ -316,7 +342,8 @@ def render(info: dict) -> str:
     srv = info["server"]
     if not srv["running"]:
         L.append(_line("server", f"not running on port {srv['port']}  "
-                                 f"(golive serve --port {srv['port']})"))
+                                 f"(golive serve --port {srv['port']})",
+                       srv.get("port_source", "")))
     else:
         bits = [f"port {srv['port']}", f"v{srv['version'] or '?'}"]
         if srv.get("pid"):
@@ -327,6 +354,12 @@ def render(info: dict) -> str:
         elif srv.get("same_home") is False:
             warn = (f"  ⚠️  server home is {srv['home']} — "
                     "different from this CLI!")
-        L.append(_line("server", "running (" + ", ".join(bits) + ")" + warn))
+        L.append(_line("server", "running (" + ", ".join(bits) + ")" + warn,
+                       srv.get("port_source", "")))
 
+    record = srv.get("service_record") or {}
+    if record.get("exists") and not record.get("valid"):
+        L.append(_line("service record", "ignored: " + record["reason"]))
+    if srv.get("backend_match") is False:
+        L.append(_line("server backend", f"{srv.get('data_backend')} (CLI: {info['data']['backend']}) — restart the server"))
     return "\n".join(L)

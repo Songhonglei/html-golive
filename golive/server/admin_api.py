@@ -475,7 +475,17 @@ def _data_dispatch(method, rest, query, body, identity) -> tuple:
 
 
 def _data_models(store) -> tuple:
-    return 200, {"models": store.list_models()}
+    from golive.config import get_config
+    from golive.core.backend_info import data_backend_info
+    models = store.list_models()
+    info = data_backend_info(get_config())
+    info.update(table_count=1, model_count=len(models),
+                row_count=sum(m["count"] for m in models), counts_scan_limit=10000)
+    if info["backend"] in ("sqlite", "mysql", "postgres"):
+        with store._conn() as conn:
+            stats = conn.execute(f"SELECT COUNT(*) AS rows_count, COUNT(DISTINCT NULLIF(model_code, '')) AS models_count FROM {store.table}").fetchone()
+        info.update(model_count=stats["models_count"], row_count=stats["rows_count"], counts_scan_limit=None)
+    return 200, {"models": models, "data_backend": info}
 
 
 def _data_rows_list(store, query) -> tuple:
@@ -802,7 +812,10 @@ def _settings_list(identity) -> tuple:
     # Flatten for a total count
     total = sum(len(items) for items in grouped.values())
     record(_who(identity), "settings.list", "", {"total": total})
-    return 200, {"settings": grouped, "total": total}
+    from golive.config import get_config
+    from golive.core.backend_info import data_backend_info
+    return 200, {"settings": grouped, "total": total,
+                 "data_backend": data_backend_info(get_config())}
 
 
 def _settings_update(body, identity) -> tuple:

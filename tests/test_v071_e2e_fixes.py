@@ -73,8 +73,10 @@ class TestDoctorPortDiscovery(unittest.TestCase):
         """The real bug: serve on 18899, doctor said 'not running'."""
         from golive.cli import _doctor_target_port, DEFAULT_SERVE_PORT
         self._write_pidfile(os.getpid(), 18899)
-        self.assertEqual(_doctor_target_port(self._args(DEFAULT_SERVE_PORT)),
-                         18899)
+        from unittest.mock import patch
+        with patch("golive.core.service.probe_health", return_value={
+                "status": "ok", "pid": os.getpid(), "home": self.home}):
+            self.assertEqual(_doctor_target_port(self._args(None)), 18899)
 
     def test_default_when_no_pidfile(self):
         from golive.cli import _doctor_target_port, DEFAULT_SERVE_PORT

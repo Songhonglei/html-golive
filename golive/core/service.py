@@ -67,7 +67,8 @@ def log_path() -> Path:
 
 def read_pidfile() -> Optional[Dict[str, Any]]:
     """Parse the pidfile, or ``None`` when absent/corrupt."""
-    p = pidfile_path()
+    from golive.core.paths import peek_home
+    p = peek_home() / PIDFILE_NAME
     try:
         raw = p.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeDecodeError):
@@ -161,7 +162,10 @@ def probe_health(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
     and newer servers add ``version`` / ``home`` / ``data_backend`` / ``pid``.
     Callers must treat every field beyond ``status`` as optional.
     """
-    url = "http://{}:{}/health".format(_probe_host(host), port)
+    target = _probe_host(host)
+    if ":" in target:
+        target = "[" + target + "]"
+    url = "http://{}:{}/health".format(target, port)
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
             body = resp.read(65536).decode("utf-8", "replace")
@@ -193,26 +197,71 @@ def describe_port(host: str, port: int) -> Tuple[str, Optional[Dict]]:
 
 # ── status ──────────────────────────────────────────────────────────────────
 
-def recorded_port() -> Optional[int]:
-    """Port of the managed server as recorded in the pidfile.
+def inspect_service_record() -> Dict[str, Any]:
+    """Read-only identity check. A live PID alone may belong to another process.
 
-    Returns ``None`` when there is no pidfile, no port in it, or the
-    recorded process is gone — callers should then fall back to their
-    own default rather than probing a port nobody is listening on.
+    Version/backend drift is diagnostic information, not identity: keep an
+    otherwise matching server discoverable so operators can restart it.
     """
-    data = read_pidfile()
-    if not data:
-        return None
-    port = data.get("port")
-    if not port:
-        return None
-    pid = data.get("pid")
-    if pid and not pid_alive(int(pid)):
-        return None
+    from golive.core.paths import peek_home
+    path = peek_home() / PIDFILE_NAME
+    rec = read_pidfile()
+    out = {"exists": path.is_file(), "valid": False, "reason": "missing",
+           "record": rec, "health": None}
+    if rec is None:
+        if out["exists"]:
+            out["reason"] = "invalid_record"
+        return out
     try:
-        return int(port)
-    except (TypeError, ValueError):
-        return None
+        value = rec.get("port")
+        if not (type(value) is int or (isinstance(value, str) and value.isdecimal())):
+            raise ValueError
+        port = int(value)
+        if not 1 <= port <= 65535:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        out["reason"] = "invalid_port"
+        return out
+    try:
+        alive = pid_alive(rec["pid"])
+    except (ValueError, OverflowError):
+        out["reason"] = "invalid_pid"
+        return out
+    if not alive:
+        out["reason"] = "pid_not_alive"
+        return out
+    host = rec.get("host") or "127.0.0.1"
+    if not isinstance(host, str):
+        out["reason"] = "invalid_host"
+        return out
+    health = probe_health(host, port)
+    out["health"] = health
+    if not health or health.get("status") != "ok":
+        out["reason"] = "health_unavailable"
+        return out
+    # Require integer identity rather than accepting booleans or lossy casts.
+    pid = health.get("pid")
+    if type(pid) is not int or pid != rec["pid"]:
+        out["reason"] = "pid_mismatch"
+        return out
+    home = health.get("home")
+    try:
+        same_home = (isinstance(home, str) and bool(home)
+                     and Path(home).is_absolute()
+                     and Path(home).resolve() == peek_home().resolve())
+    except (OSError, ValueError, RuntimeError):
+        same_home = False
+    if not same_home:
+        out["reason"] = "home_mismatch"
+        return out
+    out.update(valid=True, reason="identity_matched")
+    return out
+
+
+def recorded_port() -> Optional[int]:
+    """Return a port only after /health matches the record PID and our HOME."""
+    info = inspect_service_record()
+    return int(info["record"]["port"]) if info["valid"] else None
 
 
 def status(port: Optional[int] = None,
@@ -225,22 +274,23 @@ def status(port: Optional[int] = None,
     import golive
     cli_version = golive.__version__
 
-    rec = read_pidfile()
-    stale = False
-    rec_pid = rec_host = rec_port = None
-    if rec:
-        rec_pid = rec.get("pid")
-        rec_host = rec.get("host")
-        rec_port = rec.get("port")
-        if not pid_alive(int(rec_pid)):
-            stale = True
-
-    probe_p = port or rec_port or DEFAULT_PORT
-    probe_h = host or rec_host or "127.0.0.1"
+    from golive.config import get_config
+    cfg = get_config()
+    record_info = inspect_service_record()
+    rec = record_info["record"]
+    stale = record_info["exists"] and not record_info["valid"]
+    probe_p = port if port is not None else (
+        int(rec["port"]) if record_info["valid"] else cfg.server.port or DEFAULT_PORT)
+    use_record_host = record_info["valid"] and int(rec["port"]) == probe_p
+    probe_h = host or ((rec.get("host") or "127.0.0.1") if use_record_host
+                      else cfg.server.host or "127.0.0.1")
     owner, health = describe_port(probe_h, probe_p)
 
     running = owner == "golive"
-    managed = bool(rec) and not stale and running
+    # Match the selected endpoint too: an explicit --port can target another server.
+    managed = bool(record_info["valid"] and running and use_record_host
+                   and health.get("pid") == record_info["health"].get("pid")
+                   and health.get("home") == record_info["health"].get("home"))
 
     svc_version = ""
     if health:
@@ -251,8 +301,6 @@ def status(port: Optional[int] = None,
             svc_pid = int(health["pid"])
         except (TypeError, ValueError):
             svc_pid = None
-    if svc_pid is None and not stale and rec_pid:
-        svc_pid = int(rec_pid)
 
     return {
         "running": running,
@@ -265,6 +313,9 @@ def status(port: Optional[int] = None,
         "version_match": (not svc_version) or svc_version == cli_version,
         "health": health,
         "stale_pidfile": stale,
+        "service_record": record_info,
+        "backend_match": (health.get("data_backend") == cfg.data.backend)
+                         if health and health.get("data_backend") else None,
         "started_at": (rec or {}).get("started_at", ""),
         "pidfile": str(pidfile_path()),
         "log": str(log_path()),

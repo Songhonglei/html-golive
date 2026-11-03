@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Preserve business record IDs, JSON values, sort indices and timestamps during archive restore and data migration; verify readback, reject identity conflicts and report clone mappings/partial writes. Honor explicit SQLite target configuration. Add archive-only previews, import/migrate JSON results and recovery guidance; earlier candidate artifacts require separate replacement and acceptance.
+
 ## [0.9.8] - Unreleased candidate
 
 - Retain standard CI wheel/sdist/Skill artifacts with source commits and checksums; record isolated installed MySQL/Chrome, upgrade and code-rollback acceptance. Document the existing export/import record-ID regeneration limitation separately from content restoration.

@@ -8,6 +8,13 @@ pinned to `0.9.7.post1`; package/CLI/health/bundled Skill in this candidate use
 `0.9.8`. No tag, GitHub release, PyPI upload or SkillHub/ClawHub upload is part
 of preparation.
 
+## Development follow-up
+
+DATA-01 source now implements identity-preserving business restore and migration;
+see [its validation](validation-data01.md) and the [recovery runbook](recovery.md).
+This does not change the historical accepted `f0de446` artifacts or results below.
+A new artifact must be bound to its exact fix commit and accepted separately.
+
 ## Completed inputs
 
 - [PR #7](https://github.com/Songhonglei/html-golive/pull/7) merged as

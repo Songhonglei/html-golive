@@ -20,7 +20,9 @@ def test_business_data_migration_pair(source,target,tmp_path,monkeypatch):
     monkeypatch.setenv('GOLIVE_HOME',str(tmp_path));reset_cache();reset_config()
     cfg=Config();cfg.data.backend=source;cfg.data.templates_table='migration_'+uuid.uuid4().hex[:10];set_config(cfg)
     source_store=get_template_store(cfg)
-    for i in range(5):source_store.create('model','row-'+str(i),content={'中文':'迁移 🧪','index':i},user_id='acceptance')
+    for i in range(5):
+        row=source_store.create('model','row-'+str(i),content={'中文':'迁移 🧪','index':i},user_id='acceptance')
+        source_store.restore_row(dict(row,sort_index=100+i,created_at='2020-01-01T00:00:00+00:00',updated_at='2021-01-01T00:00:00+00:00'),overwrite=True)
     target_cfg=replace(cfg,data=replace(cfg.data,backend=target))
     try:
         preview=migrate_backend('data',target,dry_run=True,cfg=cfg)
@@ -29,7 +31,9 @@ def test_business_data_migration_pair(source,target,tmp_path,monkeypatch):
         assert result['ok'] and result['count_ok'], result
         assert result['migrated']==5
         target_store=get_template_store(target_cfg)
-        assert {r['name']:r['content'] for r in target_store.list('model')['list']}=={r['name']:r['content'] for r in source_store.list('model')['list']}
+        assert target_store.list('model')['list']==source_store.list('model')['list']
+        repeated=migrate_backend('data',target,cfg=cfg)
+        assert repeated['ok'] and repeated['migrated']==0 and repeated['skipped']==5
         assert source_store.count('model')==5
     finally:
         for backend in set((source,target)) & {'postgres','mysql'}:

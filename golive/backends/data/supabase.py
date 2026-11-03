@@ -161,6 +161,19 @@ class TemplateStore:
 
     # ── writes ──────────────────────────────────────────────────────────────
 
+    def restore_row(self, row: dict, overwrite: bool = False) -> dict:
+        from ._restore import restore_payload
+        payload = restore_payload(row)
+        if overwrite:
+            rows = self.client.update(self.table, {"id": f"eq.{payload['id']}"},
+                                      {k: v for k, v in payload.items() if k != "id"})
+            if rows:
+                return rows[0]
+        rows = self.client.insert(self.table, payload)
+        if not rows:
+            raise RuntimeError("Restored data record is not readable")
+        return rows[0]
+
     def create(self, model_code: str, name: str, content=None,
                description: str = "", version: str = "1.0.0",
                user_id: str = "") -> dict:

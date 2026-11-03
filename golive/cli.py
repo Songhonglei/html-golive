@@ -2336,6 +2336,11 @@ def cmd_import(args) -> int:
     import json as _json
     from golive.core.portability import import_archive
 
+    if getattr(args, "json", False) and not args.yes and not args.dry_run:
+        print(_json.dumps({"ok": False, "operation": "import", "code": "confirmation_required",
+                           "error": "Use --yes to restore, or --dry-run for an archive-only preview."}))
+        return 2
+
     try:
         result = import_archive(
             args.archive,
@@ -2343,9 +2348,26 @@ def cmd_import(args) -> int:
             on_conflict=args.on_conflict,
             yes=args.yes,
         )
-    except (ValueError, RuntimeError) as e:
-        print(f"❌ {e}", file=sys.stderr)
+    except Exception as error:
+        from golive.core.portability import ArchiveValidationError
+        invalid = isinstance(error, ArchiveValidationError)
+        code = "invalid_archive" if invalid else "backend_error"
+        message = ("Archive/file is invalid or unavailable; no restore success was confirmed."
+                   if invalid else "Restore failed; check target configuration and connectivity.")
+        if getattr(args, "json", False):
+            print(_json.dumps({"ok": False, "operation": "import", "code": code,
+                               "error": message}))
+        else:
+            print(f"❌ {message}", file=sys.stderr)
         return 1
+
+    if getattr(args, "json", False):
+        cancelled = bool(result.get("cancelled"))
+        ok = bool(result.get("ok")) and not cancelled
+        code = "cancelled" if cancelled else "ok" if ok else "partial_failure" if result.get("partial") else "restore_failed"
+        print(_json.dumps({**result, "ok": ok, "operation": "import", "code": code},
+                          ensure_ascii=False, indent=2))
+        return 130 if cancelled else 0 if ok else 1
 
     if result.get("cancelled"):
         return 130
@@ -2357,6 +2379,8 @@ def cmd_import(args) -> int:
         print(f"  Data rows to import:  {s['data_rows_to_import']}")
         print(f"  HTML files to write:  {s['html_files_to_write']}")
         print(f"  Slug conflicts:       {s['conflict_count']}")
+        if not s.get("target_inspected", True):
+            print("  Target not inspected; archive-only preview, conflicts unknown.")
         if s["conflicts"]:
             print(f"  Conflicting slugs:")
             for c in s["conflicts"]:
@@ -2369,6 +2393,10 @@ def cmd_import(args) -> int:
     print(f"  Sites renamed:        {result['sites_renamed']}")
     print(f"  Data rows imported:   {result['data_rows_imported']}")
     print(f"  Data rows skipped:    {result['data_rows_skipped']}")
+    print(f"  Data identity kept:   {result.get('data_identity_preserved', False)}")
+    print(f"  Data exact restore:   {result.get('data_exact_restore', False)}")
+    if not result.get("data_identity_preserved", True):
+        print("  Record IDs differ or could not be restored; references were not rewritten.")
     print(f"  HTML files written:   {result['html_files_written']}")
     if result.get("html_files_skipped"):
         print(f"  HTML files kept:      {result['html_files_skipped']}"
@@ -2400,6 +2428,7 @@ def cmd_import(args) -> int:
 def cmd_migrate(args) -> int:
     """golive migrate <data|registry> --to <backend> — cross-backend migration."""
     from golive.core.portability import migrate_backend
+    import json
 
     try:
         result = migrate_backend(
@@ -2407,9 +2436,18 @@ def cmd_migrate(args) -> int:
             target=args.to,
             dry_run=args.dry_run,
         )
-    except ValueError as e:
-        print(f"❌ {e}", file=sys.stderr)
+    except Exception:
+        message = "Migration failed; check source/target configuration and connectivity."
+        if getattr(args, "json", False):
+            print(json.dumps({"ok": False, "operation": "migrate", "code": "backend_error", "error": message}))
+        else:
+            print(f"❌ {message}", file=sys.stderr)
         return 1
+
+    if getattr(args, "json", False):
+        print(json.dumps({"operation": "migrate", "code": "ok" if result.get("ok") else "migration_failed", **result},
+                         ensure_ascii=False, indent=2))
+        return 0 if result.get("ok") else 1
 
     if not result.get("ok"):
         print(f"❌ {result.get('error', 'migration failed')}", file=sys.stderr)
@@ -2424,16 +2462,19 @@ def cmd_migrate(args) -> int:
         print(f"  Source rows:       {result['source_count']}")
         _existing = result.get("target_existing")
         print(f"  Target existing:   "
-              f"{'unknown (target not reachable)' if _existing is None else _existing}")
+              f"{'unknown (target not inspected)' if _existing is None else _existing}")
         print(f"  Would migrate:     {result['would_migrate']}")
         if result.get("warning"):
             print(f"  ⚠️  {result['warning']}")
+        if result.get("preview_note"):
+            print(f"  {result['preview_note']}")
         return 0
 
     print(f"\n  Migration complete.")
     print(f"  Source backend:    {result['source_backend']}")
     print(f"  Target backend:    {result['target_backend']}")
     print(f"  Rows migrated:     {result['migrated']}")
+    print(f"  Rows skipped:      {result.get('skipped', 0)}")
     print(f"  Target after:      {result['target_count_after']}")
     print(f"  Count verified:    {'✅' if result.get('count_ok') else '❌'}")
 
@@ -2688,9 +2729,11 @@ def main(argv=None) -> int:
                    help="Report what would happen without writing anything")
     p.add_argument("--on-conflict", default="skip",
                    choices=["skip", "overwrite", "rename"],
-                   help="How to handle slug conflicts (default: skip)")
+                   help="Handle site/data conflicts; overwrite refuses different data IDs; rename clones (default: skip)")
     p.add_argument("--yes", action="store_true",
                    help="Skip the confirmation prompt")
+    p.add_argument("--json", action="store_true",
+                   help="Return structured restore results, identity mappings and error codes")
     p.set_defaults(func=cmd_import)
 
     # migrate
@@ -2703,6 +2746,8 @@ def main(argv=None) -> int:
                    help="Target backend")
     p.add_argument("--dry-run", action="store_true",
                    help="Report what would happen without writing anything")
+    p.add_argument("--json", action="store_true",
+                   help="Return structured migration counts and error codes")
     p.set_defaults(func=cmd_migrate)
 
     args = parser.parse_args(argv)

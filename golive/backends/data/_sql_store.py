@@ -26,8 +26,6 @@ class SQLTemplateStore:
                 d["content"] = json.loads(raw)
             except ValueError:
                 d["content"] = {"raw": raw}
-        elif raw is None:
-            d["content"] = {}
         # psycopg3 returns JSONB as dict already, but we normalise anyway
         return d
 
@@ -123,6 +121,10 @@ class SQLTemplateStore:
         return {"total": len(hits), "list": hits[start:start + page_size]}
 
     # ── writes ──────────────────────────────────────────────────────────────
+
+    def restore_row(self, row: dict, overwrite: bool = False) -> dict:
+        from ._restore import restore_sql_row
+        return restore_sql_row(self, row, overwrite=overwrite)
 
     def create(self, model_code: str, name: str, content=None,
                description: str = "", version: str = "1.0.0",

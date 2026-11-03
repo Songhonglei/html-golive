@@ -119,8 +119,6 @@ class TemplateStore:
                 d["content"] = json.loads(raw)
             except ValueError:
                 d["content"] = {"raw": raw}
-        elif raw is None:
-            d["content"] = {}
         return d
 
     @staticmethod
@@ -224,6 +222,10 @@ class TemplateStore:
         return {"total": len(hits), "list": hits[start:start + page_size]}
 
     # ── writes ──────────────────────────────────────────────────────────────
+
+    def restore_row(self, row: dict, overwrite: bool = False) -> dict:
+        from ._restore import restore_sql_row
+        return restore_sql_row(self, row, overwrite=overwrite, placeholder="?")
 
     def create(self, model_code: str, name: str, content=None,
                description: str = "", version: str = "1.0.0",

@@ -63,7 +63,9 @@ def get_template_store(cfg=None):
     backend = cfg.data.backend
     if backend in ("", "sqlite"):
         from golive.backends.data.sqlite_store import TemplateStore
-        return TemplateStore()
+        from golive.core.paths import get_data_db
+        return TemplateStore(db_path=cfg.data.sqlite_path or get_data_db(),
+                             table=cfg.data.templates_table)
     if backend == "supabase":
         from golive.backends.data.supabase import TemplateStore
         from golive.backends.postgrest import client_from_config

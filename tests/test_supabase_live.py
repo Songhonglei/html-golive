@@ -152,11 +152,13 @@ def test_live_supabase_cli_verify_publish_export_import(supabase_live):
     assert response.ok and '中文 🚀' in response.content.decode()
     assert s.cfg.supabase.service_key not in response.text
     row = s.data.create('live', 'archive', content={'汉字': '🚀'})
+    row = s.data.update(row['id'], {'sort_index': 37})
     archive = s.home / 'all.tar.gz'
     cli('export', '--output', str(archive))
     s.storage.delete(site['site_id']); s.registry.delete(site['site_id']); s.data.delete(row['id'])
     cli('import', str(archive), '--yes')
-    assert s.data.list('live')['list'][0]['content'] == {'汉字': '🚀'}
+    from golive.backends.data._restore import same_record
+    assert same_record(row, s.data.get(row['id']))
     assert s.registry.get(site['site_id'])['slug'] == 'live-app'
     assert '中文 🚀' in s.storage.read(site['site_id'])
     cli('doctor', '--port', s.base.rsplit(':', 1)[1], '--json')
@@ -170,18 +172,22 @@ def test_live_supabase_migration_round_trip(supabase_live, sql_backend, monkeypa
     from golive.core.portability import migrate_backend
     from golive.backends.factory import get_template_store
     row = s.data.create('live', 'migration', content={'往返': [1, '🚀']})
+    row = s.data.update(row['id'], {'sort_index': 31})
     result = migrate_backend('data', sql_backend)
     assert result['ok'], result.get('error')
     from copy import deepcopy
     sql_cfg = deepcopy(s.cfg); sql_cfg.data.backend = sql_backend
     sql_store = get_template_store(sql_cfg)
     try:
-        assert sql_store.list('live')['list'][0]['content'] == {'往返': [1, '🚀']}
+        from golive.backends.data._restore import same_record
+        assert same_record(row, sql_store.get(row['id']))
+        repeated = migrate_backend('data', sql_backend)
+        assert repeated['ok'] and repeated['migrated'] == 0 and repeated['skipped'] == 1
         s.data.delete(row['id'])
         set_config(sql_cfg)
         result = migrate_backend('data', 'supabase')
         assert result['ok'], result.get('error')
-        assert s.data.list('live')['list'][0]['content'] == {'往返': [1, '🚀']}
+        assert same_record(row, s.data.get(row['id']))
     finally:
         set_config(s.cfg)
         if env:

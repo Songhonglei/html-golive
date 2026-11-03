@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
 
 jobs:
   test:
@@ -89,7 +89,7 @@ jobs:
         env:
           GOLIVE_PG_DSN: postgresql://golive:golive_ci@127.0.0.1:5432/golive_test
         run: |
-          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py tests/test_sql_backend_contract.py tests/test_backend_http_contract.py \
+          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py tests/test_sql_backend_contract.py tests/test_backend_http_contract.py tests/test_restore_identity.py \
             -q --timeout=60 --timeout-method=signal -rs
 
       - name: Assert the suite actually ran
@@ -144,7 +144,7 @@ jobs:
           GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
         run: |
           python -m pytest tests/test_mysql_config.py tests/test_sql_backend_contract.py \
-            tests/test_backend_http_contract.py tests/test_data_layer_e2e.py \
+            tests/test_backend_http_contract.py tests/test_data_layer_e2e.py tests/test_restore_identity.py \
             -q --timeout=45 --junitxml=mysql-results.xml
       - name: Require actual MySQL cases (never accept all-skipped)
         run: |

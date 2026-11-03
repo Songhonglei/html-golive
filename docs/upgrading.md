@@ -243,10 +243,10 @@ cp -a ~/.golive ~/.golive.bak-$(date +%F)
 
 The [0.9.8 candidate rehearsal](release-0.9.8.md) verified one code rollback to
 `0.9.7.post1` on isolated MySQL, including candidate-written rows. It does not
-establish compatibility with other versions or schemas. Current export/import
-regenerates data record IDs when restoring into an empty database; it can break
-references to old IDs and is not a substitute for an identity-preserving database
-backup. Configuration, credentials, audit history and external resources require
+establish compatibility with other versions or schemas. Published 0.9.7.post1 and the accepted `f0de446` artifact regenerate data IDs on
+import. [DATA-01 development source](validation-data01.md) preserves business IDs
+and metadata on empty targets; verify the exact commit/artifact and conflict
+report. Export is not a consistent multi-resource database backup. Configuration, credentials, audit history and external resources require
 separate recovery steps; see [DATA-01](https://github.com/Songhonglei/html-golive/issues/11).
 
 ---
@@ -488,8 +488,9 @@ cp -a ~/.golive ~/.golive.bak-$(date +%F)
 ```
 
 [0.9.8 候选演练](release-0.9.8.md)只验证了独立 MySQL 上回退到 `0.9.7.post1`，
-并读取候选版写入的记录，不能推广到其他版本或 schema。当前 export/import
-导入空库时会重新生成数据记录 ID，旧 ID 引用可能失效，不能代替保留身份的数据库备份。
+并读取候选版写入的记录，不能推广到其他版本或 schema。已发布的 0.9.7.post1 与已验收的 `f0de446` 产物导入时会重新生成数据 ID；
+[DATA-01 开发源码](validation-data01.md)已增加保留业务记录身份和元数据的恢复接口，
+需核对精确提交/产物及冲突结果。导出仍不是跨数据库和文件的一致性备份。
 配置、凭证、审计和外部资源需分别恢复；详见 [DATA-01](https://github.com/Songhonglei/html-golive/issues/11)。
 
 ---

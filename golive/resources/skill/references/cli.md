@@ -224,7 +224,7 @@ are cross-checked against the backend before writing.
 ## import
 
 ```bash
-golive import <archive> [--dry-run] [--on-conflict skip|overwrite|rename] [--yes]
+golive import <archive> [--dry-run] [--on-conflict skip|overwrite|rename] [--yes] [--json]
 ```
 
 Restores an archive produced by `golive export`. Slug conflicts (a site
@@ -234,12 +234,24 @@ strategy: `skip` (default — leave existing untouched), `overwrite`
 same archive twice with `skip` is idempotent. Archives are validated
 against path traversal before extraction.
 
-`--dry-run` reports what would happen without writing anything.
+DATA-01 development source preserves business IDs, content, sort indices and
+timestamps on empty targets; older published/candidate artifacts regenerate IDs.
+Use the exact fix commit/wheel. `--json` reports `ok`, `code`, identity maps,
+`data_exact_restore`, metadata defaults, per-record errors and uncertain writes.
+Require exit zero and inspect exactness; `ok:true` alone also permits explicit
+skip/clone operations. Overwrite refuses a different ID for the same logical key;
+rename creates new IDs and never rewrites opaque references. Import may be partial;
+after transient failure retry with skip and independently verify records.
+
+`--dry-run` validates the archive without opening target backends; target
+conflicts/connectivity remain unknown. Exports exclude config/credentials,
+audit/session state, page history and external resources; pause source writers
+for a consistent backup. Registry timestamps are outside the exact data contract.
 
 ## migrate
 
 ```bash
-golive migrate <data|registry> --to sqlite|postgres|mysql|supabase [--dry-run]
+golive migrate <data|registry> --to sqlite|postgres|mysql|supabase [--dry-run] [--json]
 ```
 
 Copies data or registry rows from the current backend to a target
@@ -247,8 +259,13 @@ backend. The source is never modified — migration copies, it does not
 move. After migration, update `golive.yaml` to point at the new backend
 and restart `golive serve`. Row counts are verified before and after; a
 mismatch aborts with a clear message. If the target backend is
-unavailable (e.g. psycopg not installed), migration fails before
-touching anything with the exact fix command.
+unavailable, migration fails with an explicit diagnostic. Business IDs and
+metadata are preserved, identical records are skipped and conflicting targets
+are not silently overwritten. `--json` includes added/skipped counts and failure
+codes. Preview reads the source but does not inspect or initialize the target.
+Migration of registry rows does not move page files. Parser/config-loading
+errors retain the existing CLI behavior; the JSON contract covers these
+commands' archive/backend operation results.
 
 ## data directory layout
 

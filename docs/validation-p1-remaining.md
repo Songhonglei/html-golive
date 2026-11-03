@@ -68,15 +68,16 @@ They do not change system proxy, daemon settings or certificate validation.
 ## Coverage matrix
 
 `passed` below describes the named scope only. CI results and installed artifact
-receipts are recorded separately when complete. Earlier DATA-01 recovery evidence
+receipts follow below. Earlier DATA-01 recovery evidence
 remains in [its report](validation-data01.md), not reclassified as new coverage.
 
 | Scenario | SQLite | PostgreSQL | MySQL | Supabase |
 | --- | --- | --- | --- | --- |
-| 12,050 rows: exact models, late search, literal wildcards, stable tied pages, complete export | passed locally | passed, native dedicated DB | passed, dedicated Docker DB | passed with fake HTTP; real PostgREST CI required |
-| CLI JSON parser/config/partial output, conflicts, retry and interruption | passed locally; shared CLI contract | shared CLI + live SQL contracts passed | shared CLI + live SQL contracts passed | shared CLI + fake HTTP; live CI required |
-| Missing PostgREST total / server page cap | shared adapter guards | shared adapter guards | shared adapter guards | fake capped HTTP passed; real cap CI required |
+| 12,050 rows: exact models, late search, literal wildcards, stable tied pages, complete export | passed locally | passed, native dedicated DB | passed, dedicated Docker DB | passed with fake HTTP and real PostgREST CI |
+| CLI JSON parser/config/partial output, conflicts, retry and interruption | passed locally; shared CLI contract | shared CLI + live SQL contracts passed | shared CLI + live SQL contracts passed | shared CLI + fake HTTP; live CI passed |
+| Missing PostgREST total / server page cap | shared adapter guards | shared adapter guards | shared adapter guards | fake capped HTTP and real capped CI passed |
 | Real browser count failure/default ID order | passed in Chrome against injected TemplateAPI fixture | shared browser contract only | shared browser contract; full mode separately | fixture only; no full Supabase browser claim |
+| Full installed Chrome CLI/browser/SQL/restart mode | not rerun in this batch; prior DATA-01 passed | passed, 16 stages | passed, 16 stages | unsupported by full mode; not claimed |
 | Docker lifecycle / TLS CA and hostname | not applicable | not applicable | passed, controlled loopback Docker endpoint | not applicable |
 | HTTP proxy / HTTPS CONNECT / timeout | shared real HTTP client test passed | not a PostgreSQL proxy test | not a MySQL wire-proxy test | shared PostgREST HTTP client passed, controlled origin |
 | External-network remote TLS, enterprise proxy / TLS interception | unverified | unverified | unverified | unverified |
@@ -116,3 +117,52 @@ in each process (SQLite, fake PostgREST, and the named real SQL backend).
 Docker/TLS/proxy acceptance passed all 11, without skips. Chrome's focused
 injected-API count/order contract passed one. CI and installed-artifact results
 must be attached to the exact commit before release acceptance.
+
+## CI and installed-artifact receipt
+
+Runtime/package baseline: `44a8be4baf52900a12362ed24a09f19bd1d23105`.
+Linux-specific sandbox correction: `a54374a26392879991afa9a6507b2bf678e62b08`.
+The first Linux environment job failed on readiness with the private host bind.
+The correction uses the image's owned anonymous volume instead; its Linux
+environment job passed. The failed run remains part of the evidence history.
+
+The corrected [CI run](https://github.com/Songhonglei/html-golive/actions/runs/41629384149)
+builds wheel/sdist/Skill with a source-commit manifest. Real Supabase CI passed
+eight scenarios plus all six directed migration pairs (14 total); the 12,050-row
+case exercises the real server response cap. SQL, browser/full and environment
+jobs passed. All nine checks passed at this corrected runtime baseline,
+including Python 3.9/3.11/3.12 and macOS.
+
+The standard CI artifact was downloaded through the connected GitHub account;
+ZIP and per-file SHA-256 values were checked before installation. A fresh Python
+3.12 environment outside the repository contained the installed wheel and only
+matching sdist tests/scripts (no source `golive/` directory). Import paths,
+`direct_url.json`, runtime file hashes and environment isolation were recorded.
+
+- Initial wheel SHA-256: `f9f99fd155ab31f4ff844b5db3edec9ee6fb47ded2c606823a33dfbed74be656`.
+- Corrected wheel SHA-256: `a3b974b25a49b0700448191f0cb8b968280b3636db963a699010e81430efa412`.
+- All 122 files under the wheels' `golive/` package were byte-identical; the
+  correction changes the sdist sandbox/test resources and documentation. The
+  corrected wheel was then installed and its matching sdist sandbox script
+  independently compared with the corrected development source.
+- Installed real PostgreSQL: 111 passed, 26 skipped; full Chrome mode 16/16.
+- Installed real MySQL: 111 passed, 26 skipped; full Chrome mode 16/16.
+
+The corrected installed artifact additionally passed all 34 focused JSON,
+Docker/TLS/proxy and real Chrome count/order checks. A first isolated-HOME smoke
+correctly failed to find the Docker daemon; the rerun explicitly selected the
+authorized daemon socket without copying user credentials. With an isolated
+HOME, supply an explicit `DOCKER_HOST` when Docker relies on a per-user context.
+Both failed preliminary receipts are retained.
+
+Each 26-skip set is for the other external SQL backend not configured in that
+process. Full reports include direct SQL, temporary service PID/HOME and
+restart persistence; both runs cleaned their own random pages/data/server.
+The explicit matrix still excludes external-network TLS, enterprise proxies,
+Supabase full browser/restart mode and production-scale performance guarantees.
+
+All newly created native PostgreSQL and Docker MySQL instances were stopped and
+their dedicated data directories/credentials and owned anonymous volumes removed.
+Existing unrelated containers, services, databases and the pre-existing untracked
+build directory were preserved. The installed venv and private evidence remain
+for review; no merge, release or business deployment was performed.

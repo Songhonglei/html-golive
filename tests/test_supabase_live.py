@@ -183,6 +183,11 @@ def test_live_supabase_migration_round_trip(supabase_live, sql_backend, monkeypa
         assert same_record(row, sql_store.get(row['id']))
         repeated = migrate_backend('data', sql_backend)
         assert repeated['ok'] and repeated['migrated'] == 0 and repeated['skipped'] == 1
+        changed = sql_store.update(row['id'], {'content': {'keep_target': True}})
+        conflict = migrate_backend('data', sql_backend)
+        assert not conflict['ok'] and conflict['migrated'] == 0
+        assert sql_store.get(row['id']) == changed
+        sql_store.restore_row(row, overwrite=True)
         s.data.delete(row['id'])
         set_config(sql_cfg)
         result = migrate_backend('data', 'supabase')
@@ -193,3 +198,14 @@ def test_live_supabase_migration_round_trip(supabase_live, sql_backend, monkeypa
         if env:
             with sql_store._conn() as db:
                 db.execute(f'DROP TABLE {sql_store.table}')
+
+
+def test_live_supabase_restore_json_scalars_and_metadata(supabase_live):
+    from golive.backends.data._restore import same_record
+    store=supabase_live.data
+    for index,value in enumerate([{'nested':[1,None,True]},[1,'二'],'plain string','123','null','{"key":1}','"quoted"',4,False,None]):
+        row=dict(id=str(uuid.uuid4()),model_code='restore',name='scalar-'+str(index),user_id='',description='中文 🧪',content=value,version='2.0',sort_index=index,created_at='2020-01-01T00:00:00+00:00',updated_at='2021-01-01T00:00:00+00:00')
+        assert same_record(row,store.restore_row(row))
+        changed=dict(row,sort_index=-index,updated_at='2022-01-01T00:00:00+00:00')
+        assert same_record(changed,store.restore_row(changed,overwrite=True))
+        assert same_record(changed,store.get(row['id']))

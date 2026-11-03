@@ -34,10 +34,59 @@ installed wheel: reading an original record ID returns `None` (expected failure)
 The development regression requires the same original ID, linked content, order,
 metadata and repeated-import result to agree.
 
-Final source, real MySQL and installed-artifact results will be recorded here
-when those runs finish. External integration cases are not counted as passed
-when their DSNs are absent. Real Supabase CI exercises PostgREST/Storage/RLS plus
-SQL migration round trips; a fake PostgREST run is labelled separately.
+Runtime fix baseline: `d28f4a87da5e868a5a4ba27fcfd404076596ec4d`.
+The first `beaa412` CI artifact failed PostgreSQL scalar-string restoration:
+psycopg had already decoded JSONB and a second decode changed plain strings.
+That artifact is retained as rejected, not accepted. The fix distinguishes decoded
+PostgreSQL JSONB from MySQL/SQLite JSON text; JSON-looking scalar strings remain strings.
+
+| Check | Actual result |
+| --- | --- |
+| Local source suite at runtime baseline | 1235 passed, 125 skipped, 643 subtests passed (121.06s) |
+| Source isolated MySQL contracts | 86 passed, 29 skipped; 27 actual MySQL cases, including negative migration conflicts |
+| Fresh installed-wheel contracts from sdist tests | 86 passed, 29 skipped; 27 actual MySQL cases |
+| Independent installed lifecycle CLI | 16 commands passed; unrelated sleeper preserved |
+| Installed MySQL 8.4.13 + Chrome | All 16 full stages passed, with browser/SQL/admin/restart evidence |
+| Installed old-release upgrade, exact restore and code rollback | All 11 checks passed; zero record-ID limitations in this fixture |
+
+Real database integrations are not counted as passed when DSNs are absent.
+CI runs real PostgreSQL/MySQL and Supabase/PostgREST/Storage/RLS contracts and
+migration round trips. Follow-up tests add negative migration conflicts and
+live Supabase scalar/metadata restoration; final check status is recorded in PR #12.
+The fake PostgREST runs above remain distinct from actual Supabase CI evidence.
+
+The upgrade fixture installed the published 0.9.7.post1 wheel, exported a row with
+historical timestamps and sort index 73, installed the exact new wheel while the
+old process remained running, verified version drift, restarted the candidate, restored into a
+new database and downgraded code. Page hashes, original record ID and
+all business fields matched. Independent MySQL SELECTs confirmed ID/content/order/
+timestamps in the restored database; code rollback read candidate-written rows.
+Configuration was copied separately. All self-created services stopped and the
+native MySQL sandbox was cleaned; previous acceptance resources were not touched.
+
+CI artifact ID `13223464958` from
+[run 41622322298](https://github.com/Songhonglei/html-golive/actions/runs/41622322298)
+was downloaded and hash-verified. Source commit is the runtime baseline above;
+GitHub checkout merge commit is `0cdfb3cdcdddadff8be0ec74e4b96546a333385f`.
+Outer artifact ZIP SHA-256:
+`d7511f9110f6186e36dff4986615e1c52598de6b77dbfd4df1fe9b4db3790d62`.
+
+| Distribution | SHA-256 |
+| --- | --- |
+| `html_golive-0.9.8-py3-none-any.whl` | `3def485bbad91deae52d4edf7a3acf936ede3a1e90b1cee0270c66affb028ef0` |
+| `html_golive-0.9.8.tar.gz` | `0644a268705cf2c9a3b162d9c1f5b0cf19505e1591b0c910d5b4c5a0ea0845d8` |
+| `html-golive-skill-0.9.8.zip` | `49815230d096b6b38c5cbc2dbf2faa05f70c0d1d46d5b8d36b12ee45da92225e` |
+
+All 121 installed runtime files matched the wheel and source; CLI/module/distribution/
+health/bundled Skill versions agree at 0.9.8. Installation ran outside the checkout.
+The installer omitted optional archive hashes in `direct_url.json`; the receipt
+supplements its file URL with independently verified SHA-256 and installed bytes.
+Later test/documentation-only changes do not replace this artifact identity.
+
+Local evidence includes `installed-provenance.json`, `installed-mysql-results.xml`,
+`mysql-full/`, `lifecycle/` and `upgrade/` reports/CLI logs/SQL/backup under the private
+`.artifacts/p1-data01/` directory. No registry upload, tag, release or business
+service/database modification was performed.
 
 ## Limits
 

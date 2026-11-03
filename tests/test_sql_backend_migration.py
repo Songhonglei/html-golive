@@ -34,6 +34,12 @@ def test_business_data_migration_pair(source,target,tmp_path,monkeypatch):
         assert target_store.list('model')['list']==source_store.list('model')['list']
         repeated=migrate_backend('data',target,cfg=cfg)
         assert repeated['ok'] and repeated['migrated']==0 and repeated['skipped']==5
+        ident=source_store.list('model')['list'][0]['id']
+        changed=target_store.update(ident,{'content':{'keep_target':True}})
+        conflict=migrate_backend('data',target,cfg=cfg)
+        assert not conflict['ok'] and conflict['migrated']==0 and conflict['skipped']==4
+        assert target_store.get(ident)==changed
+        assert source_store.get(ident)['content']!={'keep_target':True}
         assert source_store.count('model')==5
     finally:
         for backend in set((source,target)) & {'postgres','mysql'}:

@@ -306,6 +306,42 @@ jobs:
           path: environment-results.xml
           if-no-files-found: error
 
+  installed:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/distributions
+      - name: Install exact CI wheel in a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/installed-venv"
+          "$RUNNER_TEMP/installed-venv/bin/python" -m pip install "$RUNNER_TEMP"/distributions/*.whl pytest pytest-timeout Pillow cryptography
+      - name: Full installed suite outside the checkout
+        run: |
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/installed-venv/bin/python" "$GITHUB_WORKSPACE/scripts/verify_installed.py" \
+            --wheel "$RUNNER_TEMP"/distributions/*.whl \
+            --sdist "$RUNNER_TEMP"/distributions/*.tar.gz \
+            --work-dir "$RUNNER_TEMP/installed-acceptance"
+      - name: Retain installed provenance and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-acceptance
+          path: |
+            ${{ runner.temp }}/installed-acceptance/provenance.json
+            ${{ runner.temp }}/installed-acceptance/result.json
+            ${{ runner.temp }}/installed-acceptance/results.xml
+            ${{ runner.temp }}/installed-acceptance/pytest.log
+          if-no-files-found: error
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15

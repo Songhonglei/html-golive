@@ -42,3 +42,7 @@ Task-local raw logs, JUnit XML, browser receipts/screenshots and artifact proven
 - Public HTML and the existing business-data API do not become private/row-authorized through group grants.
 - Operator-local groups and audit are excluded from portability archives; back up local management state separately.
 - No merge, release or business deployment is authorized by these checks.
+
+## Independent follow-up
+
+The independent 8c7806d acceptance passed the executed core contracts but found UI01 (English conflict UI remained Chinese) and H01–H03 (source-layout assumptions in the installed full suite). These findings are accepted; the original installed result remains failed. The implementation/test-harness repairs and source-free CI gate are described in [the follow-up](validation-p2-ui01.md). New validation does not rewrite the original report.

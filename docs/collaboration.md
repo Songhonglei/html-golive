@@ -6,6 +6,8 @@ Tracked in [#16](https://github.com/Songhonglei/html-golive/issues/16), on a sep
 
 Local page storage now serializes all `publish`, conditional editor saves and deletes across server/CLI processes using the same HOME. Saves compare the stored HTML's SHA-256 revision under that lock, then snapshot and atomically replace the file. Published pages carry a transient revision meta tag for exactly the content served. The injected editor removes this tag before uploading.
 
+The editor follows the saved admin language preference, then the HTML page language, then browser language (English fallback). Conflict labels, actions and confirmation support English and Chinese; re-publish older pages to update their injected script.
+
 An editor with an old revision receives HTTP **409**, `code: edit_conflict`, and `current_revision`. The saved page and its snapshots are unchanged. The browser retains the local draft and opens a comparison with the latest server HTML. Copy or merge the draft, then reload; retries never automatically adopt a newer revision. No automatic merge or force-write button is provided.
 
 For an Agent:

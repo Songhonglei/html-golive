@@ -404,7 +404,9 @@ class TestCliSurface(unittest.TestCase):
 
 class TestPackaging(unittest.TestCase):
     def test_pyproject_declares_the_skill_files(self):
-        root = Path(si.__file__).resolve().parent.parent.parent
+        # Build declarations are sdist test resources, not runtime files in
+        # site-packages. TestPackagedSkill independently checks installed assets.
+        root = Path(__file__).resolve().parents[1]
         text = (root / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("resources/skill/SKILL.md", text)
         self.assertIn("resources/skill/references/*.md", text)

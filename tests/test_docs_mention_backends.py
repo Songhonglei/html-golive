@@ -15,7 +15,17 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+import golive
+
 ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(golive.__file__).resolve().parent
+
+
+def _doc_path(relative):
+    # Runtime docs/modules belong to the imported wheel. Project docs belong
+    # to the matching sdist test bundle; neither requires a source checkout.
+    path = Path(relative)
+    return PACKAGE_ROOT.joinpath(*path.parts[1:]) if path.parts[0] == "golive" else ROOT / path
 
 # Files that describe the data layer to humans or to agents. Every one of
 # these must name every server-proxied backend.
@@ -39,7 +49,7 @@ class TestDocsMentionEveryDataBackend(unittest.TestCase):
     def test_every_data_layer_doc_names_postgres(self):
         missing = []
         for rel in DATA_LAYER_DOCS:
-            path = ROOT / rel
+            path = _doc_path(rel)
             if not path.is_file():
                 missing.append(f"{rel} (file not found)")
                 continue
@@ -67,9 +77,7 @@ class TestDocsMentionEveryDataBackend(unittest.TestCase):
         """`/api/data` serves every server-proxied backend, not just sqlite."""
         offenders = []
         for rel in DATA_LAYER_DOCS:
-            path = ROOT / rel
-            if not path.is_file():
-                continue
+            path = _doc_path(rel)
             for i, line in enumerate(
                     path.read_text(encoding="utf-8").splitlines(), 1):
                 low = line.lower()

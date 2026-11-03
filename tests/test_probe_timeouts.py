@@ -16,13 +16,17 @@ import re
 import unittest
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+import golive
+
+PACKAGE_ROOT = Path(golive.__file__).resolve().parent
 
 
 class TestOutboundProbesAreBounded(unittest.TestCase):
 
     def _sources(self):
-        for path in (REPO / "golive").rglob("*.py"):
+        sources = list(PACKAGE_ROOT.rglob("*.py"))
+        self.assertTrue(sources, "must inspect the imported runtime, not an empty source path")
+        for path in sources:
             yield path, path.read_text(encoding="utf-8")
 
     def test_every_external_connect_sets_a_timeout(self):
@@ -87,7 +91,7 @@ class TestServerBindSkipsReverseDNS(unittest.TestCase):
             srv.server_close()
 
     def test_preview_server_also_skips_the_lookup(self):
-        src = (REPO / "golive" / "core" / "preview_server.py").read_text(
+        src = (PACKAGE_ROOT / "core" / "preview_server.py").read_text(
             encoding="utf-8")
         self.assertIn("def server_bind", src,
                       "preview server must override server_bind too")

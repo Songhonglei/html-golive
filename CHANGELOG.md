@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Localize the inline editor and conflict comparison in English/Chinese, including confirmations and error guidance; follow saved admin/page/browser language. Repair installed-test source-path assumptions and add a full source-free CI wheel acceptance gate.
+
 - P2 development (separate delivery): require content revisions for local-storage editor saves, reject stale writes without changing saved HTML/snapshots, retain browser drafts for comparison, and serialize local writers across processes. Custom clients need `If-Match`; remote object-storage editor saves explicitly refuse unsupported conditional writes.
 - Add instance-local team groups with verified-login email membership, additive viewer/maintainer site grants, immediate next-request revocation, admin management UI/API and transactional change audit. Preserve personal roles; group state needs a separate management-database backup. See [collaboration scope and compatibility](docs/collaboration.md).
 

@@ -278,22 +278,51 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build wheel
+      - name: Build distributions
         run: |
           python -m pip install --upgrade pip build
-          python -m build --wheel
+          python -m build
 
-      - name: Verify wheel contents
+      - name: Verify distributions and record provenance
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python - <<'EOF'
-          import glob, sys, zipfile
+          import email, glob, hashlib, json, os, pathlib, re, tarfile, zipfile
           whl = glob.glob("dist/*.whl")[0]
-          names = zipfile.ZipFile(whl).namelist()
+          wheel = zipfile.ZipFile(whl)
+          names = wheel.namelist()
           css = [n for n in names if "css_styles" in n and n.endswith(".css")]
           assert len(css) == 19, f"expected 19 css styles in wheel, got {len(css)}"
           assert any(n.endswith("rules.yaml") for n in names), "rules.yaml missing"
           assert not any("__pycache__" in n for n in names), "pycache leaked"
+          metadata = email.message_from_bytes(wheel.read(next(n for n in names if n.endswith('.dist-info/METADATA'))))
+          version = metadata['Version']
+          skill = wheel.read('golive/resources/skill/SKILL.md')
+          assert re.search(rb'^version: (.+)$', skill, re.M).group(1).decode() == version
+          assert re.search(rb'__version__ = "([^"]+)"', wheel.read('golive/__init__.py')).group(1).decode() == version
+          sdist = glob.glob('dist/*.tar.gz')[0]
+          with tarfile.open(sdist) as archive:
+              members = archive.getnames()
+              prefix = members[0].split('/')[0] + '/'
+              assert prefix + 'tests/test_service_control_identity.py' in members
+              assert prefix + 'tests/__init__.py' in members
+              assert not any('/.artifacts/' in n or '/.secrets/' in n for n in members)
+              assert archive.extractfile(prefix + 'golive/resources/skill/SKILL.md').read() == skill
+              assert email.message_from_bytes(archive.extractfile(prefix + 'PKG-INFO').read())['Version'] == version
+          skill_zip = pathlib.Path('dist') / f'html-golive-skill-{version}.zip'
+          with zipfile.ZipFile(skill_zip, 'w', zipfile.ZIP_DEFLATED) as output:
+              for name in names:
+                  if name.startswith('golive/resources/skill/'):
+                      output.writestr('html-golive/' + name.removeprefix('golive/resources/skill/'), wheel.read(name))
+          files = {p.name: {'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes': p.stat().st_size}
+                   for p in sorted(pathlib.Path('dist').iterdir()) if p.is_file()}
+          manifest = {'version': version, 'source_commit': os.environ['SOURCE_COMMIT'],
+                      'checkout_commit': os.environ['GITHUB_SHA'], 'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+                      'build_command': 'python -m build', 'files': files}
+          pathlib.Path('dist/artifact-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
           print(f"wheel OK: {len(names)} files, {len(css)} css styles")
+          print(json.dumps(manifest, indent=2))
           EOF
 
       - name: Smoke test from wheel
@@ -321,3 +350,10 @@ jobs:
           golive serve logs -n 20
           golive serve stop
           golive serve status || echo "stopped as expected (exit 1)"
+
+      - name: Retain distributions for independent acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/
+          if-no-files-found: error

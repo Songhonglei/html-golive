@@ -13,7 +13,7 @@ of preparation.
 DATA-01 source now implements identity-preserving business restore and migration;
 see [its validation](validation-data01.md) and the [recovery runbook](recovery.md).
 This does not change the historical accepted `f0de446` artifacts or results below.
-A separately built and installed P1 artifact is bound to runtime fix commit `d28f4a8`;
+A separately built and installed P1 artifact is bound to runtime fix commit `409a713`;
 its independent MySQL/Chrome and exact recovery/rollback results are recorded in
 the DATA-01 validation. Publication still requires an explicit final artifact selection.
 

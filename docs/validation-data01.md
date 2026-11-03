@@ -28,23 +28,28 @@ SQLite factories now use the explicitly supplied database/table configuration.
 
 ## Evidence
 
-Local private logs and scripts are retained under `.artifacts/p1-data01/`.
+Local private logs and scripts are retained under `.artifacts/p1-data01/`;
+`final/` contains the accepted final artifact and rerun evidence.
 The baseline regression restores into a separate SQLite target using the old
 installed wheel: reading an original record ID returns `None` (expected failure).
 The development regression requires the same original ID, linked content, order,
 metadata and repeated-import result to agree.
 
-Runtime fix baseline: `d28f4a87da5e868a5a4ba27fcfd404076596ec4d`.
+Runtime fix baseline: `409a713a31c67bd869f3c1edabb921832bb1f55c`.
 The first `beaa412` CI artifact failed PostgreSQL scalar-string restoration:
 psycopg had already decoded JSONB and a second decode changed plain strings.
 That artifact is retained as rejected, not accepted. The fix distinguishes decoded
 PostgreSQL JSONB from MySQL/SQLite JSON text; JSON-looking scalar strings remain strings.
+A subsequent fault injection exposed a committed migration row with failed readback
+reported as non-partial. Final code also derives partial status from the observed
+target count; retry recognizes the committed original ID. Before/after failure
+evidence is retained, and the final wheel includes this correction.
 
 | Check | Actual result |
 | --- | --- |
-| Local source suite at runtime baseline | 1235 passed, 125 skipped, 643 subtests passed (121.06s) |
-| Source isolated MySQL contracts | 86 passed, 29 skipped; 27 actual MySQL cases, including negative migration conflicts |
-| Fresh installed-wheel contracts from sdist tests | 86 passed, 29 skipped; 27 actual MySQL cases |
+| Local source suite at runtime baseline | 1236 passed, 126 skipped, 643 subtests passed (122.00s) |
+| Source isolated MySQL contracts | 87 passed, 29 skipped; 27 actual MySQL cases, including negative migration conflicts |
+| Fresh installed-wheel contracts from sdist tests | 87 passed, 29 skipped; 27 actual MySQL cases |
 | Independent installed lifecycle CLI | 16 commands passed; unrelated sleeper preserved |
 | Installed MySQL 8.4.13 + Chrome | All 16 full stages passed, with browser/SQL/admin/restart evidence |
 | Installed old-release upgrade, exact restore and code rollback | All 11 checks passed; zero record-ID limitations in this fixture |
@@ -64,18 +69,18 @@ timestamps in the restored database; code rollback read candidate-written rows.
 Configuration was copied separately. All self-created services stopped and the
 native MySQL sandbox was cleaned; previous acceptance resources were not touched.
 
-CI artifact ID `13223464958` from
-[run 41622322298](https://github.com/Songhonglei/html-golive/actions/runs/41622322298)
+CI artifact ID `13224932101` from
+[run 41624108649](https://github.com/Songhonglei/html-golive/actions/runs/41624108649)
 was downloaded and hash-verified. Source commit is the runtime baseline above;
-GitHub checkout merge commit is `0cdfb3cdcdddadff8be0ec74e4b96546a333385f`.
+GitHub checkout merge commit is `e76ff13d4c2d7d28984a2b13c3f7d000b5596c61`.
 Outer artifact ZIP SHA-256:
-`d7511f9110f6186e36dff4986615e1c52598de6b77dbfd4df1fe9b4db3790d62`.
+`10ee2af63a7c3313d3ce61a2a073ed33f1e07585038673fe4ac61786b28c008f`.
 
 | Distribution | SHA-256 |
 | --- | --- |
-| `html_golive-0.9.8-py3-none-any.whl` | `3def485bbad91deae52d4edf7a3acf936ede3a1e90b1cee0270c66affb028ef0` |
-| `html_golive-0.9.8.tar.gz` | `0644a268705cf2c9a3b162d9c1f5b0cf19505e1591b0c910d5b4c5a0ea0845d8` |
-| `html-golive-skill-0.9.8.zip` | `49815230d096b6b38c5cbc2dbf2faa05f70c0d1d46d5b8d36b12ee45da92225e` |
+| `html_golive-0.9.8-py3-none-any.whl` | `27a0f532f2fe0dace482981c59e6e4fee74e0754fd430909a6511f57e6150aab` |
+| `html_golive-0.9.8.tar.gz` | `08ba64a510c70e8ed9eb5fab34f6cdfc7989512ffbc9b90bffa0583b7d509c3c` |
+| `html-golive-skill-0.9.8.zip` | `c800c0be1579932fff1ad859c2dd69af6415178324f18ac08f1e29808175ac74` |
 
 All 121 installed runtime files matched the wheel and source; CLI/module/distribution/
 health/bundled Skill versions agree at 0.9.8. Installation ran outside the checkout.
@@ -83,9 +88,9 @@ The installer omitted optional archive hashes in `direct_url.json`; the receipt
 supplements its file URL with independently verified SHA-256 and installed bytes.
 Later test/documentation-only changes do not replace this artifact identity.
 
-Local evidence includes `installed-provenance.json`, `installed-mysql-results.xml`,
+Final evidence under `.artifacts/p1-data01/final/` includes `installed-provenance.json`, `installed-mysql-results.xml`,
 `mysql-full/`, `lifecycle/` and `upgrade/` reports/CLI logs/SQL/backup under the private
-`.artifacts/p1-data01/` directory. No registry upload, tag, release or business
+`.artifacts/p1-data01/final/` directory. No registry upload, tag, release or business
 service/database modification was performed.
 
 ## Limits

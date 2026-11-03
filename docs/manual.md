@@ -434,7 +434,7 @@ Supabase, and S3. Configuration matrix and examples:
 golive's data is yours — you can back it up, restore it on another
 machine, and migrate between backends without losing anything.
 
-Works with all three backend families: `sqlite`, `postgres` and
+Works with all four backend families: `sqlite`, `postgres`, `mysql` and
 `supabase`, in any combination for registry and data. Export always
 verifies its own counts against the database and **refuses to write a
 short archive** — a backup silently missing sites is worse than no
@@ -443,8 +443,15 @@ backup at all.
 One thing to know before restoring: an archive does not carry backend
 configuration. Pointing `GOLIVE_HOME` at a fresh directory and importing
 gives you the defaults (local storage, sqlite registry and data) no matter
-what the source used. To restore *into* Supabase or Postgres, put a
+what the source used. To restore *into* Supabase, Postgres or MySQL, put a
 `golive.yaml` and the credentials in the new home first.
+
+**Identity limitation:** importing data rows into an empty database currently
+generates new record IDs. Matching counts and content do not prove exact recovery;
+references to old IDs may break. ID, ordering and timestamp preservation are tracked
+in [DATA-01](https://github.com/Songhonglei/html-golive/issues/11). Use a separate
+consistent database backup when exact identity is required. Configuration,
+credentials, audit history and external resources need separate recovery steps.
 
 **Export** the full instance state (sites, HTML, and data rows) into a
 single tar.gz archive:

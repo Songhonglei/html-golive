@@ -12,7 +12,7 @@
 
 **v0.9.7.post1：四种数据库，同一套页面 API。** SQLite 零配置起步，PostgreSQL、MySQL 8.4+、Supabase 随需切换；保留克制的亮/暗管理工作台。
 
-**开发候选：0.9.8（尚未发布）。** 已合并的诊断与服务控制修复正在准备产物和升级验收；下方正式安装指引仍使用已发布的 0.9.7.post1。详见[候选版本交付清单](docs/release-0.9.8.md)。
+**开发候选：0.9.8（尚未发布）。** CI 产物已通过独立安装、MySQL/Chrome 和升级/代码回退验收；清单另列已有的记录 ID 恢复限制。下方正式安装指引仍使用已发布的 0.9.7.post1。详见[候选版本交付清单](docs/release-0.9.8.md)。
 
 [四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent 安装与使用](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 

@@ -24,6 +24,7 @@ shipping a silently incomplete archive.
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -32,6 +33,7 @@ import tarfile
 import tempfile
 import datetime
 import uuid
+import zlib
 from pathlib import Path
 from typing import Optional
 
@@ -466,7 +468,7 @@ def _prepare_data_rows(rows):
 
 def _read_archive(path: str) -> tuple:
     """Read an archive's contents into memory. Returns (manifest, registry_rows, data_rows, html_map)."""
-    with tarfile.open(path, "r:gz") as tar:
+    with gzip.open(path, "rb") as compressed, tarfile.open(fileobj=compressed, mode="r:") as tar:
         # Validate before extracting anything
         members = tar.getmembers()
         member_names = [m.name for m in members]
@@ -526,6 +528,12 @@ def _read_archive(path: str) -> tuple:
                 if f:
                     html_map[site_id] = f.read().decode("utf-8")
 
+        # Tar ends at its zero blocks, before gzip necessarily checks the
+        # trailer. Finish the same stream so truncated/invalid CRC/size trailers
+        # cannot pass preview or reach a restore target. Keep extra memory bounded.
+        while compressed.read(1024 * 1024):
+            pass
+
     return manifest, registry_rows, data_rows, html_map
 
 
@@ -577,7 +585,7 @@ def _validated_archive(archive_path):
         if "html_files" in manifest_counts and len(html_map) != manifest_counts["html_files"]:
             raise ValueError("Archive HTML count differs from manifest")
         return manifest, registry_rows, data_rows, html_map, data_defaults
-    except (ValueError, OSError, tarfile.TarError, UnicodeError, TypeError, AttributeError) as error:
+    except (ValueError, OSError, EOFError, zlib.error, tarfile.TarError, UnicodeError, TypeError, AttributeError) as error:
         message = ("Archive path traversal is forbidden" if str(error).startswith("Refusing to extract path-traversal member:")
                    else "Archive is invalid or unreadable")
         raise ArchiveValidationError(message) from None

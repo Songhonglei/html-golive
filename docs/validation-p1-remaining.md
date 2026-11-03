@@ -166,3 +166,13 @@ their dedicated data directories/credentials and owned anonymous volumes removed
 Existing unrelated containers, services, databases and the pre-existing untracked
 build directory were preserved. The installed venv and private evidence remain
 for review; no merge, release or business deployment was performed.
+
+## Independent acceptance follow-up: F01
+
+Independent acceptance of `b7e89ab` found a genuine invalid-archive classification
+failure despite the prior green CI: a 100-byte truncated gzip produced
+`backend_error`. That baseline remains failed for F01. The follow-up normalizes
+compressed-reader exceptions and requires complete gzip trailer validation before
+opening any target; missing-trailer/CRC/size previews are also rejected. See
+[F01 review and reproduction](validation-f01.md). External environment gaps remain
+unverified; the independent report and its existing resources were not modified.

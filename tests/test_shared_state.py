@@ -59,6 +59,7 @@ def test_realm_and_key_isolation(control):
                   provider(cookie_secret='second-key')]:
         assert other.session_user(cookie) is None
     assert first.session_user({'Cookie': 'golive_session=😀.invalid'}) is None
+    assert first.session_user({'Cookie': 'golive_session=session-id.' + '😀'*64}) is None
 
 
 def test_state_consumption_is_atomic_across_processes(control):

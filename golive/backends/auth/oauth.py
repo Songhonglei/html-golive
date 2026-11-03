@@ -345,7 +345,7 @@ class OIDCAuth(AuthProvider):
         if not cookie_value or "." not in cookie_value:
             return None
         sid, mac = cookie_value.rsplit(".", 1)
-        if not sid or len(sid) > 256 or not sid.isascii():
+        if not sid or len(sid) > 256 or not sid.isascii() or len(mac) != 64 or not mac.isascii():
             return None
         expect = hmac.new(self._cookie_secret, sid.encode("ascii"),
                           hashlib.sha256).hexdigest()

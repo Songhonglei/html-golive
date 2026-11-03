@@ -12,6 +12,8 @@ your own machine, NAS, VPS or intranet server.
 
 **v0.9.7.post1: four databases, one page API.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. Manage everything in the light/dark admin workspace.
 
+**Development candidate: 0.9.8 (not published).** The merged diagnostics/lifecycle fixes are entering artifact and upgrade acceptance; published installation instructions below remain pinned to 0.9.7.post1. See [candidate release checklist](docs/release-0.9.8.md).
+
 [Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent setup & usage](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 ### 30-second quickstart

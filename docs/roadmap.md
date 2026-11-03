@@ -6,10 +6,10 @@ Prioritize reliable single-instance, intranet and AI Agent publishing: deliver t
 
 ## Status and evidence
 
-- Post-`0.9.7.post1` diagnostics, CLI and full-acceptance changes remain in draft, unmerged [PR #7](https://github.com/Songhonglei/html-golive/pull/7). Implementation baseline: `f2d8254534585a2ef9a4fc5d4ad23351bb9d3490`.
-- All eight CI checks passed at that baseline. Independent service-identity acceptance passed 46 actual CLI subprocess checks and 125 regression tests. Historical checks do not replace acceptance of future release artifacts.
+- Diagnostics, CLI, full acceptance and REL-01 lifecycle protection were merged via [PR #7](https://github.com/Songhonglei/html-golive/pull/7) as `c0c54cbf4c97f694a8c59e2044aacacce7cb5782`; runtime baseline: `3af077b`.
+- All eight CI checks passed at the runtime baseline; 1182 local tests passed. Earlier independent f2d8254 diagnostic acceptance passed 46 CLI checks and 125 regressions; REL-01 added 16 CLI commands and 143 focused regressions. These checks do not replace 0.9.8 artifact/upgrade acceptance.
 - A 16-stage MySQL/Chrome full-acceptance run has passed. The Docker sandbox branch and remote MySQL TLS remain unverified, rather than confirmed defects. Passing PostgreSQL/Supabase CI does not imply every manual acceptance scenario has run.
-- This plan now tracks execution: REL-01 implementation and local acceptance are complete, pending final CI/review. Official publication and business deployment are outside this execution. Subsequent decisions must use current PR, CI and release evidence.
+- This plan tracks execution: REL-01/REL-02 are complete; REL-03 candidate 0.9.8 source/Skill preparation is in progress. Official publication and business deployment are outside this execution. See the [candidate checklist](release-0.9.8.md).
 
 ## Implemented; awaiting release delivery
 
@@ -17,7 +17,7 @@ Do not schedule these as new feature work. Carry them into version, installation
 
 | Capability | Current state | Remaining delivery |
 | --- | --- | --- |
-| context/doctor port precedence, record PID/HOME identity, drift reporting | Implemented and independently accepted | Merge, version alignment and release-artifact regression |
+| context/doctor port precedence, record PID/HOME identity, drift reporting | Implemented and independently accepted | Candidate version alignment and release-artifact regression |
 | Admin test defaults to the running backend; labelled button/result and safe target | Implemented; real MySQL/Chrome accepted | Repeat against installed release artifact |
 | MySQL location; separate application-table/model counts | Implemented | Artifact acceptance; scale work remains DATA-02 |
 | CLI sort, page controls, JSON mutations, db init help | Implemented | Script compatibility and error-code regression |
@@ -30,9 +30,9 @@ P0 gates the next release. P1 addresses data and automation reliability. P2 foll
 
 | ID | Priority | Work and user benefit | Status / dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| REL-01 | P0 | Protect service identity boundaries in stop/restart/start; avoid affecting unrelated processes or reusing wrong settings | Implemented and locally accepted; final CI/review pending, [#8](https://github.com/Songhonglei/html-golive/issues/8) | Reproduce reused PIDs, PID/HOME mismatch and missing health with isolated processes; establish reliable identity before signals; define and test behavior when identity cannot be confirmed |
-| REL-02 | P0 | Review and merge PR #7 so users receive accepted fixes | Awaiting review; REL-01 resolved | Required CI and independent acceptance pass on final code; no known release blocker; retain review/evidence |
-| REL-03 | P0 | Align release versions, docs and artifacts; avoid different code under the same version | Pending; candidate 0.9.8; after REL-02 | Package/CLI/health/Skill/changelog versions agree; build wheel, sdist and Skill distribution; artifact origin and checksums traceable |
+| REL-01 | P0 | Protect service identity boundaries in stop/restart/start; avoid affecting unrelated processes or reusing wrong settings | Complete; all eight CI checks passed and code merged, [#8](https://github.com/Songhonglei/html-golive/issues/8) | Reproduce reused PIDs, PID/HOME mismatch and missing health with isolated processes; establish reliable identity before signals; define and test behavior when identity cannot be confirmed |
+| REL-02 | P0 | Review and merge PR #7 so users receive accepted fixes | Complete; PR #7 merged | Required CI and independent acceptance pass on final code; no known release blocker; retain review/evidence |
+| REL-03 | P0 | Align release versions, docs and artifacts; avoid different code under the same version | In preparation; source version aligned, artifact build/acceptance pending, [#9](https://github.com/Songhonglei/html-golive/issues/9) | Package/CLI/health/Skill/changelog versions agree; build wheel, sdist and Skill distribution; artifact origin and checksums traceable |
 | REL-04 | P0 | Accept clean install, upgrade and basic rollback from candidate and official sources | Pending; after REL-03 | Install outside checkout in a fresh environment; independent CLI and MySQL/Chrome full acceptance; upgrade from old release, confirm running code/data and rollback boundaries; repeat after separately authorized publication |
 | DATA-01 | P1 | Exercise backup, restore and migration to protect pages and business data | Pending; build on existing export/import/migrate | Restore into fresh HOME/dedicated DB; compare pages, row counts/content hashes and critical settings; exercise damaged archives, conflicts, failure/interruption; document exclusions, credentials and external resources |
 | OPS-01 | P1 | Upgrade/restart/failure-recovery runbook; reduce user and Agent troubleshooting | Pending; alongside REL-04/DATA-01 | Isolated rehearsal of backup, version-drift detection, failed-restart diagnosis, recovery and cleanup; commands match actual version and preserve business resources |

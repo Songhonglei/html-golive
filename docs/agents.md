@@ -1,5 +1,7 @@
 # Use html-golive with your agent
 
+> Development candidate 0.9.8 is not published. The registry installation examples below intentionally use the published 0.9.7.post1. For candidate source/artifact validation, follow [the release checklist](release-0.9.8.md).
+
 html-golive exposes the same CLI and bundled AgentSkill to different agents.
 Choose an agent that can run local commands, and install the skill into a
 directory that agent actually reads. The product is not tied to one client.

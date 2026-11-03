@@ -3,12 +3,14 @@ name: html-golive
 slug: html-golive
 displayName: html-golive
 description: Publish, update and manage HTML pages on a self-hosted golive instance through the local `golive` CLI. golive runs entirely on the user's own machine or server — it is not a hosted service and has no relation to any online deployment platform or to any similarly named internal tool. Use when the user wants to put an HTML file, project directory or archive online on their own infrastructure, update or roll back a site they already published, give a static page real data persistence via `window.TemplateAPI`, or administer sites, owners and maintainers. Trigger phrases include "publish this page", "deploy this HTML", "put this on golive", "update the site", "roll it back", "golive".
-version: 0.9.7.post1
+version: 0.9.8
 license: MIT
 homepage: https://github.com/Songhonglei/html-golive
 ---
 
 # html-golive
+
+Development candidate 0.9.8 is not published. For candidate acceptance, use the exact provided source/wheel and matching Skill. Public package/release download instructions for 0.9.8 become valid only after publication; do not substitute a public 0.9.7.post1 CLI for this candidate Skill.
 
 `golive` is a **self-hosted** static-HTML deployment tool. One command
 turns a local HTML file into a URL served by the user's own machine.

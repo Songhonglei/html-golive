@@ -418,12 +418,17 @@ docker compose --profile minio up -d        # + local S3 stack for images
 
 ## Roadmap
 
-- WebDAV storage support.
-- Large-table aggregation and multi-instance sessions.
-- Editing conflict handling and group-based permissions.
+Prioritize reliable single-instance and Agent publishing. Work is ordered by
+acceptance gates; there are no committed release dates.
 
-[Open an issue](https://github.com/Songhonglei/html-golive/issues) to help
-prioritise the next improvement.
+- **P0 — Deliver the accepted fixes:** close service-control identity boundaries, review PR #7, align versions/artifacts, and accept clean installs and upgrades (candidate 0.9.8).
+- **P1 — Reliability:** backup/restore and migration drills, upgrade/recovery guidance, Agent/CLI failure contracts, accurate large-data statistics/search/pagination, and Docker/TLS coverage.
+- **P2 — Collaboration:** editing conflict detection, then group permissions when team demand is confirmed.
+- **P3 — Demand-triggered:** shared sessions for multiple instances and WebDAV for existing NAS/company storage users. Single-instance users should not need extra infrastructure.
+
+See the [complete prioritized backlog and milestone gates](https://github.com/Songhonglei/html-golive/blob/main/docs/roadmap.md).
+Implemented diagnostics, CLI and full-acceptance fixes remain pending release;
+they are tracked separately from future feature work.
 
 ## Contributing
 

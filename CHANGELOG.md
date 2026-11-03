@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Prioritize release delivery, single-instance/Agent reliability, recovery and large-data correctness; document all backlog items and milestone gates in both languages, with shared sessions and WebDAV explicitly demand-triggered.
+
 - Validate service-record identity with /health PID and canonical GOLIVE_HOME before giving its port precedence; reused PIDs and unrelated/missing endpoints now fall back to configuration. Context/doctor expose the ignored-record reason without deleting records or signalling processes, while valid services still report version/backend drift.
 
 - Resolve context/doctor probe ports from explicit flags, live service records and configuration, with context port provenance.

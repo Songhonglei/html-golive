@@ -325,7 +325,7 @@ golive serve start               # background; pidfile + log in GOLIVE_HOME
 golive serve start --port 9000 --host 0.0.0.0
 golive serve status              # running? which pid, port, version?
 golive serve restart             # what you run after upgrading
-golive serve stop                # SIGTERM, then SIGKILL if it hangs
+golive serve stop                # identity-checked TERM; recheck before KILL
 golive serve logs -n 100         # last 100 lines
 golive serve logs -f             # follow
 ```
@@ -337,6 +337,9 @@ Things that will not surprise you:
 
 - A **stale pidfile** (the recorded process is gone) is detected and
   cleaned up automatically — it never blocks a start.
+- A **live but unverifiable record** is preserved; start/stop/restart fail
+  rather than guessing which process to control. Stop rechecks PID/HOME before
+  escalation; an unresponsive process is left for its original supervisor.
 - A **second `start`** does not spawn a twin; it tells you the service is
   already up and suggests `restart`.
 - A **port held by something else** is reported as such, distinct from

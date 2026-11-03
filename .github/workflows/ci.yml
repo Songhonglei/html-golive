@@ -138,7 +138,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install MySQL dependencies
-        run: pip install -e '.[image,dev,mysql]'
+        run: pip install -e '.[image,dev,mysql,verify]'
       - name: Run real MySQL store and HTTP contracts
         env:
           GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
@@ -157,6 +157,29 @@ jobs:
           assert all(c.find("failure") is None and c.find("error") is None for c in actual)
           print(f"{len(actual)} real MySQL contract cases passed")
           PY
+
+      - name: Install acceptance browser
+        run: python -m playwright install --with-deps chromium
+      - name: Full MySQL browser and restart acceptance
+        env:
+          GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
+        run: |
+          export GOLIVE_HOME="$RUNNER_TEMP/golive-full-home"
+          mkdir -p "$GOLIVE_HOME"
+          python - <<'PYCFG'
+          import os
+          from pathlib import Path
+          Path(os.environ["GOLIVE_HOME"], "golive.yaml").write_text(
+              "registry:\n  backend: mysql\ndata:\n  backend: mysql\n", encoding="utf-8")
+          PYCFG
+          golive verify --full --json --report-dir "$RUNNER_TEMP/mysql-full-report"
+      - name: Upload full acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-full-acceptance
+          path: ${{ runner.temp }}/mysql-full-report
+          if-no-files-found: warn
 
   supabase:
     runs-on: ubuntu-latest

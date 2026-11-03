@@ -168,7 +168,7 @@ def check_sql(backend, cfg):
             finally:
                 conn.rollback()
         return 200, {"ok": True, "code": "sql_ok", "backend": backend,
-                     "location": f"{store.table} (via ${env})", "table_count": 1,
+                     "table_count": 1,
                      "checks": ["read", "write", "rollback"],
                      "latency_ms": int((time.monotonic() - started) * 1000)}
     except ImportError:
@@ -192,7 +192,7 @@ def check_sql(backend, cfg):
                             latency_ms=int((time.monotonic() - started) * 1000))
 
 
-def check_data_backend(data, cfg):
+def _check_data_backend(data, cfg):
     backend = str(data.get("backend") or ("supabase" if data.get("url") else cfg.data.backend) or "none")
     if backend == "sqlite":
         return 200, check_sqlite(cfg)
@@ -204,3 +204,16 @@ def check_data_backend(data, cfg):
         return 200, {"ok": None, "status": "skipped", "code": "backend_disabled", "backend": "none"}
     return 400, failure("backend_unsupported", "Connection tests are not implemented for this backend.",
                         "Choose SQLite, PostgreSQL, MySQL or Supabase for this test.")
+
+
+def check_data_backend(data, cfg):
+    """Always identify the backend and safe target, including failed probes."""
+    from golive.core.backend_info import data_backend_info
+    backend = str(data.get("backend") or ("supabase" if data.get("url") else cfg.data.backend) or "none")
+    status, result = _check_data_backend(data, cfg)
+    info = data_backend_info(cfg, backend)
+    if backend == "supabase" and data.get("url"):
+        # The supplied target can differ from the configured project.
+        from dataclasses import replace
+        info = data_backend_info(replace(cfg, supabase=replace(cfg.supabase, url=str(data["url"]))), backend)
+    return status, {**info, **result, "backend": backend}

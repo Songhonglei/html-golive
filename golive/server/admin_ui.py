@@ -1914,6 +1914,10 @@ td.actions button:hover{
             <label data-i18n="databackend.tables"></label>
             <span id="db-tables" class="s-value">—</span>
           </div>
+          <div class="form-row">
+            <label data-i18n="databackend.models"></label>
+            <span id="db-models" class="s-value">—</span>
+          </div>
           <div class="form-row" id="db-rows-row">
             <label data-i18n="databackend.rows"></label>
             <span id="db-rows" class="s-value">—</span>
@@ -1953,8 +1957,7 @@ td.actions button:hover{
             </div>
           </div>
           <div class="form-actions">
-            <button class="primary" id="db-test"
-                    data-i18n="databackend.test"></button>
+            <button class="primary" id="db-test"></button>
             <button id="db-switch" data-i18n="databackend.switch"></button>
           </div>
           <div class="test-result" id="db-test-result" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -2577,7 +2580,9 @@ en: {
   "databackend.current": "Current backend",
   "databackend.type": "Type",
   "databackend.location": "Location",
-  "databackend.tables": "Tables",
+  "databackend.tables": "Application tables",
+  "databackend.models": "Data models",
+  "databackend.test.target": "Test {backend}",
   "databackend.rows": "Total rows",
   "databackend.switch.title": "Switch backend",
   "databackend.newtype": "New type",
@@ -3009,7 +3014,9 @@ zh: {
   "databackend.current": "当前后端",
   "databackend.type": "类型",
   "databackend.location": "位置",
-  "databackend.tables": "表数",
+  "databackend.tables": "应用表数量",
+  "databackend.models": "数据模型数量",
+  "databackend.test.target": "测试 {backend}",
   "databackend.rows": "总行数",
   "databackend.switch.title": "切换后端",
   "databackend.newtype": "新类型",
@@ -3379,6 +3386,8 @@ function api(method, path, body){
         e.hint = j.hint;
         e.fields = j.fields;
         e.http_status = j.http_status;
+        e.backend = j.backend;
+        e.location = j.location;
         throw e;
       }
       return j;
@@ -4700,6 +4709,11 @@ function loadDataBackend() {
       if (s.key === "data.sqlite_path") dbLocation = s.value || "—";
       if (s.key === "supabase.url") dbLocation = s.value || "—";
     });
+    // Runtime metadata wins over saved settings which may require restart.
+    var active = d.data_backend;
+    if (active) { dbType = active.backend; dbLocation = active.location || "—"; }
+    $("db-new-type").value = dbType;
+    syncBackendSelection();
     var pill = $("db-type");
     pill.className = "status-pill " + (dbType === "none" ? "none" : "token");
     pill.textContent = dbType;
@@ -4707,12 +4721,14 @@ function loadDataBackend() {
     // Try to get table/row counts from M6 data API
     api("GET", "/api/admin/data/models").then(function(d2) {
       var models = d2.models || [];
-      $("db-tables").textContent = models.length;
+      $("db-tables").textContent = d2.data_backend ? d2.data_backend.table_count : "—";
+      $("db-models").textContent = d2.data_backend ? d2.data_backend.model_count : models.length;
       var totalRows = 0;
       models.forEach(function(m) { totalRows += (m.count || 0); });
-      $("db-rows").textContent = totalRows;
+      $("db-rows").textContent = d2.data_backend ? d2.data_backend.row_count : totalRows;
     }).catch(function() {
       $("db-tables").textContent = "—";
+      $("db-models").textContent = "—";
       $("db-rows").textContent = "—";
     });
   }).catch(function(e) {
@@ -4722,12 +4738,16 @@ function loadDataBackend() {
         $("databackend-degraded").style.display = "none";
         $("databackend-main").style.display = "";
         $("db-type").className = "status-pill token";
-        $("db-type").textContent = "sqlite";
+        $("db-type").textContent = d.data_backend ? d.data_backend.backend : "unknown";
+        $("db-location").textContent = d.data_backend ? d.data_backend.location : "—";
+        $("db-new-type").value = d.data_backend ? d.data_backend.backend : "none";
+        syncBackendSelection();
         var models = d.models || [];
-        $("db-tables").textContent = models.length;
+        $("db-tables").textContent = d.data_backend ? d.data_backend.table_count : "—";
+        $("db-models").textContent = d.data_backend ? d.data_backend.model_count : models.length;
         var totalRows = 0;
         models.forEach(function(m) { totalRows += (m.count || 0); });
-        $("db-rows").textContent = totalRows;
+        $("db-rows").textContent = d.data_backend ? d.data_backend.row_count : totalRows;
       }).catch(function(e2) {
         if (e2.status === 400) {
           // No data backend configured
@@ -4735,7 +4755,10 @@ function loadDataBackend() {
           $("databackend-main").style.display = "";
           $("db-type").className = "status-pill none";
           $("db-type").textContent = "none";
+          $("db-new-type").value = "none";
+          syncBackendSelection();
           $("db-tables").textContent = "—";
+          $("db-models").textContent = "—";
           $("db-rows").textContent = "—";
         } else {
           showDegraded("databackend");
@@ -4753,11 +4776,16 @@ function clearBackendErrors(){
     $(id).removeAttribute("aria-describedby");
   });
 }
+function syncBackendSelection() {
+  var value = $("db-new-type").value;
+  $("db-test").textContent = t("databackend.test.target", {backend:value === "mysql" ? "MySQL" : value === "postgres" ? "PostgreSQL" : value === "sqlite" ? "SQLite" : value});
+  $("db-supabase-opts").style.display = value === "supabase" ? "" : "none";
+  $("migrate-cmd-preview").textContent = value === "none" ? "" : "golive migrate data --to " + value + " --dry-run";
+}
 $("db-new-type").addEventListener("change", function() {
-  $("db-supabase-opts").style.display = this.value === "supabase" ? "" : "none";
+  syncBackendSelection();
   $("db-test-result").style.display = "none";
   clearBackendErrors();
-  $("migrate-cmd-preview").textContent = this.value === "none" ? "" : "golive migrate data --to " + this.value + " --dry-run";
 });
 function renderBackendCheck(d){
   var res = $("db-test-result");
@@ -4776,6 +4804,7 @@ function renderBackendCheck(d){
     res.className = "test-result ok";
     var html = "<b>" + esc(message) + "</b>";
     if (d.table_count != null) html += "<br>" + esc(t("databackend.test.ok.tables", {n:d.table_count}));
+    if (d.backend) html += "<br>" + esc(d.backend);
     if (d.location) html += '<div class="endpoint">' + esc(t("dbcheck.location")) + ": " + esc(d.location) + "</div>";
     if (d.latency_ms != null) html += '<div class="endpoint">' + esc(t("dbcheck.latency")) + ": " + esc(d.latency_ms) + " ms</div>";
     html += "<br>" + esc(t(code === "sqlite_ok" ? "dbcheck.sqlite_note" : code === "sql_ok" ? "dbcheck.sql_note" : "dbcheck.supabase_note"));
@@ -4789,6 +4818,7 @@ function renderBackendCheck(d){
   }
   res.className = "test-result fail";
   res.innerHTML = "<b>" + esc(t(fields.length ? "dbcheck.configuration" : "dbcheck.failed")) + "</b><br>" + esc(message) +
+    (d.backend ? "<br>" + esc(d.backend) + " · " + esc(d.location || "") : "") +
     (d.http_status ? '<div class="endpoint">' + esc(t("dbcheck.http")) + ": " + esc(d.http_status) + "</div>" : "");
   fields.forEach(function(field){
     var input = field === "url" ? $("db-sb-url") : field === "key" ? $("db-sb-key") : null;
@@ -4818,10 +4848,10 @@ $("db-test").addEventListener("click", function() {
   .catch(function(e){
     var code = e.code || (e.status === 401 ? "admin_unauthorized" : e.status === 403 ? "admin_forbidden" : e.status === 404 ? "endpoint_unavailable" : "request_failed");
     renderBackendCheck({ok:false, code:code, error:e.message,
-      fields:e.fields, hint:e.hint, http_status:e.http_status});
+      backend:e.backend || newType, location:e.location, fields:e.fields, hint:e.hint, http_status:e.http_status});
   }).finally(function(){
     controls.forEach(function(control){ control.disabled = false; });
-    btn.textContent = t("databackend.test");
+    syncBackendSelection();
     var invalid = document.querySelector('#db-supabase-opts [aria-invalid="true"]');
     if (invalid) invalid.focus();
   });

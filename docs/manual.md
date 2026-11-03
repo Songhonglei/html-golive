@@ -105,6 +105,8 @@ Click **✏️** to enter edit mode, edit text, use **🖼 图片 / Image** to u
 re-runs the security scan and writes a rollback snapshot. Only site owners
 and maintainers may save (see next section).
 
+Conditional editor saves require an `If-Match` content revision. Stale writes return 409 and preserve the draft for comparison. This P2 development capability currently requires local storage; remote storage returns an explicit 501 for editor saves. Custom clients and legacy injected editors must adopt the new contract. See [team collaboration](collaboration.md).
+
 ## 7. Access control
 
 Editing is limited to a site's **owner** (set at publish time) and any
@@ -119,6 +121,8 @@ golive maintainer remove q3 alice@corp.com
 Identity comes from the OIDC session when logged in, otherwise from the
 `editor_user` parameter validated against the editor token. A shared token
 (single token, many editors) is supported but warns at publish time.
+
+The P2 development branch also supports explicit OIDC-email groups with viewer/maintainer site grants, prompt revocation and durable change audit. Existing personal permissions remain independent. See [groups and API](collaboration.md).
 
 ## 8. Built-in data storage
 

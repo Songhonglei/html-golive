@@ -401,7 +401,7 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 
 - **P0 — 修复正式交付**：收口服务控制身份边界、审查 PR #7、同步版本/产物并完成安装升级验收（候选 0.9.8）。
 - **P1 — 可靠性**：备份恢复与迁移演练、升级/恢复指引、Agent/CLI 失败契约、大表统计/搜索/分页，以及 Docker/TLS 覆盖。
-- **P2 — 协作**：编辑冲突检测，再按团队需求推进组权限。
+- **P2 — 协作**：已按团队需求推进编辑冲突检测与组权限；[开发范围与兼容性](docs/collaboration.md)。
 - **P3 — 按需启动**：多实例共享会话、面向已有 NAS/企业存储用户的 WebDAV；单机用户无需增加基础设施。
 
 详见[完整待办优先级与里程碑计划](https://github.com/Songhonglei/html-golive/blob/main/docs/roadmap.zh-CN.md)。

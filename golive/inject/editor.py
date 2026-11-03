@@ -21,8 +21,8 @@ OIDC session cookie when the server runs with auth.provider=oidc.
 Image upload: POST {serve_base}/api/sites/<slug>/upload (only when the
 server has an ImageUploader configured; otherwise images stay inline).
 
-Single-writer model: no CRDT. The server snapshots the previous version
-before every save (rollback covers conflicts).
+Conditional saves reject stale content revisions. Snapshots preserve successful
+writes; conflicting local drafts stay in the browser for comparison.
 """
 
 from __future__ import annotations
@@ -72,6 +72,8 @@ _JS_TEMPLATE = r"""
   var _editableEls = [];
   var _dirty = false;
   var _saving = false;
+  var _revisionNode = document.getElementById('__golive_revision__');
+  var _revision = _revisionNode ? '"' + _revisionNode.content + '"' : '';
 
   /* ── styles ── */
   var _css = [
@@ -108,7 +110,9 @@ _JS_TEMPLATE = r"""
   var EDITOR_IDS = ['__golive_editor_fab__', '__golive_editor_toolbar__',
                     '__golive_editor_status__', '__golive_editor_style__',
                     '__golive_editor_img__', '__golive_editor_file__',
-                    '__golive_editor_cancel__', '__golive_editor_save__'];
+                    '__golive_editor_cancel__', '__golive_editor_save__',
+                    '__golive_revision__', '__golive_editor_compare__',
+                    'golive-inline-editor'];
 
   /* ── UI construction ── */
   function _buildUI() {{
@@ -336,13 +340,56 @@ _JS_TEMPLATE = r"""
   }}
 
   /* ── save ── */
+  function _compareConflict(localHTML, url) {{
+    var old = document.getElementById('__golive_editor_compare__');
+    if (old) old.remove();
+    var panel = document.createElement('dialog');
+    panel.id = '__golive_editor_compare__';
+    panel.style.cssText = 'box-sizing:border-box;width:90vw;max-width:1000px;max-height:85vh;z-index:100000;padding:20px;border:1px solid #bbb;border-radius:12px;background:white;color:#222;font:14px system-ui,sans-serif';
+    var title = document.createElement('h2');
+    title.id = '__golive_conflict_title__'; panel.setAttribute('aria-labelledby', title.id);
+    title.textContent = '内容已被其他编辑者更新，草稿尚未保存';
+    panel.appendChild(title);
+    function area(label, value) {{
+      var heading = document.createElement('p'); heading.textContent = label;
+      var text = document.createElement('textarea'); text.readOnly = true;
+      text.setAttribute('aria-label', label);
+      text.style.cssText = 'width:100%;height:22vh'; text.value = value;
+      panel.appendChild(heading); panel.appendChild(text); return text;
+    }}
+    area('本地草稿（可复制保留）', localHTML);
+    var latest = area('服务器最新内容', '正在读取…');
+    var close = document.createElement('button'); close.textContent = '继续保留草稿';
+    close.onclick = function () {{ panel.close(); }}; panel.appendChild(close);
+    var reload = document.createElement('button'); reload.textContent = '放弃草稿并重新加载';
+    reload.onclick = function () {{
+      if (confirm('确定放弃本地草稿？请先复制需要保留的内容。')) {{
+        _dirty = false; location.reload();
+      }}
+    }};
+    [close, reload].forEach(function (button) {{
+      button.type = 'button'; button.style.cssText = 'padding:8px 12px;margin:8px 8px 0 0;cursor:pointer';
+    }});
+    panel.appendChild(reload); document.body.appendChild(panel); panel.showModal(); close.focus();
+    fetch(url, {{credentials: 'include', cache: 'no-store', headers: {{
+      'Authorization': 'Bearer ' + _token(), 'X-Editor-User': _user()
+    }}}}).then(function (r) {{
+      if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+    }}).then(function (j) {{
+      var parsed = new DOMParser().parseFromString(j.html, 'text/html');
+      var script = parsed.getElementById('golive-inline-editor'); if (script) script.remove();
+      latest.value = '<!DOCTYPE html>\n' + parsed.documentElement.outerHTML;
+    }}).catch(function (e) {{
+      latest.value = '读取失败：' + e.message;
+    }});
+  }}
+
   function _save() {{
     if (_saving) return;
     var token = _token();
     var user = _user();
-    if (!token) {{
-      _showStatus('❌ 缺少编辑令牌：请通过 ?editor_token=xxx&editor_user=you@example.com 打开页面',
-                  'err', 6000);
+    if (!_revision) {{
+      _showStatus('❌ 缺少内容版本，请复制保留草稿后重新加载页面', 'err', 0);
       return;
     }}
     _saving = true;
@@ -361,11 +408,13 @@ _JS_TEMPLATE = r"""
         'Content-Type': 'text/html; charset=utf-8',
         'Authorization': 'Bearer ' + token,
         'X-Editor-User': user,
+        'If-Match': _revision,
       }},
       body: html,
     }})
     .then(function (r) {{
       return r.json().catch(function () {{ return {{}}; }}).then(function (j) {{
+        if (r.status === 409 && j.code === 'edit_conflict') _compareConflict(html, url);
         if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
         return j;
       }});

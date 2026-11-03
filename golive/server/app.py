@@ -139,7 +139,18 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._send(404, "<h1>404</h1><p>site content missing</p>".encode())
             return
-        self._send(200, content.encode("utf-8"))
+        from golive.core.content_revision import content_revision
+        revision = content_revision(content)
+        if site.get("editable"):
+            # The revision belongs to exactly the DOM served, never to a later
+            # asynchronous fetch. This transient meta is stripped on save.
+            import re
+            meta = '<meta id="__golive_revision__" content="' + revision.strip('"') + '">'
+            content, count = re.subn(r'(?i)(<head\b[^>]*>)', lambda m: m[0] + meta, content, count=1)
+            if not count:
+                content = meta + content
+        self._send(200, content.encode("utf-8"), extra_headers={
+            "ETag": revision, "Cache-Control": "no-store"})
 
     def _session_user(self):
         if self.oidc is None:
@@ -273,6 +284,27 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             self._handle_admin_api("GET", parsed)
             return
 
+        site, matched = self._match_editor_route("content")
+        if matched:
+            if site is None:
+                return
+            from golive.server.editor_api import check_editor_auth
+            ok, code, msg, _ = check_editor_auth(dict(self.headers), site,
+                                                session_user=self._session_user())
+            if not ok:
+                self._send_json(code, {"error": msg})
+                return
+            from golive.core.content_revision import content_revision
+            try:
+                html = self.storage.read(site["site_id"])
+            except FileNotFoundError:
+                self._send_json(404, {"error": "site content missing"})
+                return
+            revision = content_revision(html)
+            self._send_json(200, {"html": html, "revision": revision},
+                            {"ETag": revision, "Cache-Control": "no-store"})
+            return
+
         if path.startswith("/api/data"):
             self._handle_data_api("GET", parsed)
             return
@@ -367,7 +399,8 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return
 
         status, payload = editor_api.save_content(
-            site, html, editor, self.registry, self.storage)
+            site, html, editor, self.registry, self.storage,
+            expected_revision=self.headers.get("If-Match"))
         self._send_json(status, payload)
 
     def do_POST(self):  # noqa: N802

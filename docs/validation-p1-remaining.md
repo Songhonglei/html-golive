@@ -35,7 +35,9 @@ An identical version string does not identify an identical artifact.
   and canonical directory label. A mismatched/unreachable daemon preserves
   resources. Missing containers can be cleaned without signalling a replacement;
   cleanup removes only the owned container and its anonymous volumes. Existing
-  unlabelled containers are refused. Logs and credentials stay private.
+  unlabelled containers are refused. Logs and credentials stay private. Docker
+  stores data in its owned anonymous volume, so Linux's container mysql UID
+  never needs access to the host's 0700 credential directory.
 
 ## Reproduction
 

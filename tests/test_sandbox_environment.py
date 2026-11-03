@@ -75,6 +75,13 @@ def test_real_docker_lifecycle_permissions_identity_and_mysql_tls(tmp_path,recor
     pytest.importorskip('pymysql')
     root=tmp_path/'sandbox';port=free_port();service_port=free_port()
     started=invoke('start',root,'--engine','docker','--port',str(port),'--server-port',str(service_port))
+    if started.returncode and root.exists():
+        saved=sandbox.load(root);owned=sandbox.docker_identity(root,saved)
+        detail=command('docker','logs',owned['id']).stdout if owned else ''
+        for line in (root/'root.cnf').read_text().splitlines():
+            if line.startswith('password='):detail=detail.replace(line.split('=',1)[1],'[redacted]')
+        cleanup=invoke('cleanup',root)
+        pytest.fail(started.stderr+detail+'; owned cleanup exit='+str(cleanup.returncode))
     assert started.returncode==0,started.stderr
     saved=sandbox.load(root);owned=sandbox.docker_identity(root,saved)
     container=owned['id']
@@ -112,9 +119,10 @@ def test_real_docker_lifecycle_permissions_identity_and_mysql_tls(tmp_path,recor
         openssl('x509','-req','-in',str(tls/'server.csr'),'-CA',str(tls/'ca.pem'),'-CAkey',str(tls/'ca.key'),'-CAcreateserial','-out',str(tls/'server-cert.pem'),'-days','2','-extfile',str(tls/'extensions'))
         openssl('req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(tls/'other.key'),'-out',str(tls/'other.pem'),'-days','2','-subj','/CN=Untrusted test CA')
         for path in tls.iterdir():path.chmod(0o600)
-        # Copy into this sandbox's existing auto-TLS paths, retaining mysql ownership.
+        # Copy only test certificates into the owned volume. No host HOME bind.
+        assert command('docker','cp',str(tls),container+':/tmp/golive-tls').returncode==0
         result=command('docker','exec','--user','0',container,'sh','-c',
-                       'cp /sandbox/tls/ca.pem /sandbox/data/ca.pem && cp /sandbox/tls/server-cert.pem /sandbox/data/server-cert.pem && cp /sandbox/tls/server-key.pem /sandbox/data/server-key.pem && chown mysql:mysql /sandbox/data/ca.pem /sandbox/data/server-*.pem && chmod 600 /sandbox/data/server-key.pem')
+                       'cp /tmp/golive-tls/ca.pem /var/lib/mysql/ca.pem && cp /tmp/golive-tls/server-cert.pem /var/lib/mysql/server-cert.pem && cp /tmp/golive-tls/server-key.pem /var/lib/mysql/server-key.pem && chown mysql:mysql /var/lib/mysql/ca.pem /var/lib/mysql/server-*.pem && chmod 600 /var/lib/mysql/server-key.pem')
         assert result.returncode==0,result.stderr
         assert command('docker','restart',container).returncode==0
         from golive.backends._mysql import connection_options

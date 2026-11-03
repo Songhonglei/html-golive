@@ -165,8 +165,10 @@ def start(args, root):
              "--label", "io.opengolive.directory=" + str(root.resolve()),
              "--env-file", str(root / "docker.env"), "-p", f"127.0.0.1:{args.port}:3306",
              "--mount", f"type=bind,src={root / 'root.cnf'},dst=/run/golive-root.cnf,readonly",
-             "--mount", f"type=bind,src={root},dst=/sandbox", args.image,
-             "--datadir=/sandbox/data", "--mysqlx=OFF"]).strip()
+             # The image's private anonymous /var/lib/mysql volume is owned by
+             # mysql. A bind under our host 0700 directory is inaccessible to
+             # that UID on Linux; never relax the credential directory instead.
+             args.image, "--mysqlx=OFF"]).strip()
         state["container_id"] = container_id
         temporary = root / ("sandbox-" + secrets.token_hex(6) + ".json")
         save(temporary, json.dumps(state))

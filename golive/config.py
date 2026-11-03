@@ -69,7 +69,7 @@ class SupabaseConfig:
 
 @dataclass
 class StorageConfig:
-    backend: str = "local"           # local | s3 | supabase
+    backend: str = "local"           # local | s3 | supabase | webdav
     # s3 sub-options
     s3_endpoint: str = ""
     s3_bucket: str = "golive-sites"
@@ -80,6 +80,10 @@ class StorageConfig:
     s3_public_base: str = ""         # optional CDN/public URL prefix
     # supabase sub-options
     supabase_bucket: str = "golive-sites"
+    webdav_url: str = ""
+    webdav_username_env: str = "GOLIVE_WEBDAV_USERNAME"
+    webdav_password_env: str = "GOLIVE_WEBDAV_PASSWORD"
+    webdav_timeout: float = 15.0
 
 
 @dataclass
@@ -366,6 +370,16 @@ def _build(raw: dict, source_path: str) -> Config:
     st.s3_public_base = str(_get(raw, "storage", "s3", "public_base", default=""))
     st.supabase_bucket = str(_get(raw, "storage", "supabase", "bucket",
                                   default=st.supabase_bucket))
+    st.webdav_url = str(_get(raw, 'storage', 'webdav', 'url', default=''))
+    for attr in ('username_env', 'password_env'):
+        setattr(st, 'webdav_' + attr, str(_get(raw, 'storage', 'webdav', attr,
+                                             default=getattr(st, 'webdav_' + attr))))
+    try:
+        st.webdav_timeout = float(_get(raw, 'storage', 'webdav', 'timeout', default=15))
+        if not 0 < st.webdav_timeout <= 120:
+            raise ValueError()
+    except (TypeError, ValueError):
+        raise ConfigError('storage.webdav.timeout must be >0 and <=120 seconds') from None
 
     # registry
     rg = cfg.registry

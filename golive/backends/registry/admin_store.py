@@ -46,8 +46,8 @@ class ManagedAdmins:
 
     def __init__(self, db_path=None):
         if db_path is None:
-            from golive.core.paths import get_registry_db
-            db_path = get_registry_db()
+            from golive.core.state import management_db
+            db_path = management_db()
         self.db_path = str(db_path)
         with self._conn() as c:
             c.executescript(_SCHEMA)
@@ -86,14 +86,12 @@ class ManagedAdmins:
         email = self._norm(email)
         if not email:
             raise ValueError("email must not be empty")
-        if self.has(email):
-            return False
         with self._conn() as c:
-            c.execute(
-                "INSERT INTO managed_admins (email, added_by, added_at) "
+            changed = c.execute(
+                "INSERT OR IGNORE INTO managed_admins (email, added_by, added_at) "
                 "VALUES (?,?,?)",
-                (email, self._norm(added_by) or added_by or "", _now()))
-        return True
+                (email, self._norm(added_by) or added_by or "", _now())).rowcount
+        return changed > 0
 
     def remove(self, email: str) -> bool:
         """Delete. Returns True when a row was actually removed."""
@@ -110,8 +108,8 @@ _cached_path = ""
 def get_managed_admins() -> ManagedAdmins:
     """Process-wide ManagedAdmins bound to the current GOLIVE_HOME."""
     global _cached, _cached_path
-    from golive.core.paths import get_registry_db
-    path = str(get_registry_db())
+    from golive.core.state import management_db
+    path = str(management_db())
     if _cached is None or _cached_path != path:
         _cached = ManagedAdmins(path)
         _cached_path = path

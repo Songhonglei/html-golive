@@ -7,6 +7,24 @@ on:
     branches: [main, 'release/**', 'codex/**']
 
 jobs:
+  p3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install shared-state and real WebDAV test dependencies
+        run: pip install -e '.[dev]' 'wsgidav>=4.3,<5' 'cheroot>=10,<12'
+      - name: Verify two-process identity and real WebDAV TLS
+        run: python -m pytest tests/test_shared_state.py tests/test_shared_http.py tests/test_webdav.py tests/test_webdav_live.py -q --timeout=45 --timeout-method=signal --junitxml=p3-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p3-results
+          path: p3-results.xml
+
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15

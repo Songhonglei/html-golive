@@ -70,24 +70,34 @@ def _load_or_create_cookie_secret() -> str:
 
     Generated once (0600 file) so signed session cookies survive a server
     restart without the operator having to set GOLIVE_COOKIE_SECRET. If the
-    home dir is unwritable we fall back to an ephemeral per-process key and
-    warn — sessions then die on restart, but auth still works.
+    home dir is unwritable we warn before using an ephemeral key. Explicit
+    shared state refuses that fallback. Sessions/pending logins reside in
+    sessions.db under the same state root.
     """
     try:
-        from golive.core.paths import get_home
-        path = get_home() / ".cookie_secret"
-        if path.exists():
-            val = path.read_text(encoding="utf-8").strip()
-            if val:
-                return val
-        val = secrets.token_hex(32)
-        path.write_text(val, encoding="utf-8")
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
-        return val
+        import fcntl
+        from golive.core.state import state_dir
+        root = state_dir(create=True)
+        path = root / '.cookie_secret'
+        fd = os.open(root / '.cookie_secret.lock', os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0),
+                     0o600)
+        with os.fdopen(fd, 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if path.exists():
+                val = path.read_text(encoding='utf-8').strip()
+                if val:
+                    return val
+            val = secrets.token_hex(32)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC |
+                         getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                stream.write(val)
+                stream.flush()
+                os.fsync(stream.fileno())
+            return val
     except Exception as e:  # noqa: BLE001 — degrade to ephemeral
+        if os.environ.get('GOLIVE_STATE_DIR', '').strip():
+            raise OIDCError('shared cookie key unavailable; refusing ephemeral key') from e
         print(f"⚠️  could not persist cookie secret ({e}); using an "
               f"ephemeral key — sessions will not survive a restart. "
               f"Set GOLIVE_COOKIE_SECRET to silence this.", file=sys.stderr)
@@ -156,8 +166,16 @@ class OIDCAuth(AuthProvider):
             _sec = _load_or_create_cookie_secret()
         self._cookie_secret = _sec.encode("utf-8")
         self._discovery: Optional[dict] = None
-        self._sessions: dict = {}       # sid -> {sub, email, name, exp}
-        self._pending: dict = {}        # state -> {verifier, nonce, exp}
+        from golive.core.state import state_dir
+        from golive.backends.auth.state_store import AuthState
+        # A shared DB may host different IdPs/clients/keys without accepting
+        # one another's sessions or pending login transactions.
+        realm = hashlib.sha256(json.dumps(
+            [self.issuer, self.client_id, hashlib.sha256(self._cookie_secret).hexdigest()],
+            separators=(',', ':')).encode()).hexdigest()
+        db = state_dir(create=True) / 'sessions.db'
+        self._sessions = AuthState(db, realm, 'session')
+        self._pending = AuthState(db, realm, 'pending')
         self._jwks_provider = None      # lazy-init on first complete_login
 
     # ── discovery ───────────────────────────────────────────────────────────
@@ -193,9 +211,7 @@ class OIDCAuth(AuthProvider):
     # ── login: build the authorization redirect ─────────────────────────────
 
     def _prune_pending(self) -> None:
-        now = time.time()
-        for k in [k for k, v in self._pending.items() if v["exp"] < now]:
-            self._pending.pop(k, None)
+        self._pending.prune()
 
     def begin_login(self) -> str:
         """Return the IdP authorization URL (registers state + PKCE + nonce)."""
@@ -329,6 +345,8 @@ class OIDCAuth(AuthProvider):
         if not cookie_value or "." not in cookie_value:
             return None
         sid, mac = cookie_value.rsplit(".", 1)
+        if not sid or len(sid) > 256 or not sid.isascii():
+            return None
         expect = hmac.new(self._cookie_secret, sid.encode("ascii"),
                           hashlib.sha256).hexdigest()
         if not hmac.compare_digest(mac, expect):
@@ -336,9 +354,7 @@ class OIDCAuth(AuthProvider):
         return sid
 
     def _prune_sessions(self) -> None:
-        now = time.time()
-        for k in [k for k, v in self._sessions.items() if v["exp"] < now]:
-            self._sessions.pop(k, None)
+        self._sessions.prune()
 
     def session_user(self, request_headers: dict) -> Optional[dict]:
         """Resolve the session cookie into a user dict (or None)."""
@@ -353,7 +369,6 @@ class OIDCAuth(AuthProvider):
         sid = self._verify_cookie(cookie_value)
         if not sid:
             return None
-        self._prune_sessions()
         sess = self._sessions.get(sid)
         if not sess or sess["exp"] < time.time():
             self._sessions.pop(sid, None)

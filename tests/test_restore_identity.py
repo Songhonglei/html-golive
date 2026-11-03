@@ -245,3 +245,22 @@ def test_sql_driver_decoding_keeps_jsonb_strings_distinct_from_json_text():
     for value in ('plain string','123','null','{"key":1}','"quoted"'):
         assert Postgres._row_to_dict({'content':value})['content']==value
         assert MySQL._row_to_dict({'content':json.dumps(value)})['content']==value
+
+
+def test_migration_commit_then_readback_failure_reports_partial_and_can_resume(tmp_path):
+    from golive.backends.data.sqlite_store import TemplateStore
+    from golive.core.portability import migrate_backend
+    source=TemplateStore(tmp_path/'migration-source.db',table='records')
+    target=TemplateStore(tmp_path/'migration-target.db',table='records')
+    source.create('m','committed',content={'keep':True})
+    cfg=Config();original=target.restore_row
+    def factory(selected):return source if selected.data.backend=='sqlite' else target
+    def wrong_readback(row,**kw):return dict(original(row,**kw),sort_index=99999)
+    with patch('golive.backends.factory.get_template_store',side_effect=factory):
+        with patch.object(target,'restore_row',side_effect=wrong_readback):
+            failed=migrate_backend('data','supabase',cfg=cfg)
+        assert not failed['ok'] and failed['migrated']==0 and failed['target_count_after']==1
+        assert failed['partial']
+        retried=migrate_backend('data','supabase',cfg=cfg)
+        assert retried['ok'] and retried['migrated']==0 and retried['skipped']==1
+        assert target.list('m')['list']==source.list('m')['list']

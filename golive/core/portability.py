@@ -1112,7 +1112,7 @@ def migrate_backend(
         "target_existing_before": target_count,
         "migrated": migrated,
         "skipped": skipped,
-        "partial": bool(errors) and migrated > 0,
+        "partial": bool(errors) and (migrated > 0 or target_count_after != target_count),
         "target_count_after": target_count_after,
         "count_ok": count_ok,
         "errors": errors,

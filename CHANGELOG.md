@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Wait for the final Docker MySQL TCP listener during sandbox startup; the image's temporary initialization socket no longer signals readiness prematurely.
 - Persist OIDC sessions and one-use PKCE/state across restart. Optional same-host `GOLIVE_STATE_DIR` shares cookie signing, sessions, groups/guards/group audit and managed admins between independent HOMEs. Configured OIDC refuses startup on state/config failure; logout failure returns 503 without claiming revocation. Add a read-only control-state inventory to context/doctor JSON.
 - Add WebDAV page storage with verified TLS, environment credentials, scoped paths, snapshots/rollback, bounded responses/timeouts and explicit failure handling. Remote protected editor writes remain unsupported (501). Cross-host HA and real NAS/Nextcloud acceptance remain separate boundaries.
 - Localize the inline editor and conflict comparison in English/Chinese, including confirmations and error guidance; follow saved admin/page/browser language. Repair installed-test source-path assumptions and add a full source-free CI wheel acceptance gate.

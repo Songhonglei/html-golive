@@ -182,7 +182,7 @@ _JS_TEMPLATE = r"""
   function _listQuery(opts, mc, mineOnly) {{
     var params = {{
       model_code : 'eq.' + mc,
-      order      : 'sort_index.desc,created_at.desc',
+      order      : 'sort_index.desc,created_at.desc,id.asc',
       limit      : String(opts.pageSize || 20),
       offset     : String(((opts.pageNo || 1) - 1) * (opts.pageSize || 20)),
     }};
@@ -209,7 +209,8 @@ _JS_TEMPLATE = r"""
       var mc = resolveModelCode(opts.modelCode, 'list');
       return request('GET', _listQuery(opts, mc, true), null,
                      {{ 'Prefer': 'count=exact' }}).then(function (r) {{
-        return {{ total: (r.total !== null ? r.total : r.rows.length),
+        if (r.total === null) throw new Error('Exact row count unavailable; refusing a truncated total');
+        return {{ total: r.total,
                  list: r.rows.map(toTemplate) }};
       }});
     }},
@@ -224,7 +225,8 @@ _JS_TEMPLATE = r"""
       var mc = resolveModelCode(opts.modelCode, 'listAll');
       return request('GET', _listQuery(opts, mc, false), null,
                      {{ 'Prefer': 'count=exact' }}).then(function (r) {{
-        return {{ total: (r.total !== null ? r.total : r.rows.length),
+        if (r.total === null) throw new Error('Exact row count unavailable; refusing a truncated total');
+        return {{ total: r.total,
                  list: r.rows.map(toTemplate) }};
       }});
     }},

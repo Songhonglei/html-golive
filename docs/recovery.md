@@ -120,3 +120,36 @@ when code rollback alone is insufficient.
 
 导出不包含配置、凭证、审计、会话/密钥、Agent 安装和外部资源；不保证站点时间戳和历史快照保真，
 也不是跨数据库和文件的一致事务备份。新代码安装与服务重启分开核验，无法确认身份时交回原进程管理器。
+
+## 6. Large backups and automation/environment failures
+
+Pause writers before exporting. Model discovery/search no longer silently stops
+at 10,000/2,000 rows. An independent full-table count includes legacy empty-model
+rows; missing exact PostgREST totals or a known short archive abort export. A
+count match alone cannot detect same-count edits during a live backup.
+
+For explicit `--json`, parse one stdout document and check both exit status and
+`ok`. Parser/configuration failures must not be treated as empty success. Keep
+`write_state: "unknown"` distinct from a definite rejection: interruption, timeout
+or lost connectivity may follow a committed write. Read by stable record ID or
+logical key before retrying; use upsert only when replacing that key is intended.
+Do not blindly retry create/delete/import after an uncertain response.
+
+If Docker sandbox start fails, retain its directory and private `commands.log`.
+Fix registry/daemon/port availability, clean only the recorded owned resources,
+and retry with a new directory. Stop preserves data; an existing directory is
+never reinitialized. Missing containers can be cleaned, but identity mismatch
+requires inspection and is never bypassed by deleting a record or using a name
+as authority. Legacy unlabelled live containers require their original trusted
+supervisor/known creation receipt. Do not prune shared Docker resources.
+
+For certificate errors, verify the endpoint hostname, trusted CA and certificate
+validity; do not disable verification. A doctor proxy-variable listing proves
+configuration visibility only. It does not prove Docker/Homebrew inherit it,
+enterprise proxy reachability or external TLS. The controlled tests and current
+coverage boundaries are in [P1 validation](validation-p1-remaining.md).
+
+中文：大表备份包含空模型旧数据并核对独立总数；暂停写入后再导出。JSON 模式同时检查
+退出码和 `ok`，将 `write_state: unknown` 当作可能已提交，先按稳定 ID 独立读取再重试。
+Docker 失败保留私有日志，只清理有归属证据的容器；身份不匹配时拒绝控制，不做全局清理。
+证书失败应修正主机名或 CA，不能关闭验证；本机受控 TLS/代理通过不代表外部网络已验收。

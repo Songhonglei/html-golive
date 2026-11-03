@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, 'release/**']
+    branches: [main, 'release/**', 'codex/**']
 
 jobs:
   test:
@@ -89,7 +89,7 @@ jobs:
         env:
           GOLIVE_PG_DSN: postgresql://golive:golive_ci@127.0.0.1:5432/golive_test
         run: |
-          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py tests/test_sql_backend_contract.py tests/test_backend_http_contract.py tests/test_restore_identity.py \
+          python -m pytest tests/test_postgres_backend.py tests/test_data_layer_e2e.py tests/test_sql_backend_contract.py tests/test_backend_http_contract.py tests/test_restore_identity.py tests/test_large_data_contract.py tests/test_cli_json_contract.py \
             -q --timeout=60 --timeout-method=signal -rs
 
       - name: Assert the suite actually ran
@@ -144,7 +144,7 @@ jobs:
           GOLIVE_MYSQL_DSN: mysql://golive:golive_ci@127.0.0.1:3306/golive_test
         run: |
           python -m pytest tests/test_mysql_config.py tests/test_sql_backend_contract.py \
-            tests/test_backend_http_contract.py tests/test_data_layer_e2e.py tests/test_restore_identity.py \
+            tests/test_backend_http_contract.py tests/test_data_layer_e2e.py tests/test_restore_identity.py tests/test_large_data_contract.py tests/test_cli_json_contract.py \
             -q --timeout=45 --junitxml=mysql-results.xml
       - name: Require actual MySQL cases (never accept all-skipped)
         run: |
@@ -173,6 +173,10 @@ jobs:
               "registry:\n  backend: mysql\ndata:\n  backend: mysql\n", encoding="utf-8")
           PYCFG
           golive verify --full --json --report-dir "$RUNNER_TEMP/mysql-full-report"
+      - name: Browser rejects missing totals
+        env:
+          GOLIVE_TEST_BROWSER_CHANNEL: chromium
+        run: python -m pytest tests/test_browser_count_contract.py -q --timeout=45
       - name: Upload full acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -261,12 +265,46 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = ET.parse('supabase-results.xml').findall('.//testcase')
           live = [c for c in cases if c.get('classname', '').endswith('test_supabase_live')]
-          assert len(live) == 7 and all(c.find('skipped') is None for c in live)
+          assert len(live) == 8 and all(c.find('skipped') is None for c in live)
           assert all(c.find('failure') is None and c.find('error') is None for c in live)
           PY
       - name: Stop only this test stack
         if: always()
         run: supabase --workdir "$RUNNER_TEMP/golive-supabase" stack stop --stack golive-ci
+
+  environment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated environment test dependencies
+        run: pip install -e '.[dev,mysql]'
+      - name: Pull fixed MySQL sandbox image
+        run: docker pull mysql:8.4.13
+      - name: Docker ownership, lifecycle, TLS and proxy acceptance
+        env:
+          GOLIVE_TEST_DOCKER: "1"
+        run: |
+          python -m pytest tests/test_sandbox_environment.py tests/test_proxy_tls_environment.py \
+            -q --timeout=300 -o junit_family=legacy --junitxml=environment-results.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = ET.parse('environment-results.xml').findall('.//testcase')
+          live = [c for c in cases if c.get('name', '').startswith('test_real_')]
+          assert len(live) == 4
+          assert all(c.find('skipped') is None and c.find('failure') is None
+                     and c.find('error') is None for c in live)
+          PY
+      - name: Retain environment acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-acceptance
+          path: environment-results.xml
+          if-no-files-found: error
 
   build:
     runs-on: ubuntu-latest

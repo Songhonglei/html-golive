@@ -27,7 +27,9 @@ MySQL shows host, port, database and application table; DSN users, passwords and
 TLS key paths are omitted. Application table count means the configured
 TemplateAPI table (one), not every table in the database. Model and row counts
 are separate, exact SQL aggregates for SQLite/Postgres/MySQL. Supabase model
-statistics retain their existing 10,000-row scan bound.
+statistics page through the complete result, respecting server response caps;
+generic JSON substring search is a complete bounded-memory client fallback.
+Missing exact PostgREST counts fail explicitly.
 
 ## Service control identity (REL-01)
 
@@ -67,13 +69,17 @@ golive data delete --id <record-id> --json
 ```
 
 List order matches TemplateAPI: descending `sort_index`, then descending
-`created_at`. `--limit` remains supported; `--page-size` takes precedence.
+`created_at`, then ascending unique `id` to break ties. `--limit` remains supported; `--page-size` takes precedence.
 Pages and sizes must be positive. Mutation JSON contains `ok`, `operation`,
 `code`, `id`, `record`, and `error` on failure. Missing records and failed
 deletes exit nonzero. Error codes include `invalid_arguments`, `invalid_input`,
-`not_found`, `backend_disabled`, `backend_error`; backend exceptions are not
+`not_found`, `backend_disabled`, `conflict`, `backend_timeout`,
+`backend_unavailable`, `backend_error`; backend exceptions are not
 printed because they may contain credentials. List/get retain their existing
-JSON shape. `--json` also makes operational errors machine-readable.
+JSON shape. `--json` also makes parser/configuration failures machine-readable,
+with one complete JSON document on stdout. Uncertain mutations include
+`write_state: "unknown"`; independently inspect the target before retrying.
+See the [P1 contract and coverage report](validation-p1-remaining.md).
 
 `db init` creates configured SQLite/Postgres/MySQL tables. For Supabase it
 prints SQL for the SQL editor, since PostgREST cannot execute DDL.
@@ -142,7 +148,9 @@ The helper refuses existing directories and occupied ports, requires native
 MySQL 8.4+ or working Docker, binds TCP to loopback, disables MySQL X protocol,
 creates a dedicated database/user, and stores random credentials in protected
 files. `stop` preserves data. `cleanup` authenticates to this sandbox and removes
-only its owned directory/container. A failed start preserves its private logs
+only its owned directory/container and anonymous volumes. Docker control checks
+immutable ID and random ownership/directory labels before sending commands; a
+legacy unlabelled or mismatched live container is refused. A failed start preserves its private logs
 for diagnosis. No local DB tooling is needed when a dedicated remote DSN is
 already available. Docker execution still requires access to its daemon and
 image registry; this is distinct from a successful native smoke test.

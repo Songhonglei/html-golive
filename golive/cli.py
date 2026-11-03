@@ -1415,7 +1415,11 @@ def cmd_doctor(args) -> int:
     # got a healthy exit 0 for a site that was never looked at. Distinguish
     # "not asked for" (None) from "asked for, with nothing" (empty).
     if getattr(args, "site", None) is not None and not str(args.site).strip():
-        print(t("doctor.site.empty_ref"), file=sys.stderr)
+        if getattr(args, "json", False):
+            from golive.core.cli_output import emit_error
+            emit_error("doctor", "doctor", "invalid_arguments", t("doctor.site.empty_ref"))
+        else:
+            print(t("doctor.site.empty_ref"), file=sys.stderr)
         return 2
     if getattr(args, "site", ""):
         info = _doctor_site_info(args.site)
@@ -1580,16 +1584,18 @@ def cmd_data(args) -> int:
 
     want_json = getattr(args, "json", False)
 
-    def emit(ok, code, row=None, error=None):
+    def emit(ok, code, row=None, error=None, uncertain=False):
         result = {"ok": ok, "operation": args.action, "code": code,
                   "id": row.get("id") if row else (args.id or None), "record": row}
+        if uncertain:
+            result["write_state"] = "unknown"
         if error:
             result["error"] = error
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
 
-    def fail(code, message):
+    def fail(code, message, uncertain=False):
         if want_json:
-            emit(False, code, error=message)
+            emit(False, code, error=message, uncertain=uncertain)
         else:
             print(message, file=sys.stderr)
         return 1
@@ -1599,7 +1605,8 @@ def cmd_data(args) -> int:
             return None
         if raw.startswith("@"):
             raw = Path(raw[1:]).read_text(encoding="utf-8")
-        return json.loads(raw)
+        from golive.core.cli_output import decode_json
+        return decode_json(raw)
 
     try:
         if args.action in ("get", "update", "delete", "sort") and not args.id:
@@ -1613,6 +1620,10 @@ def cmd_data(args) -> int:
         page_size = page_size if page_size is not None else getattr(args, "limit", 20)
         if page_no < 1 or page_size < 1:
             return fail("invalid_arguments", "--page-no and --page-size/--limit must be positive")
+        try:
+            content = load_content(args.content) if args.action in ("create", "update", "upsert") else None
+        except (ValueError, OSError):
+            return fail("invalid_input", "Invalid JSON or input file; no data write was attempted.")
         store = get_template_store()
         if store is None:
             return fail("backend_disabled", t("data.disabled"))
@@ -1629,10 +1640,10 @@ def cmd_data(args) -> int:
             return 0
         if args.action == "create":
             row = store.create(args.model_code, args.name,
-                               content=load_content(args.content), description=args.desc)
+                               content=content, description=args.desc)
             message = t("data.created", id=row["id"])
         elif args.action == "upsert":
-            row = store.upsert(args.model_code, args.name, content=load_content(args.content))
+            row = store.upsert(args.model_code, args.name, content=content)
             message = t("data.upserted", id=row["id"])
         elif args.action in ("update", "sort"):
             patch = {}
@@ -1642,7 +1653,7 @@ def cmd_data(args) -> int:
                 if args.name:
                     patch["name"] = args.name
                 if args.content:
-                    patch["content"] = load_content(args.content)
+                    patch["content"] = content
                 if args.desc:
                     patch["desc"] = args.desc
             row = store.update(args.id, patch)
@@ -1661,10 +1672,11 @@ def cmd_data(args) -> int:
         return 0
     except KeyError:
         return fail("not_found", t("data.template_not_found", id=args.id))
-    except (ValueError, OSError):
-        return fail("invalid_input", "Invalid input or connection configuration; check JSON, files and backend settings.")
-    except Exception:  # Backend exceptions can contain DSNs or credentials.
-        return fail("backend_error", "Data operation failed; check backend configuration, connectivity and constraints.")
+    except Exception as error:  # Never expose driver messages or connection credentials.
+        from golive.core.cli_output import failure_code
+        code = failure_code(error)
+        uncertain = args.action not in ("list", "get") and code in ("backend_timeout", "backend_unavailable", "backend_error")
+        return fail(code, "Data operation failed; check backend configuration, connectivity and constraints.", uncertain=uncertain)
 
 
 # ═════════════════════════════════ skill ════════════════════════════════════
@@ -2492,7 +2504,17 @@ def cmd_migrate(args) -> int:
 # ═════════════════════════════════ main ═════════════════════════════════════
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(
+    from golive.core import cli_output
+    argv = list(sys.argv[1:] if argv is None else argv)
+    json_mode = cli_output.wants_json(argv)
+
+    class Parser(argparse.ArgumentParser):
+        def error(self, message):
+            if json_mode:
+                raise cli_output.JSONArgumentError()
+            super().error(message)
+
+    parser = Parser(
         prog="golive",
         description="🚀 golive — self-hosted one-command HTML deployment",
     )
@@ -2750,24 +2772,39 @@ def main(argv=None) -> int:
                    help="Return structured migration counts and error codes")
     p.set_defaults(func=cmd_migrate)
 
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except cli_output.JSONArgumentError:
+        command, action = cli_output.operation(argv, sub.choices)
+        cli_output.emit_error(command, action, "invalid_arguments", "Invalid or missing arguments; use --help.")
+        return 2
 
     # Make `golive init --home <DIR>` stick: export the recorded home into
     # the environment *before* the config loader looks for golive.yaml, so
     # the CLI and the server can never end up on different data dirs.
     from golive.core.paths import bootstrap_home_env
-    bootstrap_home_env()
-
     from golive.config import ConfigError, load_config, set_config
     try:
+        bootstrap_home_env()
         set_config(load_config(cli_path=args.config or None))
-    except ConfigError as e:
-        print(t("arg.config.error", msg=e), file=sys.stderr)
+    except ConfigError:
+        if json_mode:
+            cli_output.emit_error(args.command, getattr(args, "action", args.command), "invalid_config", "Invalid configuration; check file syntax and values.")
+        else:
+            print(t("arg.config.error", msg="Invalid configuration; check file syntax and values."), file=sys.stderr)
+        return 1
+    except Exception:
+        if json_mode:
+            cli_output.emit_error(args.command, getattr(args, "action", args.command), "startup_error", "Cannot initialize CLI context; check paths and permissions.")
+        else:
+            print("Cannot initialize CLI context; check paths and permissions.", file=sys.stderr)
         return 1
 
     if not getattr(args, "func", None):
         parser.print_help()
         return 0
+    if json_mode:
+        return cli_output.run_json(args.func, args)
     return args.func(args)
 
 

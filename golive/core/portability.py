@@ -74,6 +74,8 @@ def _paginated_data_list(store, page_size: int = DATA_PAGE_SIZE):
     a page returns fewer rows than requested (or the total is reached).
     """
     models = store.list_models(scan_limit=100000)
+    if store.count(""):
+        models = models + [{"model_code": ""}]
     all_rows = []
     for m in models:
         model_code = m["model_code"]
@@ -180,17 +182,18 @@ def export_archive(
         # always agrees — including when the pager is the thing that is
         # broken, which is the only failure this check exists to catch.
         actual = _registry_total(registry)
-        if actual is not None and actual != len(registry_rows):
+        if actual is None:
+            raise RuntimeError("Registry does not expose an independent total; export aborted")
+        if actual != len(registry_rows):
             raise RuntimeError(
                 f"Registry count mismatch during export: collected "
                 f"{len(registry_rows)} sites but the backend holds {actual}. "
                 f"Aborting rather than writing a silently incomplete archive "
                 f"— a backup missing sites is worse than no backup.")
 
-    # For data: sum count() across all models.
+    # Count the complete table independently of discovery/pagination.
     if data_store is not None and not sites_only:
-        models = data_store.list_models(scan_limit=100000)
-        total_expected = sum(m.get("count", 0) for m in models)
+        total_expected = data_store.total_count()
         if len(data_rows) != total_expected:
             raise RuntimeError(
                 f"Data row count mismatch during export: collected {len(data_rows)} "
@@ -324,8 +327,8 @@ def _registry_total(registry):
     went through the same pagination code, a broken pager would agree with
     itself and the check would pass while the archive was short.
 
-    Returns ``None`` when the backend offers no way to count cheaply — the
-    caller then skips the check rather than blocking the export.
+    Returns ``None`` for an unknown backend; the caller refuses an export
+    without an independent witness. A known backend's count failure also aborts.
     """
     try:
         if hasattr(registry, "db_path"):
@@ -341,8 +344,10 @@ def _registry_total(registry):
                     return None
                 return int(row[0] if not isinstance(row, dict)
                            else list(row.values())[0])
-    except Exception:  # noqa: BLE001 — the check is a safety net, not a gate
-        return None
+        if hasattr(registry, "client"):
+            return registry.client.count(registry.table, {"select": "site_id"})
+    except Exception:
+        raise RuntimeError("Cannot independently verify registry total; export aborted") from None
     return None
 
 

@@ -33,7 +33,7 @@ DEFAULT_TABLE = "golive_templates"
 
 # Columns a caller (including the HTTP adapter) may filter/sort on.
 FILTERABLE = ("id", "model_code", "name", "user_id", "version")
-SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code")
+SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code", "id")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS {table} (

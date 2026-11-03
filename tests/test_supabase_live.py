@@ -209,3 +209,16 @@ def test_live_supabase_restore_json_scalars_and_metadata(supabase_live):
         changed=dict(row,sort_index=-index,updated_at='2022-01-01T00:00:00+00:00')
         assert same_record(changed,store.restore_row(changed,overwrite=True))
         assert same_record(changed,store.get(row['id']))
+
+
+def test_live_supabase_large_complete_statistics_and_search(supabase_live):
+    from tests.test_large_data_contract import large_rows
+    rows=list(large_rows());store=supabase_live.data
+    for start in range(0,len(rows),500):store.client.insert(store.table,rows[start:start+500],returning=False)
+    assert store.total_count()==12050
+    assert {m['model_code']:m['count'] for m in store.list_models()}=={'large':11000,'late_model':1000}
+    assert store.search('large','needle')['list'][0]['id']==rows[10999]['id']
+    assert store.search('large','%_! 中文')['total']==1
+    ids=[]
+    for page in range(1,6):ids.extend(row['id'] for row in store.list('large',page_no=page,page_size=200)['list'])
+    assert ids==[row['id'] for row in rows[:1000]]

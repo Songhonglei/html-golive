@@ -19,12 +19,31 @@ import sys
 import time
 
 MARKER = "opengolive-mysql-sandbox-v1"
+_log_root = None
+_secrets = []
+
+
+def log_failure(command, output):
+    if _log_root is None or not _log_root.exists():
+        return
+    value = output.decode(errors="replace") if isinstance(output, bytes) else (output or "")
+    for secret in _secrets:
+        value = value.replace(secret, "[redacted]")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(str(_log_root / "commands.log"), flags, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(Path(command[0]).name + ": " + value + "\n")
 
 
 def run(command, **kwargs):
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, timeout=120, **kwargs)
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, timeout=120, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        log_failure(command, error.stderr)
+        raise RuntimeError("Sandbox command timed out: " + Path(command[0]).name + ". Check image/network/daemon; owned resources were preserved for cleanup.") from None
     if result.returncode:
+        log_failure(command, result.stdout + result.stderr)
         raise RuntimeError("Sandbox command failed: " + Path(command[0]).name + ". Inspect the private sandbox logs.")
     return result.stdout
 
@@ -44,9 +63,35 @@ def load(root):
     return state
 
 
+def docker_identity(root, state):
+    """An immutable container ID and private ownership labels precede control."""
+    import re
+    if not re.fullmatch(r"golive-mysql-[0-9a-f]{12}", state.get("container", "")):
+        raise RuntimeError("Invalid sandbox container record; preserving resources")
+    target = state.get("container_id") or state["container"]
+    if state.get("container_id") and not re.fullmatch(r"[0-9a-f]{64}", target):
+        raise RuntimeError("Invalid sandbox container ID; preserving resources")
+    template = '{{.Id}}\n{{.State.Running}}\n{{index .Config.Labels "io.opengolive.sandbox"}}\n{{index .Config.Labels "io.opengolive.directory"}}'
+    result = subprocess.run(["docker", "inspect", "--format", template, target],
+                            capture_output=True, text=True, timeout=20)
+    if result.returncode:
+        if "no such object" in result.stderr.lower() or "no such container" in result.stderr.lower():
+            return None
+        raise RuntimeError("Cannot inspect sandbox container; preserving resources")
+    fields = result.stdout.strip().splitlines()
+    if (len(fields) != 4 or not state.get("sandbox_id")
+            or fields[2] != state["sandbox_id"] or fields[3] != str(root.resolve())
+            or (state.get("container_id") and fields[0] != state["container_id"])):
+        raise RuntimeError("Container identity mismatch; preserving resources")
+    return {"id": fields[0], "running": fields[1] == "true"}
+
+
 def client(root, state, sql):
     if state["engine"] == "docker":
-        command = ["docker", "exec", "-i", state["container"], "mysql", "--defaults-extra-file=/run/golive-root.cnf", "--batch", "--skip-column-names"]
+        owned = docker_identity(root, state)
+        if not owned or not owned["running"]:
+            raise RuntimeError("Owned MySQL container is not running")
+        command = ["docker", "exec", "--user", "0", "-i", owned["id"], "mysql", "--defaults-extra-file=/run/golive-root.cnf", "--batch", "--skip-column-names"]
     else:
         command = ["mysql", "--defaults-extra-file=" + str(root / "root.cnf"), "--batch", "--skip-column-names"]
     return run(command, input=sql)
@@ -54,7 +99,9 @@ def client(root, state, sql):
 
 def stop(root, state):
     if state["engine"] == "docker":
-        run(["docker", "stop", state["container"]])
+        owned = docker_identity(root, state)
+        if owned and owned["running"]:
+            run(["docker", "stop", owned["id"]])
     else:
         # Authenticate over this sandbox's unique Unix socket, never kill a PID.
         sock = root / "mysql.sock"
@@ -91,8 +138,10 @@ def start(args, root):
     root.mkdir(parents=True, mode=0o700)
     root.chmod(0o700)
     password, root_password = secrets.token_hex(24), secrets.token_hex(24)
+    _secrets.extend([password, root_password])
     state = {"marker": MARKER, "directory": str(root), "engine": engine,
-             "port": args.port, "container": "golive-mysql-" + secrets.token_hex(6)}
+             "port": args.port, "container": "golive-mysql-" + secrets.token_hex(6),
+             "sandbox_id": secrets.token_hex(16)}
     save(root / "sandbox.json", json.dumps(state))
     socket_path = str(root / "mysql.sock")
     config = "[client]\nuser=root\npassword=" + root_password + "\n"
@@ -111,11 +160,17 @@ def start(args, root):
                               "--log-error=" + str(root / "mysql.log")], stdout=log, stderr=log, start_new_session=True)
     else:
         save(root / "docker.env", "MYSQL_ROOT_PASSWORD=" + root_password + "\n")
-        run(["docker", "run", "-d", "--name", state["container"],
+        container_id = run(["docker", "run", "-d", "--name", state["container"],
+             "--label", "io.opengolive.sandbox=" + state["sandbox_id"],
+             "--label", "io.opengolive.directory=" + str(root.resolve()),
              "--env-file", str(root / "docker.env"), "-p", f"127.0.0.1:{args.port}:3306",
              "--mount", f"type=bind,src={root / 'root.cnf'},dst=/run/golive-root.cnf,readonly",
              "--mount", f"type=bind,src={root},dst=/sandbox", args.image,
-             "--datadir=/sandbox/data", "--mysqlx=OFF"])
+             "--datadir=/sandbox/data", "--mysqlx=OFF"]).strip()
+        state["container_id"] = container_id
+        temporary = root / ("sandbox-" + secrets.token_hex(6) + ".json")
+        save(temporary, json.dumps(state))
+        os.replace(temporary, root / "sandbox.json")
     deadline = time.monotonic() + 90
     while True:
         try:
@@ -144,6 +199,7 @@ def start(args, root):
 
 
 def main():
+    global _log_root
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("start", "stop", "cleanup"))
     parser.add_argument("--directory", type=Path, required=True)
@@ -154,15 +210,22 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     root = args.directory.expanduser().absolute()
+    _log_root = root
     try:
         if args.action == "start":
             start(args, root)
         else:
             state = load(root)
+            for line in (root / "root.cnf").read_text().splitlines() if (root / "root.cnf").exists() else []:
+                if line.startswith("password="):
+                    _secrets.append(line.split("=", 1)[1])
             stop(root, state)
             if args.action == "cleanup":
                 if state["engine"] == "docker":
-                    run(["docker", "rm", state["container"]])
+                    owned = docker_identity(root, state)
+                    if owned:
+                        # Remove only this container's anonymous volumes, never shared volumes.
+                        run(["docker", "rm", "-v", owned["id"]])
                 shutil.rmtree(root)
             print("Sandbox " + args.action + " completed")
         return 0

@@ -72,6 +72,8 @@ def check_editor_auth(headers: dict, site: dict, cfg=None,
     owner = (site.get("owner") or "").strip().lower()
     maintainers = [str(m).strip().lower()
                    for m in (site.get("maintainers") or [])]
+    if identity and (identity == owner or identity in maintainers):
+        return True, 200, "", identity
 
     from golive.backends.registry.group_store import get_group_store
     try:

@@ -277,6 +277,10 @@ def test_group_store_failure_denies_inherited_access_without_losing_owner(team, 
     monkeypatch.setattr(group_store, 'get_group_store', unavailable)
     assert authz.site_role(authz.Identity('member@example.com'), team.site) == ''
     assert authz.site_role(authz.Identity('owner@example.com'), team.site) == 'owner'
+    assert editor_api.check_editor_auth({}, team.site, cfg=team.cfg,
+        session_user={'email':'owner@example.com'})[0]
+    assert editor_api.check_editor_auth({}, team.site, cfg=team.cfg,
+        session_user={'email':'member@example.com'})[1] == 503
     # group_api imports factory at module import, patch its bound name as well.
     from golive.server import group_api
     monkeypatch.setattr(group_api, 'get_group_store', unavailable)

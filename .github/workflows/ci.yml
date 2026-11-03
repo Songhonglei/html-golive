@@ -261,7 +261,7 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = ET.parse('supabase-results.xml').findall('.//testcase')
           live = [c for c in cases if c.get('classname', '').endswith('test_supabase_live')]
-          assert len(live) == 6 and all(c.find('skipped') is None for c in live)
+          assert len(live) == 7 and all(c.find('skipped') is None for c in live)
           assert all(c.find('failure') is None and c.find('error') is None for c in live)
           PY
       - name: Stop only this test stack

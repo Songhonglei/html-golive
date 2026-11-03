@@ -9,7 +9,7 @@ Prioritize reliable single-instance, intranet and AI Agent publishing: deliver t
 - Post-`0.9.7.post1` diagnostics, CLI and full-acceptance changes remain in draft, unmerged [PR #7](https://github.com/Songhonglei/html-golive/pull/7). Implementation baseline: `f2d8254534585a2ef9a4fc5d4ad23351bb9d3490`.
 - All eight CI checks passed at that baseline. Independent service-identity acceptance passed 46 actual CLI subprocess checks and 125 regression tests. Historical checks do not replace acceptance of future release artifacts.
 - A 16-stage MySQL/Chrome full-acceptance run has passed. The Docker sandbox branch and remote MySQL TLS remain unverified, rather than confirmed defects. Passing PostgreSQL/Supabase CI does not imply every manual acceptance scenario has run.
-- This update changes planning only: no feature implementation, merge, release, business deployment or credential changes. Status was checked on the date above; subsequent decisions must use current PR, CI and release evidence.
+- This plan now tracks execution: REL-01 implementation and local acceptance are complete, pending final CI/review. Official publication and business deployment are outside this execution. Subsequent decisions must use current PR, CI and release evidence.
 
 ## Implemented; awaiting release delivery
 
@@ -30,7 +30,7 @@ P0 gates the next release. P1 addresses data and automation reliability. P2 foll
 
 | ID | Priority | Work and user benefit | Status / dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| REL-01 | P0 | Audit service identity boundaries in stop/restart/start; avoid affecting unrelated processes or reusing wrong settings | Pending audit; release gate | Reproduce reused PIDs, PID/HOME mismatch and missing health with isolated processes; establish reliable identity before signals; define and test behavior when identity cannot be confirmed |
+| REL-01 | P0 | Protect service identity boundaries in stop/restart/start; avoid affecting unrelated processes or reusing wrong settings | Implemented and locally accepted; final CI/review pending, [#8](https://github.com/Songhonglei/html-golive/issues/8) | Reproduce reused PIDs, PID/HOME mismatch and missing health with isolated processes; establish reliable identity before signals; define and test behavior when identity cannot be confirmed |
 | REL-02 | P0 | Review and merge PR #7 so users receive accepted fixes | Awaiting review; REL-01 resolved | Required CI and independent acceptance pass on final code; no known release blocker; retain review/evidence |
 | REL-03 | P0 | Align release versions, docs and artifacts; avoid different code under the same version | Pending; candidate 0.9.8; after REL-02 | Package/CLI/health/Skill/changelog versions agree; build wheel, sdist and Skill distribution; artifact origin and checksums traceable |
 | REL-04 | P0 | Accept clean install, upgrade and basic rollback from candidate and official sources | Pending; after REL-03 | Install outside checkout in a fresh environment; independent CLI and MySQL/Chrome full acceptance; upgrade from old release, confirm running code/data and rollback boundaries; repeat after separately authorized publication |
@@ -46,7 +46,7 @@ P0 gates the next release. P1 addresses data and automation reliability. P2 foll
 | SCALE-01 | P3 | Shared sessions and inventory of local state dependencies | Demand-triggered; after reliability work | Confirm dual-instance/load-balancing need; inventory sessions, keys, files, configuration, caches and jobs; login/logout/revocation consistent across two instances; single-instance users require no added infrastructure |
 | STORE-01 | P3 | WebDAV adapter; reuse NAS/Nextcloud/company storage | Demand-triggered; real target storage/user required | Confirm NAS/WebDAV use case and endpoint; publish/read/delete, timeouts, auth and cleanup pass storage contracts; shared page files with server-only credentials; document separate DB/session/backup responsibilities |
 
-REL-01 is a code-review observation awaiting independent reproduction: `service.stop()` currently signals an alive recorded PID without calling diagnostic identity verification. It is not a newly demonstrated acceptance failure and does not invalidate accepted context/doctor behavior. Confirm the boundary with controlled processes before choosing an implementation. Never run suspect-record stop/restart against existing services.
+REL-01 was reproduced and fixed: stop at ce7b3aa terminated this run's unrelated Python sleeper in a fresh HOME. PID/HOME checks now guard stop, escalation and startup; restart aborts after failed stop and invalid/replaced records are preserved. Independent CLI acceptance and all 16 real MySQL/Chrome stages passed. See [REL-01 validation](validation-rel01.md). Only newly created test resources were controlled; existing acceptance services/databases were not modified.
 
 ## Milestone order
 

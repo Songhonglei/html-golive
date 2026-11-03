@@ -29,6 +29,32 @@ TemplateAPI table (one), not every table in the database. Model and row counts
 are separate, exact SQL aggregates for SQLite/Postgres/MySQL. Supabase model
 statistics retain their existing 10,000-row scan bound.
 
+## Service control identity (REL-01)
+
+`serve stop` now requires the same live PID/HOME health identity as diagnosis
+before sending SIGTERM. If identity is missing, mismatched or unavailable,
+it returns a nonzero result (`identity-unverified`) and preserves the record
+and process. SIGKILL escalation requires a fresh matching health/record check.
+A hung process that no longer answers health is not force-killed automatically.
+Only records for a confirmed dead PID may be cleaned automatically. Legacy
+bare-PID files remain readable, but cannot authorize control of a live process.
+Boolean, fractional and nonpositive PIDs are rejected.
+
+`serve restart` aborts after every failed stop. It uses an explicit endpoint,
+then a verified record, then configuration/defaults; a dead or unverifiable
+record cannot supply a stale host/port. A replacement record is preserved,
+and restart does not overwrite it. `serve start` rejects a second endpoint for
+an already managed HOME, never overwrites an unverifiable live record, and
+only accepts existing/startup health matching this HOME (and the spawned PID
+for a new child). Version/backend drift does not itself prevent control.
+
+If control is refused, use `context --json`, `doctor --json` and the original
+service terminal/process supervisor to investigate. Do not delete a live record
+or guess a PID to kill just to make the command succeed. If startup times out,
+the result identifies the child PID/log; it is not reported as managed success.
+These are local identity checks, not cryptographic proof against a malicious
+server forging its health response or an atomic OS process handle.
+
 ## CLI data parity
 
 ```sh
@@ -150,3 +176,10 @@ Supabase 继续使用基础验收；两种模式均不代表远程 TLS 已验收
 库和账号，不安装全局软件、不改变现有 MySQL 服务，凭证文件权限为 0600。
 `stop` 保留数据，显式 `cleanup` 才删除该沙箱。运行前会检查工具版本和端口；
 `doctor` 补充 SSL、代理及 MySQL 前置条件诊断，并且不回显凭证或代理地址。
+
+
+服务控制补充（REL-01）：stop 发送 SIGTERM 前必须核对 PID/HOME，升级到 SIGKILL 前再次核对。
+身份无法确认时返回失败并保留记录/进程；restart 在停止失败后中止，且不沿用无效记录的主机或端口。
+start 不覆盖无法验证的存活记录，不接管其他 HOME 的服务，也不把不匹配的新进程 health 当成启动成功。
+确认 PID 已退出的记录仍可自动清理；活进程的旧式纯 PID 文件不能授权停止。
+无法响应 health 的卡死进程需通过其原终端或进程管理器调查处理，不自动强杀。

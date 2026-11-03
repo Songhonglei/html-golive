@@ -2,6 +2,12 @@
 
 *[中文版在下方](#升级-html-golive中文)*
 
+For the upcoming release, service control verifies recorded PID/HOME before
+signalling. If `serve stop`/`restart` refuses an unverifiable record, inspect
+`context --json` / `doctor --json` and use the original service terminal or
+supervisor. Do not remove a live record or force-kill a guessed PID. See
+[service control identity](acceptance.md#service-control-identity-rel-01).
+
 Three things to know before you upgrade:
 
 1. **Upgrading the code does not upgrade a running server.** `golive serve`
@@ -250,6 +256,9 @@ golive skill install --force    # 4. (if you use the agent skill) resync it
 ---
 
 # 升级 html-golive（中文）
+
+下一版的服务控制会在发信号前校验记录中的 PID/HOME。stop/restart 拒绝无法验证的记录时，先查看 context/doctor，再通过原终端或进程管理器处理；不要删除存活记录或凭猜测强杀 PID。
+
 
 升级前需要知道三件事：
 

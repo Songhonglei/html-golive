@@ -80,16 +80,17 @@ def read_pidfile() -> Optional[Dict[str, Any]]:
     except ValueError:
         data = raw
     if isinstance(data, (int, str)):
-        # tolerate a bare "12345" written by hand or by an older version
-        try:
-            return {"pid": int(str(data).strip())}
-        except ValueError:
-            return None
-    if not isinstance(data, dict) or not data.get("pid"):
+        data = {"pid": data}   # legacy bare integer pidfile
+    if not isinstance(data, dict):
+        return None
+    value = data.get("pid")
+    if not (type(value) is int or (isinstance(value, str) and value.isdecimal())):
         return None
     try:
-        data["pid"] = int(data["pid"])
-    except (TypeError, ValueError):
+        data["pid"] = int(value)
+        if data["pid"] <= 0:
+            return None
+    except (TypeError, ValueError, OverflowError):
         return None
     return data
 
@@ -197,6 +198,46 @@ def describe_port(host: str, port: int) -> Tuple[str, Optional[Dict]]:
 
 # ── status ──────────────────────────────────────────────────────────────────
 
+def _health_identity_error(health, pid=None):
+    """Validate the identity shared by diagnostics and lifecycle control."""
+    from golive.core.paths import peek_home
+    if not isinstance(health, dict) or health.get("status") != "ok":
+        return "health_unavailable"
+    health_pid = health.get("pid")
+    if type(health_pid) is not int or health_pid <= 0 or (pid is not None and health_pid != pid):
+        return "pid_mismatch"
+    home = health.get("home")
+    try:
+        same_home = (isinstance(home, str) and bool(home)
+                     and Path(home).is_absolute()
+                     and Path(home).resolve() == peek_home().resolve())
+    except (OSError, ValueError, RuntimeError):
+        same_home = False
+    return None if same_home else "home_mismatch"
+
+
+def _record_matches(expected):
+    return read_pidfile() == expected
+
+
+def _clear_matching_record(expected):
+    """Do not remove a newer service's record while finishing an old stop."""
+    if _record_matches(expected):
+        clear_pidfile()
+        from golive.core.paths import peek_home
+        return not (peek_home() / PIDFILE_NAME).exists()
+    return False
+
+
+def _identity_refusal(info):
+    rec = info.get("record") or {}
+    return {"ok": False, "state": "identity-unverified", "pid": rec.get("pid"),
+            "reason": info["reason"],
+            "message": "Service identity could not be verified ({}). No signal was sent; "
+                       "the record was preserved. Inspect the process and configuration before retrying."
+                       .format(info["reason"])}
+
+
 def inspect_service_record() -> Dict[str, Any]:
     """Read-only identity check. A live PID alone may belong to another process.
 
@@ -213,6 +254,14 @@ def inspect_service_record() -> Dict[str, Any]:
             out["reason"] = "invalid_record"
         return out
     try:
+        alive = pid_alive(rec["pid"])
+    except (ValueError, OverflowError):
+        out["reason"] = "invalid_pid"
+        return out
+    if not alive:
+        out["reason"] = "pid_not_alive"
+        return out
+    try:
         value = rec.get("port")
         if not (type(value) is int or (isinstance(value, str) and value.isdecimal())):
             raise ValueError
@@ -222,37 +271,15 @@ def inspect_service_record() -> Dict[str, Any]:
     except (TypeError, ValueError, OverflowError):
         out["reason"] = "invalid_port"
         return out
-    try:
-        alive = pid_alive(rec["pid"])
-    except (ValueError, OverflowError):
-        out["reason"] = "invalid_pid"
-        return out
-    if not alive:
-        out["reason"] = "pid_not_alive"
-        return out
     host = rec.get("host") or "127.0.0.1"
     if not isinstance(host, str):
         out["reason"] = "invalid_host"
         return out
     health = probe_health(host, port)
     out["health"] = health
-    if not health or health.get("status") != "ok":
-        out["reason"] = "health_unavailable"
-        return out
-    # Require integer identity rather than accepting booleans or lossy casts.
-    pid = health.get("pid")
-    if type(pid) is not int or pid != rec["pid"]:
-        out["reason"] = "pid_mismatch"
-        return out
-    home = health.get("home")
-    try:
-        same_home = (isinstance(home, str) and bool(home)
-                     and Path(home).is_absolute()
-                     and Path(home).resolve() == peek_home().resolve())
-    except (OSError, ValueError, RuntimeError):
-        same_home = False
-    if not same_home:
-        out["reason"] = "home_mismatch"
+    reason = _health_identity_error(health, rec["pid"])
+    if reason:
+        out["reason"] = reason
         return out
     out.update(valid=True, reason="identity_matched")
     return out
@@ -392,41 +419,47 @@ def start(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
     """Start the server in the background (idempotent).
 
     Returns ``{ok, state, message, pid, port, host, log}`` where ``state`` is
-    one of ``started`` | ``already-running`` | ``port-taken`` | ``failed``.
+    one of ``started`` | ``already-running`` | ``port-taken`` | ``failed`` |
+    ``identity-unverified`` | ``already-managed``.
     """
-    rec = read_pidfile()
-    if rec and not pid_alive(int(rec["pid"])):
-        clear_pidfile()
+    info = inspect_service_record()
+    rec = info["record"]
+    if info["exists"] and not info["valid"]:
+        if info["reason"] != "pid_not_alive":
+            return {**_identity_refusal(info), "host": host, "port": port, "log": str(log_path())}
+        if not _clear_matching_record(rec):
+            return {**_identity_refusal({"record": rec, "reason": "record_changed"}),
+                    "host": host, "port": port, "log": str(log_path())}
         rec = None
+    if info["valid"] and (int(rec["port"]) != port or _probe_host(rec.get("host") or "127.0.0.1") != _probe_host(host)):
+        return {"ok": False, "state": "already-managed", "pid": rec["pid"],
+                "host": host, "port": port, "log": str(log_path()),
+                "message": "This HOME already has a verified managed server on port {}. "
+                           "Use serve restart with explicit host/port to move it.".format(rec["port"])}
 
-    # already ours and healthy? don't start a second one.
-    existing_port = port
-    owner, health = describe_port(host, existing_port)
-    if owner == "golive":
-        pid = None
-        if health and health.get("pid"):
-            try:
-                pid = int(health["pid"])
-            except (TypeError, ValueError):
-                pid = None
-        if pid is None and rec and int(rec.get("port", -1)) == existing_port:
-            pid = int(rec["pid"])
-        return {
-            "ok": True, "state": "already-running", "pid": pid,
-            "host": host, "port": existing_port, "log": str(log_path()),
-            "message": "golive is already serving on port {}{}."
-                       .format(existing_port,
-                               " (pid {})".format(pid) if pid else ""),
-        }
-    if owner == "other":
-        return {
-            "ok": False, "state": "port-taken", "pid": None,
-            "host": host, "port": existing_port, "log": str(log_path()),
-            "message": "port {} is held by another program (it does not "
-                       "answer golive's /health). Pick a different port "
-                       "with --port, or free that one."
-                       .format(existing_port),
-        }
+    owner, health = describe_port(host, port)
+    if info["valid"] and (_health_identity_error(health, rec["pid"]) is not None or not _record_matches(rec)):
+        return {**_identity_refusal({"record": rec, "reason": "identity_changed"}),
+                "host": host, "port": port, "log": str(log_path())}
+    if owner == "golive" and _health_identity_error(health) is None:
+        try:
+            alive = pid_alive(health["pid"])
+        except (ValueError, OverflowError):
+            alive = False
+        if alive:
+            return {"ok": True, "state": "already-running", "pid": health["pid"],
+                    "host": host, "port": port, "log": str(log_path()),
+                    "message": "golive is already serving this HOME on port {} (pid {})."
+                               .format(port, health["pid"])}
+    if owner != "free":
+        return {"ok": False, "state": "port-taken", "pid": None,
+                "host": host, "port": port, "log": str(log_path()),
+                "message": "port {} is held by another program or a server whose PID/HOME "
+                           "does not match this project. Pick a different port with --port, "
+                           "or inspect the existing service.".format(port)}
+    if info["valid"]:
+        return {**_identity_refusal({"record": rec, "reason": "health_unavailable"}),
+                "host": host, "port": port, "log": str(log_path())}
 
     proc = _spawn(host, port, config_path=config_path)
 
@@ -440,7 +473,12 @@ def start(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
                            "See {}".format(proc.returncode, log_path()),
             }
         health = probe_health(host, port, timeout=1.0)
-        if health is not None:
+        if _health_identity_error(health, proc.pid) is None:
+            # A concurrent lifecycle command must not have published its own record.
+            from golive.core.paths import peek_home
+            if (peek_home() / PIDFILE_NAME).exists():
+                return {**_identity_refusal({"record": read_pidfile(), "reason": "record_changed"}),
+                        "host": host, "port": port, "log": str(log_path())}
             write_pidfile(proc.pid, host, port,
                           version=str(health.get("version") or ""))
             return {
@@ -464,85 +502,97 @@ def start(host: str = "127.0.0.1", port: int = DEFAULT_PORT,
 
 
 def stop(timeout: float = STOP_TIMEOUT) -> Dict[str, Any]:
-    """Stop the background server. SIGTERM, then SIGKILL after ``timeout``.
+    """Signal only a verified recorded service; preserve unverifiable records.
 
-    ``state``: ``stopped`` | ``killed`` | ``not-running`` | ``stale-cleaned``
-    | ``unmanaged`` | ``failed``.
+    Recheck identity before escalation. A live but unresponsive process is
+    left for explicit operator investigation rather than guessed to be ours.
     """
-    rec = read_pidfile()
-    if not rec:
+    info = inspect_service_record()
+    rec = info["record"]
+    if not info["exists"]:
         st = status()
         if st["running"]:
-            return {
-                "ok": False, "state": "unmanaged", "pid": st["pid"],
-                "message": "a golive server answers on port {} but there is "
-                           "no pidfile — it was probably started in the "
-                           "foreground. Stop it with Ctrl+C in its terminal"
-                           "{}.".format(
-                               st["port"],
-                               ", or kill pid {}".format(st["pid"])
-                               if st["pid"] else ""),
-            }
+            return {"ok": False, "state": "unmanaged", "pid": st["pid"],
+                    "message": "A server is answering without a managed record. "
+                               "Stop it in its own terminal; it was not signalled."}
         return {"ok": True, "state": "not-running", "pid": None,
                 "message": "no background server is running."}
+    if not info["valid"]:
+        if info["reason"] == "pid_not_alive" and _clear_matching_record(rec):
+            return {"ok": True, "state": "stale-cleaned", "pid": rec["pid"],
+                    "message": "pid {} is gone; removed the stale pidfile.".format(rec["pid"])}
+        return _identity_refusal(info)
+    if not _record_matches(rec):
+        return _identity_refusal({"record": rec, "reason": "record_changed"})
 
-    pid = int(rec["pid"])
-    if not pid_alive(pid):
-        clear_pidfile()
-        return {"ok": True, "state": "stale-cleaned", "pid": pid,
-                "message": "pid {} is gone; removed the stale pidfile."
-                           .format(pid)}
+    pid = rec["pid"]
+
+    def finished(state):
+        cleared = _clear_matching_record(rec)
+        return {"ok": True, "state": state, "pid": pid,
+                "record_preserved": not cleared,
+                "message": "{} pid {}.{}".format(
+                    "stopped" if state == "stopped" else "force-stopped", pid,
+                    " A replacement record was preserved." if not cleared else "")}
 
     try:
         os.kill(pid, signal.SIGTERM)
-    except OSError as e:
+    except ProcessLookupError:
+        return finished("stopped")
+    except OSError as error:
         return {"ok": False, "state": "failed", "pid": pid,
-                "message": "could not signal pid {}: {}".format(pid, e)}
+                "message": "could not signal pid {}: {}".format(pid, error)}
 
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if not pid_alive(pid):
-            clear_pidfile()
-            return {"ok": True, "state": "stopped", "pid": pid,
-                    "message": "stopped pid {}.".format(pid)}
+            return finished("stopped")
         time.sleep(0.15)
-
+    if not pid_alive(pid):
+        return finished("stopped")
+    fresh = inspect_service_record()
+    if not fresh["valid"] or fresh["record"] != rec:
+        refusal = _identity_refusal({"record": rec, "reason": fresh["reason"] if not fresh["valid"] else "record_changed"})
+        refusal["message"] = (
+            "SIGTERM was sent to the verified service, but identity could not "
+            "be reconfirmed ({}). SIGKILL was not sent; the current record "
+            "was preserved.".format(refusal["reason"]))
+        return refusal
     try:
         os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
+    except ProcessLookupError:
+        return finished("killed")
+    except OSError as error:
+        return {"ok": False, "state": "failed", "pid": pid,
+                "message": "could not force-stop pid {}: {}".format(pid, error)}
     for _ in range(20):
         if not pid_alive(pid):
-            break
+            return finished("killed")
         time.sleep(0.1)
-    clear_pidfile()
-    if pid_alive(pid):
-        return {"ok": False, "state": "failed", "pid": pid,
-                "message": "pid {} survived SIGKILL — check it by hand."
-                           .format(pid)}
-    return {"ok": True, "state": "killed", "pid": pid,
-            "message": "pid {} did not stop within {:.0f}s; sent SIGKILL."
-                       .format(pid, timeout)}
+    return {"ok": False, "state": "failed", "pid": pid,
+            "message": "pid {} survived SIGKILL; its record was preserved.".format(pid)}
 
 
 def restart(host: Optional[str] = None, port: Optional[int] = None,
             config_path: str = "") -> Dict[str, Any]:
-    """Stop (if running) then start, reusing the recorded host/port."""
-    rec = read_pidfile() or {}
-    use_host = host or rec.get("host") or "127.0.0.1"
-    use_port = int(port or rec.get("port") or DEFAULT_PORT)
-
+    """Restart only after successful stop; inherit only a verified endpoint."""
+    from golive.config import get_config
+    cfg = get_config()
+    info = inspect_service_record()
+    rec = info["record"] if info["valid"] else {}
+    use_host = host if host is not None else rec.get("host") or cfg.server.host or "127.0.0.1"
+    use_port = int(port if port is not None else rec.get("port") or cfg.server.port or DEFAULT_PORT)
     stop_res = stop()
-    if stop_res["state"] == "unmanaged":
-        return {"ok": False, "state": "unmanaged", "pid": stop_res["pid"],
-                "host": use_host, "port": use_port, "log": str(log_path()),
-                "message": stop_res["message"], "stop": stop_res}
+    if not stop_res["ok"]:
+        return {**stop_res, "host": use_host, "port": use_port,
+                "log": str(log_path()), "stop": stop_res}
+    if stop_res.get("record_preserved"):
+        return {**_identity_refusal({"record": read_pidfile(), "reason": "record_changed"}),
+                "host": use_host, "port": use_port, "log": str(log_path()), "stop": stop_res}
 
-    # the OS may hold the listening socket for a moment after exit
-    deadline = time.time() + 5.0
-    while time.time() < deadline and port_in_use(use_host, use_port):
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and port_in_use(use_host, use_port):
         time.sleep(0.15)
-
     start_res = start(host=use_host, port=use_port, config_path=config_path)
     start_res["stop"] = stop_res
     return start_res

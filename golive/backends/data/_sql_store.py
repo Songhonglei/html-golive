@@ -12,16 +12,18 @@ def _now():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 class SQLTemplateStore:
+    content_is_decoded = False
+
     def _conn(self):
         raise NotImplementedError
 
     # ── row mapping ─────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _row_to_dict(row) -> dict:
+    @classmethod
+    def _row_to_dict(cls, row) -> dict:
         d = dict(row) if row else {}
         raw = d.get("content")
-        if isinstance(raw, str):
+        if isinstance(raw, str) and not cls.content_is_decoded:
             try:
                 d["content"] = json.loads(raw)
             except ValueError:

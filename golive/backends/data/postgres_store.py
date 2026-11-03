@@ -71,6 +71,9 @@ def _valid_table(name: str) -> str:
 class TemplateStore(SQLTemplateStore):
     """CRUD for golive_templates on Postgres (self-hosted data backend)."""
 
+    # psycopg has already decoded JSONB, including scalar string values.
+    content_is_decoded = True
+
     def __init__(self, dsn_env: str = "", table: str = ""):
         if not table or not dsn_env:
             try:

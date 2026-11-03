@@ -72,7 +72,7 @@ def test_archive_restores_record_ids_and_references(pair):
     assert rerun['data_exact_restore']
 
 
-@pytest.mark.parametrize('content',[{'x':[1,None,True]},[1,'二'],'plain string',4,False,None])
+@pytest.mark.parametrize('content',[{'x':[1,None,True]},[1,'二'],'plain string','123','null','{"key":1}','"quoted"',4,False,None])
 def test_restore_primitive_preserves_scalars_and_metadata(pair,content):
     row=payload();row['content']=content
     assert pair.dest.restore_row(row)==row
@@ -237,3 +237,11 @@ def test_json_restore_requires_explicit_noninteractive_mode(tmp_path,capsys):
     result=json.loads(capsys.readouterr().out)
     assert result['code']=='confirmation_required' and not result['ok']
     restore.assert_not_called()
+
+
+def test_sql_driver_decoding_keeps_jsonb_strings_distinct_from_json_text():
+    from golive.backends.data.postgres_store import TemplateStore as Postgres
+    from golive.backends.data.mysql_store import TemplateStore as MySQL
+    for value in ('plain string','123','null','{"key":1}','"quoted"'):
+        assert Postgres._row_to_dict({'content':value})['content']==value
+        assert MySQL._row_to_dict({'content':json.dumps(value)})['content']==value

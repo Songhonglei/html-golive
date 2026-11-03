@@ -46,7 +46,7 @@ foreign hrefs, bad XML, oversized bodies and preservation after failed read/PUT.
 `test_webdav_live.py` uses actual WsgiDAV with a fresh local CA and TLS server:
 valid CA succeeds; untrusted CA/wrong hostname fail; lifecycle/retention/rollback,
 wrong credentials and scoped deletion are checked. It explicitly skips unless
-WsgiDAV is installed; the dedicated **P3 CI job** installs it and executes it.
+WsgiDAV and Cheroot are installed; the dedicated **P3 CI job** installs it and executes it.
 The normal package has no new runtime dependency.
 
 Installed validation uses the exact CI wheel/sdist and manifest, a fresh venv,

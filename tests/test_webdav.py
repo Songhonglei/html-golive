@@ -197,8 +197,9 @@ def test_golive_serve_reads_webdav_and_editor_returns_501(dav, tmp_path, monkeyp
         base = 'http://127.0.0.1:%s' % server.server_port
         response = requests.get(base+'/dav-page', timeout=5)
         assert response.status_code == 200 and '<h1>remote page</h1>' in response.text
-        response = requests.put(base+'/api/sites/dav-page/content', json={'html': '<h1>new</h1>'},
+        response = requests.put(base+'/api/sites/dav-page/content', data=b'<h1>new</h1>',
             headers={'Authorization': 'Bearer fixture-editor', 'X-Editor-User': 'owner@example.com',
+                     'Content-Type': 'text/html; charset=utf-8',
                      'If-Match': content_revision(html)}, timeout=5)
         assert response.status_code == 501
         assert storage.read(site['site_id']) == html

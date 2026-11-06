@@ -208,10 +208,12 @@ class TestEditorSaveE2E(unittest.TestCase):
 
     def test_save_roundtrip_with_snapshot(self):
         new_html = "<html><body><h1>v2 edited</h1></body></html>"
+        from golive.core.content_revision import content_revision
+        revision = content_revision(self.storage.read(self.site["site_id"]))
         status, body = _put(
             f"{self.base}/api/sites/e2e-edit/content", new_html.encode(),
             headers={"Authorization": "Bearer e2e-token",
-                     "X-Editor-User": "own@x.com"})
+                     "X-Editor-User": "own@x.com", "If-Match": revision})
         self.assertEqual(status, 200, body)
         self.assertTrue(body["success"])
         self.assertTrue(body["snapshot_id"])
@@ -288,7 +290,8 @@ class TestEditorInject(unittest.TestCase):
         out = editor.inject_into_html(html, slug="demo", site_name="D")
         self.assertIn("golive-inline-editor", out)
         out2 = editor.inject_into_html(out, slug="demo2")
-        self.assertEqual(out2.count("golive-inline-editor"), 1)
+        # Script IDs may also appear in JS cleanup/comparison references.
+        self.assertEqual(out2.count('id="golive-inline-editor"'), 1)
 
         evil = editor.inject_into_html(html, slug='</script><script>alert(1)')
         self.assertNotIn("</script><script>alert(1)", evil)

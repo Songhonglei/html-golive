@@ -918,6 +918,13 @@ def _doctor_storage_info(cfg) -> dict:
             out["location"] = (getattr(cfg.storage, "supabase_bucket", "")
                                or "golive-sites")
             out["detail"] = getattr(cfg.supabase, "url", "") or ""
+        elif backend == 'webdav':
+            from golive.backends.factory import get_storage
+            storage = get_storage(cfg)  # validate without performing network I/O
+            from urllib.parse import urlsplit
+            target = urlsplit(storage.url)
+            out['location'] = target.hostname or ''
+            out['detail'] = 'WebDAV configuration valid; connection not probed'
     except Exception as e:  # noqa: BLE001
         out["error"] = str(e)
     return out
@@ -1443,6 +1450,8 @@ def cmd_doctor(args) -> int:
 
     port = _doctor_target_port(args)
     rep = _doctor_collect(port)
+    from golive.core.state import inventory
+    rep['local_state'] = inventory()
     problems = _doctor_problems(rep)
     rep["problems"] = problems
     rep["ok"] = not problems

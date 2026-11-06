@@ -1,6 +1,6 @@
 # 0.9.8 candidate delivery checklist / 候选版本交付清单
 
-Updated: 2026-11-03. Tracking [REL-03/REL-04 issue #9](https://github.com/Songhonglei/html-golive/issues/9).
+Updated: 2026-11-06. Tracking [REL-03/REL-04 issue #9](https://github.com/Songhonglei/html-golive/issues/9).
 
 **Candidate artifacts only; not published.** Do not install `html-golive==0.9.8`
 from a public index until an actual release exists. Published examples remain
@@ -9,6 +9,10 @@ pinned to `0.9.7.post1`; package/CLI/health/bundled Skill in this candidate use
 of preparation.
 
 ## Development follow-up
+
+The [P0–P3 stage summary](stage-summary-0.9.8.md) records the candidate integration
+and the fixed-commit [P3 independent reacceptance](validation-p3.md#independent-reacceptance).
+The historical artifact gates below refer to their own artifact baseline.
 
 DATA-01 source now implements identity-preserving business restore and migration;
 see [its validation](validation-data01.md) and the [recovery runbook](recovery.md).

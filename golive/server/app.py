@@ -41,6 +41,19 @@ from golive.i18n import t
 DEFAULT_PORT = 8787
 
 
+def _state_errors(method):
+    from functools import wraps
+    @wraps(method)
+    def wrapped(self):
+        from golive.backends.auth.state_store import StateUnavailable
+        try:
+            return method(self)
+        except StateUnavailable:
+            self._send_json(503, {'error': 'session store unavailable',
+                                  'code': 'session_store_unavailable'})
+    return wrapped
+
+
 def _lan_ip() -> str:
     """Best-effort LAN address, for printing a reachable URL.
 
@@ -94,9 +107,8 @@ def _make_oidc():
     try:
         from golive.backends.auth.oauth import OIDCAuth
         return OIDCAuth()
-    except Exception as e:  # noqa: BLE001 — misconfig shouldn't kill serve
-        print(t("serve.app.oidc_misconfig", error=e), file=sys.stderr)
-        return None
+    except Exception as e:  # never downgrade configured OIDC to loopback admin
+        raise RuntimeError('OIDC configuration/state unavailable; server not started') from e
 
 
 class GoliveHandler(http.server.BaseHTTPRequestHandler):
@@ -139,7 +151,18 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._send(404, "<h1>404</h1><p>site content missing</p>".encode())
             return
-        self._send(200, content.encode("utf-8"))
+        from golive.core.content_revision import content_revision
+        revision = content_revision(content)
+        if site.get("editable"):
+            # The revision belongs to exactly the DOM served, never to a later
+            # asynchronous fetch. This transient meta is stripped on save.
+            import re
+            meta = '<meta id="__golive_revision__" content="' + revision.strip('"') + '">'
+            content, count = re.subn(r'(?i)(<head\b[^>]*>)', lambda m: m[0] + meta, content, count=1)
+            if not count:
+                content = meta + content
+        self._send(200, content.encode("utf-8"), extra_headers={
+            "ETag": revision, "Cache-Control": "no-store"})
 
     def _session_user(self):
         if self.oidc is None:
@@ -246,6 +269,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
 
     # ── routing: GET ────────────────────────────────────────────────────────
 
+    @_state_errors
     def do_GET(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         path = parsed.path.rstrip("/") or "/"
@@ -271,6 +295,27 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/admin"):
             self._handle_admin_api("GET", parsed)
+            return
+
+        site, matched = self._match_editor_route("content")
+        if matched:
+            if site is None:
+                return
+            from golive.server.editor_api import check_editor_auth
+            ok, code, msg, _ = check_editor_auth(dict(self.headers), site,
+                                                session_user=self._session_user())
+            if not ok:
+                self._send_json(code, {"error": msg})
+                return
+            from golive.core.content_revision import content_revision
+            try:
+                html = self.storage.read(site["site_id"])
+            except FileNotFoundError:
+                self._send_json(404, {"error": "site content missing"})
+                return
+            revision = content_revision(html)
+            self._send_json(200, {"html": html, "revision": revision},
+                            {"ETag": revision, "Cache-Control": "no-store"})
             return
 
         if path.startswith("/api/data"):
@@ -328,6 +373,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return None, True
         return site, True
 
+    @_state_errors
     def do_PUT(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path.startswith("/api/admin"):
@@ -367,9 +413,11 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return
 
         status, payload = editor_api.save_content(
-            site, html, editor, self.registry, self.storage)
+            site, html, editor, self.registry, self.storage,
+            expected_revision=self.headers.get("If-Match"))
         self._send_json(status, payload)
 
+    @_state_errors
     def do_POST(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path.startswith("/api/admin"):
@@ -404,6 +452,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
         status, payload = editor_api.upload_image(site, data, filename, editor)
         self._send_json(status, payload)
 
+    @_state_errors
     def do_PATCH(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path.startswith("/api/admin"):
@@ -414,6 +463,7 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return
         self._send_json(404, {"error": "not found"})
 
+    @_state_errors
     def do_DELETE(self):  # noqa: N802
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path.startswith("/api/admin"):
@@ -496,7 +546,12 @@ class GoliveHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path == "/auth/logout":
-            self.oidc.logout(dict(self.headers))
+            try:
+                self.oidc.logout(dict(self.headers))
+            except Exception:
+                self._send_json(503, {"error": "session store unavailable; logout was not confirmed",
+                                      "code": "session_store_unavailable"})
+                return
             headers = {"Set-Cookie": self.oidc.clear_cookie()}
             end_url = self.oidc.end_session_url()
             if end_url:

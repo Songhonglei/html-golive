@@ -56,6 +56,20 @@ def test_failure_log_is_private_scrubbed_and_does_not_include_arguments(tmp_path
     assert 'private' not in log.read_text() and '[redacted]' in log.read_text()
 
 
+def test_docker_readiness_uses_final_tcp_server_not_temporary_socket(tmp_path,monkeypatch):
+    monkeypatch.setattr(sandbox, 'docker_identity', lambda *args: {'id': 'b'*64, 'running': True})
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return '1\n'
+    monkeypatch.setattr(sandbox, 'run', run)
+    assert sandbox.client(tmp_path, state(tmp_path), 'SELECT 1;') == '1\n'
+    command, kwargs = calls[0]
+    assert '--protocol=TCP' in command and '--host=127.0.0.1' in command and '--port=3306' in command
+    assert '--defaults-extra-file=/run/golive-root.cnf' in command
+    assert kwargs['input'] == 'SELECT 1;'
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1',0));return sock.getsockname()[1]

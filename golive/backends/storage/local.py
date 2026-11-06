@@ -8,6 +8,9 @@ Layout:
 
 from __future__ import annotations
 import datetime
+import os
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from golive.core.paths import get_backups_dir, get_sites_dir
@@ -34,20 +37,61 @@ class LocalStorage:
 
     # ── write ───────────────────────────────────────────────────────────────
 
+    @contextmanager
+    def _write_lock(self, site_id):
+        # Keep lock inodes outside the deletable site directory. flock also
+        # serializes separate CLI/server processes sharing this HOME.
+        import fcntl
+        import hashlib
+        locks = get_sites_dir().parent / "content-locks"
+        locks.mkdir(parents=True, exist_ok=True)
+        key = hashlib.sha256(site_id.encode()).hexdigest()
+        with open(locks / key, "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def publish_if_revision(self, html, site_id, expected_revision):
+        from golive.core.content_revision import ContentConflict, content_revision
+        with self._write_lock(site_id):
+            try:
+                current = content_revision(self.read(site_id))
+            except FileNotFoundError:
+                current = None
+            if current is None or expected_revision != current:
+                raise ContentConflict(current)
+            return self._publish(html, site_id, True)
+
     def publish(self, html: str, site_id: str, backup_previous: bool = True) -> Path:
         """Write site HTML; snapshot the previous version first."""
+        with self._write_lock(site_id):
+            return self._publish(html, site_id, backup_previous)
+
+    def _publish(self, html, site_id, backup_previous):
         p = self.site_path(site_id)
         p.parent.mkdir(parents=True, exist_ok=True)
         if backup_previous and p.exists():
             self._snapshot(site_id, p.read_text(encoding="utf-8"))
-        p.write_text(html, encoding="utf-8")
+        fd, temp = tempfile.mkstemp(dir=p.parent, prefix=".content-")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(html)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, p)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
         return p
 
     def delete(self, site_id: str) -> None:
         import shutil
-        d = get_sites_dir() / site_id
-        if d.exists():
-            shutil.rmtree(d)
+        with self._write_lock(site_id):
+            d = get_sites_dir() / site_id
+            if d.exists():
+                shutil.rmtree(d)
 
     # ── snapshots / rollback ────────────────────────────────────────────────
 

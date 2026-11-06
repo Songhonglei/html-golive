@@ -106,3 +106,34 @@ def test_export_import_and_persistence(live):
     from golive.backends.factory import get_template_store
     assert get_template_store(live.cfg).list('archive')['list'][0]['content']=={'text':'持久化 🧪'}
     cli('doctor','--port',str(live.base.rsplit(':',1)[1]),'--json')
+
+
+def test_team_grants_and_conditional_edit_with_registry(live):
+    """Team state stays local with a real SQLite/Postgres/MySQL registry."""
+    from golive.backends.registry.group_store import GroupStore
+    from golive.backends.storage.local import LocalStorage
+    from golive.core.content_revision import content_revision
+    from golive.server import admin_api, authz, editor_api
+    slug = 'team-' + uuid.uuid4().hex[:10]
+    site = live.registry.create('Team registry contract', slug, owner='owner@example.com')
+    sid = site['site_id']; live.ids.append(sid)
+    live.registry.set_editable(sid, True)
+    site = live.registry.get(sid)
+    storage = LocalStorage(); storage.publish('<h1>original</h1>', sid, False)
+    groups = GroupStore()
+    gid = groups.change('create', 'operator', value='Team')['group_id']
+    groups.change('member.add', 'operator', gid, value='member@example.com')
+    groups.change('grant', 'operator', gid, site_id=sid, role='maintainer')
+    user = authz.Identity('member@example.com')
+    code, detail = admin_api.handle('GET', '/api/admin/sites/' + slug, {}, b'', user, live.registry, storage)
+    assert code == 200 and detail['role'] == 'maintainer'
+    assert editor_api.check_editor_auth({}, site, cfg=live.cfg, session_user={'email':user.email})[0]
+    revision = content_revision(storage.read(sid))
+    assert editor_api.save_content(site, '<h1>team edit</h1>', user.email, live.registry, storage,
+        cfg=live.cfg, expected_revision=revision)[0] == 200
+    assert editor_api.save_content(site, '<h1>stale edit</h1>', user.email, live.registry, storage,
+        cfg=live.cfg, expected_revision=revision)[0] == 409
+    groups.change('member.remove', 'operator', gid, value=user.email)
+    assert not editor_api.check_editor_auth({}, site, cfg=live.cfg, session_user={'email':user.email})[0]
+    assert admin_api.handle('GET', '/api/admin/sites/' + slug, {}, b'', user, live.registry, storage)[0] == 403
+    assert live.registry.get(sid)['owner'] == 'owner@example.com'

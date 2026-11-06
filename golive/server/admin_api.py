@@ -176,8 +176,7 @@ def _me(identity: authz.Identity, registry) -> tuple:
             if role == "owner" or \
                     (identity.email == (s.get("owner") or "").strip().lower()):
                 owned.append(s.get("slug") or s["site_id"])
-            elif identity.email in [str(m).strip().lower()
-                                    for m in (s.get("maintainers") or [])]:
+            elif role == "maintainer":
                 maintained.append(s.get("slug") or s["site_id"])
     return 200, {
         "identity": identity.as_dict(),
@@ -593,6 +592,9 @@ def _perm_dispatch(method, rest, query, body, identity, registry) -> tuple:
             return _perm_admin_remove(body, identity)
         if rest == ["bulk"] and method == "POST":
             return _perm_bulk(body, identity, registry)
+        if rest[:1] == ["groups"]:
+            from golive.server.group_api import handle_groups
+            return handle_groups(method, rest[1:], body, identity, registry, query)
     except Exception as e:  # noqa: BLE001 — store failure -> 500, not a crash
         return 500, {"error": f"permission store error: {e}"}
     return _err(404, "unknown admin endpoint")

@@ -26,6 +26,8 @@ CREATE_TABLE_SQL = _SCHEMA
 
 
 class TemplateStore(SQLTemplateStore):
+    search_text_sql = "CONCAT(COALESCE(name, ''), ' ', COALESCE(description, ''), ' ', COALESCE(CAST(content AS CHAR CHARACTER SET utf8mb4), ''))"
+
     def __init__(self, dsn_env: str = "", table: str = ""):
         if not dsn_env or not table:
             from golive.config import get_config

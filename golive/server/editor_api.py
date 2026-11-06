@@ -5,7 +5,7 @@ Handles::
   PUT  /api/sites/<slug>/content    save edited HTML
   POST /api/sites/<slug>/upload     upload an image (when configured)
 
-Authorization model (single-writer, no CRDT):
+Authorization model (conditional writes, no CRDT):
   1. the site must have editing enabled (registry ``editable`` flag —
      set via ``golive publish --enable-editor``);
   2. the request must carry a valid editor token
@@ -14,7 +14,9 @@ Authorization model (single-writer, no CRDT):
   3. the claimed editor identity (``X-Editor-User`` header, or the OIDC
      session email) must be the site owner or a registered maintainer.
      When the site has no owner AND no maintainers, any valid token is
-     accepted (zero-config mode) — a warning is printed at publish time.
+     accepted (zero-config mode), unless the site has used group grants.
+     Group maintainer access requires a server-verified OIDC session email;
+     X-Editor-User never establishes group membership.
 
 Every save re-runs the publish-time security gate (code-safety checker +
 rule/AI scanner) so the edit channel can never bypass the scan, snapshots
@@ -70,8 +72,20 @@ def check_editor_auth(headers: dict, site: dict, cfg=None,
     owner = (site.get("owner") or "").strip().lower()
     maintainers = [str(m).strip().lower()
                    for m in (site.get("maintainers") or [])]
+    if identity and (identity == owner or identity in maintainers):
+        return True, 200, "", identity
 
-    if owner or maintainers:
+    from golive.backends.registry.group_store import get_group_store
+    try:
+        groups = get_group_store()
+        group_role = groups.role(identity, site["site_id"]) if session_user else ""
+        has_groups = groups.requires_identity(site["site_id"])
+    except Exception:
+        return False, 503, "group permission store unavailable", identity
+
+    if group_role == "maintainer":
+        return True, 200, "", identity
+    if owner or maintainers or has_groups:
         if not identity:
             return False, 403, ("X-Editor-User header required "
                                 "(must match site owner or a maintainer)"), ""
@@ -83,7 +97,7 @@ def check_editor_auth(headers: dict, site: dict, cfg=None,
 
 
 def save_content(site: dict, html: str, editor: str,
-                 registry, storage, cfg=None) -> tuple:
+                 registry, storage, cfg=None, expected_revision=None) -> tuple:
     """Validate + scan + snapshot + overwrite. Returns (status, body_dict)."""
     t0 = time.time()
     site_id = site["site_id"]
@@ -113,6 +127,19 @@ def save_content(site: dict, html: str, editor: str,
         return 422, {"error": "security scan blocked the content "
                               "(sensitive data detected)"}
 
+    # Never silently downgrade to an unconditional write. Scan first so invalid
+    # HTML is still rejected independently of a client's revision support.
+    import re
+    if expected_revision is None:
+        return 428, {"error": "Read content and supply its revision in If-Match",
+                     "code": "revision_required"}
+    if not re.fullmatch(r'"[0-9a-f]{64}"', expected_revision):
+        return 400, {"error": "If-Match must be one strong content revision",
+                     "code": "invalid_revision"}
+    if not callable(getattr(storage, "publish_if_revision", None)):
+        return 501, {"error": "Storage does not support atomic conditional editing",
+                     "code": "conditional_write_unsupported"}
+
     # keep the editor layer working after save: re-inject before persisting
     # (the client strips editor UI from the DOM before upload)
     from golive.inject import editor as editor_inject
@@ -120,7 +147,16 @@ def save_content(site: dict, html: str, editor: str,
         html, slug=site.get("slug") or site_id, site_name=site.get("name", ""))
 
     # snapshot happens inside storage.publish(backup_previous=True)
-    storage.publish(html_to_store, site_id, backup_previous=True)
+    from golive.core.content_revision import ContentConflict, content_revision
+    try:
+        storage.publish_if_revision(html_to_store, site_id, expected_revision)
+    except ContentConflict as conflict:
+        from golive.core.audit import record
+        record(editor or "(token)", "editor.conflict", site.get("slug") or site_id,
+               {"expected_revision": expected_revision,
+                "current_revision": conflict.current_revision})
+        return 409, {"error": str(conflict), "code": "edit_conflict",
+                     "current_revision": conflict.current_revision}
     snaps = storage.list_snapshots(site_id)
     snapshot_id = snaps[0]["ts"] if snaps else ""
     registry.touch(site_id)
@@ -138,7 +174,8 @@ def save_content(site: dict, html: str, editor: str,
            site.get("slug") or site_id,
            {"size": size, "snapshot_id": snapshot_id})
 
-    return 200, {"success": True, "snapshot_id": snapshot_id, "size": size}
+    return 200, {"success": True, "snapshot_id": snapshot_id, "size": size,
+                 "revision": content_revision(html_to_store)}
 
 
 def upload_image(site: dict, data: bytes, filename: str, editor: str) -> tuple:

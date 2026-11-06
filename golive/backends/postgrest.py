@@ -89,9 +89,9 @@ class PostgrestClient:
             cr = resp.headers.get("Content-Range", "")
             if "/" in cr:
                 tail = cr.rsplit("/", 1)[1]
-                total = int(tail) if tail.isdigit() else len(rows)
+                total = int(tail) if tail.isdigit() else None
             else:
-                total = len(rows)
+                total = None
         return rows, total
 
     def insert(self, table: str, rows, returning: bool = True) -> list:
@@ -133,7 +133,9 @@ class PostgrestClient:
         params["select"] = "id" if "select" not in params else params["select"]
         params["limit"] = "1"
         _, total = self.select(table, params=params, count=True)
-        return total or 0
+        if total is None:
+            raise PostgrestError("PostgREST exact count is unavailable")
+        return total
 
 
 def client_from_config(cfg=None) -> PostgrestClient:

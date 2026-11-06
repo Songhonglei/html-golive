@@ -12,6 +12,8 @@
 
 **v0.9.7.post1：四种数据库，同一套页面 API。** SQLite 零配置起步，PostgreSQL、MySQL 8.4+、Supabase 随需切换；保留克制的亮/暗管理工作台。
 
+**开发候选：0.9.8（尚未发布）。** CI 产物已通过独立安装、MySQL/Chrome 和升级/代码回退验收；清单另列已有的记录 ID 恢复限制。下方正式安装指引仍使用已发布的 0.9.7.post1。详见[候选版本交付清单](docs/release-0.9.8.md)。
+
 [四后端配置与验收](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent 安装与使用](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 更新](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 浏览器、SQL 证据与重启持久化验收，以及本轮诊断/CLI 修复，见[完整验收说明](docs/acceptance.md#中文说明)（尚未发布的源码改动）。
@@ -399,8 +401,8 @@ docker compose --profile minio up -d        # 加本地 S3（图床用）
 
 - **P0 — 修复正式交付**：收口服务控制身份边界、审查 PR #7、同步版本/产物并完成安装升级验收（候选 0.9.8）。
 - **P1 — 可靠性**：备份恢复与迁移演练、升级/恢复指引、Agent/CLI 失败契约、大表统计/搜索/分页，以及 Docker/TLS 覆盖。
-- **P2 — 协作**：编辑冲突检测，再按团队需求推进组权限。
-- **P3 — 按需启动**：多实例共享会话、面向已有 NAS/企业存储用户的 WebDAV；单机用户无需增加基础设施。
+- **P2 — 协作**：已按团队需求推进编辑冲突检测与组权限；[开发范围与兼容性](docs/collaboration.md)。
+- **P3 — 首批实现**：[同主机共享登录/权限状态](docs/shared-state.md)与 [WebDAV 页面存储](docs/webdav.md)已进入候选开发；跨主机 HA 和真实 NAS 兼容性单独验收，单机用户无需增加基础设施。
 
 详见[完整待办优先级与里程碑计划](https://github.com/Songhonglei/html-golive/blob/main/docs/roadmap.zh-CN.md)。
 已实现的诊断、CLI、完整验收修复单独跟踪发布交付，不重复排为新功能开发。

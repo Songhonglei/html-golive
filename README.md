@@ -12,6 +12,8 @@ your own machine, NAS, VPS or intranet server.
 
 **v0.9.7.post1: four databases, one page API.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. Manage everything in the light/dark admin workspace.
 
+**Development candidate: 0.9.8 (not published).** CI artifacts passed isolated installation, MySQL/Chrome and upgrade/code-rollback acceptance; the checklist records the existing record-ID restore limitation. Published installation instructions below remain pinned to 0.9.7.post1. See [candidate release checklist](docs/release-0.9.8.md).
+
 [Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent setup & usage](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
 
 ### 30-second quickstart
@@ -423,8 +425,8 @@ acceptance gates; there are no committed release dates.
 
 - **P0 — Deliver the accepted fixes:** close service-control identity boundaries, review PR #7, align versions/artifacts, and accept clean installs and upgrades (candidate 0.9.8).
 - **P1 — Reliability:** backup/restore and migration drills, upgrade/recovery guidance, Agent/CLI failure contracts, accurate large-data statistics/search/pagination, and Docker/TLS coverage.
-- **P2 — Collaboration:** editing conflict detection, then group permissions when team demand is confirmed.
-- **P3 — Demand-triggered:** shared sessions for multiple instances and WebDAV for existing NAS/company storage users. Single-instance users should not need extra infrastructure.
+- **P2 — Collaboration:** editing conflict detection and group permissions are in development following confirmed team demand; [scope and compatibility](docs/collaboration.md).
+- **P3 — First slice:** [same-host shared login/control state](docs/shared-state.md) and [WebDAV page storage](docs/webdav.md) are implemented as candidate features. Cross-host HA and target NAS acceptance remain separate; single-instance users need no added infrastructure.
 
 See the [complete prioritized backlog and milestone gates](https://github.com/Songhonglei/html-golive/blob/main/docs/roadmap.md).
 Implemented diagnostics, CLI and full-acceptance fixes remain pending release;

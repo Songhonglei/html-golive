@@ -1,5 +1,7 @@
 # WorkBuddy / 其他 Agent：MySQL 安装、初始化与验证
 
+> 开发候选 0.9.8 尚未发布；下方仓库安装示例继续使用已发布的 0.9.7.post1。候选源码/产物的验收方式见[版本交付清单](release-0.9.8.md)。
+
 适用版本：html-golive **v0.9.7.post1**；数据库：**MySQL 8.4+**。这是一套本机自部署工具，不需要 golive 平台账号。Python 的 MySQL extra 安装驱动，不会自动安装数据库服务。
 
 WorkBuddy 官方支持[项目级 `.codebuddy/skills`](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project)，也可在[技能界面上传本地技能包](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Skills-Market)。请使用真实受支持的入口，不要猜测 `~/.workbuddy` 等安装目录。

@@ -232,14 +232,22 @@ pip install 'html-golive==0.7.0'
 golive serve restart
 ```
 
-`GOLIVE_HOME` is forward-compatible within the 0.x line: schema changes
-are additive, so downgrading the code does not corrupt an existing
-`registry.db` or `data.db`. Back the directory up anyway before any
-upgrade you are nervous about:
+Do not assume arbitrary downgrades are compatible. Stop the intended service,
+retain the exact old package and take a consistent backup of configuration,
+page files and databases before upgrading. External databases need their own
+backup; copying `GOLIVE_HOME` alone does not include them. For a local instance:
 
 ```bash
 cp -a ~/.golive ~/.golive.bak-$(date +%F)
 ```
+
+The [0.9.8 candidate rehearsal](release-0.9.8.md) verified one code rollback to
+`0.9.7.post1` on isolated MySQL, including candidate-written rows. It does not
+establish compatibility with other versions or schemas. Published 0.9.7.post1 and the accepted `f0de446` artifact regenerate data IDs on
+import. [DATA-01 development source](validation-data01.md) preserves business IDs
+and metadata on empty targets; verify the exact commit/artifact and conflict
+report. Export is not a consistent multi-resource database backup. Configuration, credentials, audit history and external resources require
+separate recovery steps; see [DATA-01](https://github.com/Songhonglei/html-golive/issues/11).
 
 ---
 
@@ -471,12 +479,19 @@ pip install 'html-golive==0.7.0'
 golive serve restart
 ```
 
-`GOLIVE_HOME` 在 0.x 线内向前兼容：schema 变更都是增量的，降级代码不会
-破坏已有的 `registry.db` 或 `data.db`。不放心的升级前照样先备份：
+不要假设任意版本都能安全降级。升级前停止目标服务，保留精确的旧安装包，
+一致地备份配置、页面文件和数据库。外部数据库必须单独备份；仅复制
+`GOLIVE_HOME` 不包含它们。本地实例可在服务停止后复制目录：
 
 ```bash
 cp -a ~/.golive ~/.golive.bak-$(date +%F)
 ```
+
+[0.9.8 候选演练](release-0.9.8.md)只验证了独立 MySQL 上回退到 `0.9.7.post1`，
+并读取候选版写入的记录，不能推广到其他版本或 schema。已发布的 0.9.7.post1 与已验收的 `f0de446` 产物导入时会重新生成数据 ID；
+[DATA-01 开发源码](validation-data01.md)已增加保留业务记录身份和元数据的恢复接口，
+需核对精确提交/产物及冲突结果。导出仍不是跨数据库和文件的一致性备份。
+配置、凭证、审计和外部资源需分别恢复；详见 [DATA-01](https://github.com/Songhonglei/html-golive/issues/11)。
 
 ---
 

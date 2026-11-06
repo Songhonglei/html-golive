@@ -182,6 +182,8 @@ def collect(cfg=None, port: int | None = None) -> dict:
     }
 
     # skill installs
+    from golive.core.state import inventory
+    out['local_state'] = inventory()
     out["skill"] = _skill_info()
 
     # server
@@ -280,6 +282,10 @@ def render(info: dict) -> str:
     else:
         L.append(_line("config file", "(none — using built-in defaults)",
                        "default"))
+
+    state = info.get('local_state', {})
+    if state.get('mode') == 'same_host_shared':
+        L.append(_line('control state', state['directory'] + ' (same-host shared)', state['source']))
 
     reg = info["registry"]
     if reg["backend"] in ("", "sqlite"):

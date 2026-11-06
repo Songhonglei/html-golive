@@ -117,7 +117,7 @@ def resolve_identity(session_user: Optional[dict],
 
 
 def site_role(identity: Optional[Identity], site: dict) -> str:
-    """Return 'superadmin' | 'owner' | 'maintainer' | '' for a site."""
+    """Admin > personal owner/maintainer > group maintainer/viewer > none."""
     if identity is None:
         return ""
     if identity.is_superadmin:
@@ -131,11 +131,17 @@ def site_role(identity: Optional[Identity], site: dict) -> str:
                    for m in (site.get("maintainers") or [])]
     if identity.email in maintainers:
         return "maintainer"
-    return ""
+    # Resolve every request: revoked memberships/grants must not survive an
+    # existing login session. Group-store failures never grant permissions.
+    from golive.backends.registry.group_store import get_group_store
+    try:
+        return get_group_store().role(identity.email, site["site_id"])
+    except Exception:
+        return ""
 
 
 def can_view(identity: Optional[Identity], site: dict) -> bool:
-    return site_role(identity, site) in ("superadmin", "owner", "maintainer")
+    return site_role(identity, site) in ("superadmin", "owner", "maintainer", "viewer")
 
 
 def can_edit_meta(identity: Optional[Identity], site: dict) -> bool:

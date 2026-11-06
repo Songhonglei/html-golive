@@ -918,6 +918,13 @@ def _doctor_storage_info(cfg) -> dict:
             out["location"] = (getattr(cfg.storage, "supabase_bucket", "")
                                or "golive-sites")
             out["detail"] = getattr(cfg.supabase, "url", "") or ""
+        elif backend == 'webdav':
+            from golive.backends.factory import get_storage
+            storage = get_storage(cfg)  # validate without performing network I/O
+            from urllib.parse import urlsplit
+            target = urlsplit(storage.url)
+            out['location'] = target.hostname or ''
+            out['detail'] = 'WebDAV configuration valid; connection not probed'
     except Exception as e:  # noqa: BLE001
         out["error"] = str(e)
     return out
@@ -1415,7 +1422,11 @@ def cmd_doctor(args) -> int:
     # got a healthy exit 0 for a site that was never looked at. Distinguish
     # "not asked for" (None) from "asked for, with nothing" (empty).
     if getattr(args, "site", None) is not None and not str(args.site).strip():
-        print(t("doctor.site.empty_ref"), file=sys.stderr)
+        if getattr(args, "json", False):
+            from golive.core.cli_output import emit_error
+            emit_error("doctor", "doctor", "invalid_arguments", t("doctor.site.empty_ref"))
+        else:
+            print(t("doctor.site.empty_ref"), file=sys.stderr)
         return 2
     if getattr(args, "site", ""):
         info = _doctor_site_info(args.site)
@@ -1439,6 +1450,8 @@ def cmd_doctor(args) -> int:
 
     port = _doctor_target_port(args)
     rep = _doctor_collect(port)
+    from golive.core.state import inventory
+    rep['local_state'] = inventory()
     problems = _doctor_problems(rep)
     rep["problems"] = problems
     rep["ok"] = not problems
@@ -1580,16 +1593,18 @@ def cmd_data(args) -> int:
 
     want_json = getattr(args, "json", False)
 
-    def emit(ok, code, row=None, error=None):
+    def emit(ok, code, row=None, error=None, uncertain=False):
         result = {"ok": ok, "operation": args.action, "code": code,
                   "id": row.get("id") if row else (args.id or None), "record": row}
+        if uncertain:
+            result["write_state"] = "unknown"
         if error:
             result["error"] = error
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
 
-    def fail(code, message):
+    def fail(code, message, uncertain=False):
         if want_json:
-            emit(False, code, error=message)
+            emit(False, code, error=message, uncertain=uncertain)
         else:
             print(message, file=sys.stderr)
         return 1
@@ -1599,7 +1614,8 @@ def cmd_data(args) -> int:
             return None
         if raw.startswith("@"):
             raw = Path(raw[1:]).read_text(encoding="utf-8")
-        return json.loads(raw)
+        from golive.core.cli_output import decode_json
+        return decode_json(raw)
 
     try:
         if args.action in ("get", "update", "delete", "sort") and not args.id:
@@ -1613,6 +1629,10 @@ def cmd_data(args) -> int:
         page_size = page_size if page_size is not None else getattr(args, "limit", 20)
         if page_no < 1 or page_size < 1:
             return fail("invalid_arguments", "--page-no and --page-size/--limit must be positive")
+        try:
+            content = load_content(args.content) if args.action in ("create", "update", "upsert") else None
+        except (ValueError, OSError):
+            return fail("invalid_input", "Invalid JSON or input file; no data write was attempted.")
         store = get_template_store()
         if store is None:
             return fail("backend_disabled", t("data.disabled"))
@@ -1629,10 +1649,10 @@ def cmd_data(args) -> int:
             return 0
         if args.action == "create":
             row = store.create(args.model_code, args.name,
-                               content=load_content(args.content), description=args.desc)
+                               content=content, description=args.desc)
             message = t("data.created", id=row["id"])
         elif args.action == "upsert":
-            row = store.upsert(args.model_code, args.name, content=load_content(args.content))
+            row = store.upsert(args.model_code, args.name, content=content)
             message = t("data.upserted", id=row["id"])
         elif args.action in ("update", "sort"):
             patch = {}
@@ -1642,7 +1662,7 @@ def cmd_data(args) -> int:
                 if args.name:
                     patch["name"] = args.name
                 if args.content:
-                    patch["content"] = load_content(args.content)
+                    patch["content"] = content
                 if args.desc:
                     patch["desc"] = args.desc
             row = store.update(args.id, patch)
@@ -1661,10 +1681,11 @@ def cmd_data(args) -> int:
         return 0
     except KeyError:
         return fail("not_found", t("data.template_not_found", id=args.id))
-    except (ValueError, OSError):
-        return fail("invalid_input", "Invalid input or connection configuration; check JSON, files and backend settings.")
-    except Exception:  # Backend exceptions can contain DSNs or credentials.
-        return fail("backend_error", "Data operation failed; check backend configuration, connectivity and constraints.")
+    except Exception as error:  # Never expose driver messages or connection credentials.
+        from golive.core.cli_output import failure_code
+        code = failure_code(error)
+        uncertain = args.action not in ("list", "get") and code in ("backend_timeout", "backend_unavailable", "backend_error")
+        return fail(code, "Data operation failed; check backend configuration, connectivity and constraints.", uncertain=uncertain)
 
 
 # ═════════════════════════════════ skill ════════════════════════════════════
@@ -2336,6 +2357,11 @@ def cmd_import(args) -> int:
     import json as _json
     from golive.core.portability import import_archive
 
+    if getattr(args, "json", False) and not args.yes and not args.dry_run:
+        print(_json.dumps({"ok": False, "operation": "import", "code": "confirmation_required",
+                           "error": "Use --yes to restore, or --dry-run for an archive-only preview."}))
+        return 2
+
     try:
         result = import_archive(
             args.archive,
@@ -2343,9 +2369,26 @@ def cmd_import(args) -> int:
             on_conflict=args.on_conflict,
             yes=args.yes,
         )
-    except (ValueError, RuntimeError) as e:
-        print(f"❌ {e}", file=sys.stderr)
+    except Exception as error:
+        from golive.core.portability import ArchiveValidationError
+        invalid = isinstance(error, ArchiveValidationError)
+        code = "invalid_archive" if invalid else "backend_error"
+        message = ("Archive/file is invalid or unavailable; no restore success was confirmed."
+                   if invalid else "Restore failed; check target configuration and connectivity.")
+        if getattr(args, "json", False):
+            print(_json.dumps({"ok": False, "operation": "import", "code": code,
+                               "error": message}))
+        else:
+            print(f"❌ {message}", file=sys.stderr)
         return 1
+
+    if getattr(args, "json", False):
+        cancelled = bool(result.get("cancelled"))
+        ok = bool(result.get("ok")) and not cancelled
+        code = "cancelled" if cancelled else "ok" if ok else "partial_failure" if result.get("partial") else "restore_failed"
+        print(_json.dumps({**result, "ok": ok, "operation": "import", "code": code},
+                          ensure_ascii=False, indent=2))
+        return 130 if cancelled else 0 if ok else 1
 
     if result.get("cancelled"):
         return 130
@@ -2357,6 +2400,8 @@ def cmd_import(args) -> int:
         print(f"  Data rows to import:  {s['data_rows_to_import']}")
         print(f"  HTML files to write:  {s['html_files_to_write']}")
         print(f"  Slug conflicts:       {s['conflict_count']}")
+        if not s.get("target_inspected", True):
+            print("  Target not inspected; archive-only preview, conflicts unknown.")
         if s["conflicts"]:
             print(f"  Conflicting slugs:")
             for c in s["conflicts"]:
@@ -2369,6 +2414,10 @@ def cmd_import(args) -> int:
     print(f"  Sites renamed:        {result['sites_renamed']}")
     print(f"  Data rows imported:   {result['data_rows_imported']}")
     print(f"  Data rows skipped:    {result['data_rows_skipped']}")
+    print(f"  Data identity kept:   {result.get('data_identity_preserved', False)}")
+    print(f"  Data exact restore:   {result.get('data_exact_restore', False)}")
+    if not result.get("data_identity_preserved", True):
+        print("  Record IDs differ or could not be restored; references were not rewritten.")
     print(f"  HTML files written:   {result['html_files_written']}")
     if result.get("html_files_skipped"):
         print(f"  HTML files kept:      {result['html_files_skipped']}"
@@ -2400,6 +2449,7 @@ def cmd_import(args) -> int:
 def cmd_migrate(args) -> int:
     """golive migrate <data|registry> --to <backend> — cross-backend migration."""
     from golive.core.portability import migrate_backend
+    import json
 
     try:
         result = migrate_backend(
@@ -2407,9 +2457,18 @@ def cmd_migrate(args) -> int:
             target=args.to,
             dry_run=args.dry_run,
         )
-    except ValueError as e:
-        print(f"❌ {e}", file=sys.stderr)
+    except Exception:
+        message = "Migration failed; check source/target configuration and connectivity."
+        if getattr(args, "json", False):
+            print(json.dumps({"ok": False, "operation": "migrate", "code": "backend_error", "error": message}))
+        else:
+            print(f"❌ {message}", file=sys.stderr)
         return 1
+
+    if getattr(args, "json", False):
+        print(json.dumps({"operation": "migrate", "code": "ok" if result.get("ok") else "migration_failed", **result},
+                         ensure_ascii=False, indent=2))
+        return 0 if result.get("ok") else 1
 
     if not result.get("ok"):
         print(f"❌ {result.get('error', 'migration failed')}", file=sys.stderr)
@@ -2424,16 +2483,19 @@ def cmd_migrate(args) -> int:
         print(f"  Source rows:       {result['source_count']}")
         _existing = result.get("target_existing")
         print(f"  Target existing:   "
-              f"{'unknown (target not reachable)' if _existing is None else _existing}")
+              f"{'unknown (target not inspected)' if _existing is None else _existing}")
         print(f"  Would migrate:     {result['would_migrate']}")
         if result.get("warning"):
             print(f"  ⚠️  {result['warning']}")
+        if result.get("preview_note"):
+            print(f"  {result['preview_note']}")
         return 0
 
     print(f"\n  Migration complete.")
     print(f"  Source backend:    {result['source_backend']}")
     print(f"  Target backend:    {result['target_backend']}")
     print(f"  Rows migrated:     {result['migrated']}")
+    print(f"  Rows skipped:      {result.get('skipped', 0)}")
     print(f"  Target after:      {result['target_count_after']}")
     print(f"  Count verified:    {'✅' if result.get('count_ok') else '❌'}")
 
@@ -2451,7 +2513,17 @@ def cmd_migrate(args) -> int:
 # ═════════════════════════════════ main ═════════════════════════════════════
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(
+    from golive.core import cli_output
+    argv = list(sys.argv[1:] if argv is None else argv)
+    json_mode = cli_output.wants_json(argv)
+
+    class Parser(argparse.ArgumentParser):
+        def error(self, message):
+            if json_mode:
+                raise cli_output.JSONArgumentError()
+            super().error(message)
+
+    parser = Parser(
         prog="golive",
         description="🚀 golive — self-hosted one-command HTML deployment",
     )
@@ -2688,9 +2760,11 @@ def main(argv=None) -> int:
                    help="Report what would happen without writing anything")
     p.add_argument("--on-conflict", default="skip",
                    choices=["skip", "overwrite", "rename"],
-                   help="How to handle slug conflicts (default: skip)")
+                   help="Handle site/data conflicts; overwrite refuses different data IDs; rename clones (default: skip)")
     p.add_argument("--yes", action="store_true",
                    help="Skip the confirmation prompt")
+    p.add_argument("--json", action="store_true",
+                   help="Return structured restore results, identity mappings and error codes")
     p.set_defaults(func=cmd_import)
 
     # migrate
@@ -2703,26 +2777,43 @@ def main(argv=None) -> int:
                    help="Target backend")
     p.add_argument("--dry-run", action="store_true",
                    help="Report what would happen without writing anything")
+    p.add_argument("--json", action="store_true",
+                   help="Return structured migration counts and error codes")
     p.set_defaults(func=cmd_migrate)
 
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except cli_output.JSONArgumentError:
+        command, action = cli_output.operation(argv, sub.choices)
+        cli_output.emit_error(command, action, "invalid_arguments", "Invalid or missing arguments; use --help.")
+        return 2
 
     # Make `golive init --home <DIR>` stick: export the recorded home into
     # the environment *before* the config loader looks for golive.yaml, so
     # the CLI and the server can never end up on different data dirs.
     from golive.core.paths import bootstrap_home_env
-    bootstrap_home_env()
-
     from golive.config import ConfigError, load_config, set_config
     try:
+        bootstrap_home_env()
         set_config(load_config(cli_path=args.config or None))
-    except ConfigError as e:
-        print(t("arg.config.error", msg=e), file=sys.stderr)
+    except ConfigError:
+        if json_mode:
+            cli_output.emit_error(args.command, getattr(args, "action", args.command), "invalid_config", "Invalid configuration; check file syntax and values.")
+        else:
+            print(t("arg.config.error", msg="Invalid configuration; check file syntax and values."), file=sys.stderr)
+        return 1
+    except Exception:
+        if json_mode:
+            cli_output.emit_error(args.command, getattr(args, "action", args.command), "startup_error", "Cannot initialize CLI context; check paths and permissions.")
+        else:
+            print("Cannot initialize CLI context; check paths and permissions.", file=sys.stderr)
         return 1
 
     if not getattr(args, "func", None):
         parser.print_help()
         return 0
+    if json_mode:
+        return cli_output.run_json(args.func, args)
     return args.func(args)
 
 

@@ -1720,6 +1720,37 @@ td.actions button:hover{
           </div>
         </div>
 
+        <div class="perm-block" id="perm-groups">
+          <h3 data-i18n="groups.title"></h3>
+          <p data-i18n="groups.description"></p>
+          <div class="frow">
+            <input id="group-name" data-i18n-ph="groups.name" aria-label="Group name" maxlength="80">
+            <button id="group-create" data-i18n="groups.create"></button>
+          </div>
+          <div class="frow">
+            <select id="group-select" aria-label="Group"></select>
+            <button id="group-delete" class="danger" data-i18n="groups.delete"></button>
+          </div>
+          <div id="group-detail" hidden>
+            <h4 data-i18n="groups.members"></h4>
+            <div id="group-members"></div>
+            <div class="frow">
+              <input id="group-email" type="email" placeholder="user@example.com" aria-label="Member email">
+              <button id="group-member-add" data-i18n="groups.add"></button>
+            </div>
+            <h4 data-i18n="groups.grants"></h4>
+            <div id="group-grants"></div>
+            <div class="frow">
+              <select id="group-site" aria-label="Site"></select>
+              <select id="group-role" aria-label="Role">
+                <option value="viewer" data-i18n="role.viewer"></option>
+                <option value="maintainer" data-i18n="role.maintainer"></option>
+              </select>
+              <button id="group-grant" data-i18n="groups.grant"></button>
+            </div>
+          </div>
+        </div>
+
         <div class="perm-block" id="perm-sites">
           <h3 data-i18n="perms.sites"></h3>
           <div class="desc" data-i18n="perms.sites.desc"></div>
@@ -2363,6 +2394,18 @@ en: {
   "role.superadmin": "Admin",
   "role.owner": "Owner",
   "role.maintainer": "Maintainer",
+  "role.viewer": "Viewer",
+  "groups.title": "Team groups",
+  "groups.description": "Verified login emails inherit site access. Personal grants remain independent. Changes apply on the next request. Public page visibility is unchanged.",
+  "groups.name": "Group name",
+  "groups.create": "Create group",
+  "groups.delete": "Delete group",
+  "groups.members": "Members",
+  "groups.add": "Add member",
+  "groups.remove": "Remove",
+  "groups.grants": "Site grants",
+  "groups.grant": "Grant / update access",
+  "groups.confirm": "Delete this group and all its memberships and site grants?",
   "sites.description.data": "Browse, search and maintain the records behind your published pages.",
   "sites.description.perms": "Keep ownership and collaboration clear, with access granted intentionally.",
   "sites.description.stats": "A concise view of your published content and recent activity.",
@@ -2797,6 +2840,18 @@ zh: {
   "role.superadmin": "管理员",
   "role.owner": "所有者",
   "role.maintainer": "协作者",
+  "role.viewer": "查看者",
+  "groups.title": "团队组",
+  "groups.description": "通过登录验证的邮箱继承站点权限，个人授权独立保留；变更从下一次请求生效。公开页面的可见性不变。",
+  "groups.name": "组名称",
+  "groups.create": "创建组",
+  "groups.delete": "删除组",
+  "groups.members": "组成员",
+  "groups.add": "添加成员",
+  "groups.remove": "移除",
+  "groups.grants": "站点授权",
+  "groups.grant": "授予 / 更新权限",
+  "groups.confirm": "删除此组及其全部成员关系和站点授权？",
   "sites.description.data": "查看、搜索和维护已发布页面背后的应用数据。",
   "sites.description.perms": "明确内容归属与协作边界，让每一份权限恰到好处。",
   "sites.description.stats": "简洁了解已发布内容、存储占用与近期动态。",
@@ -3747,6 +3802,7 @@ function renderSnaps(snaps){
     row.innerHTML = '<span class="ts">' + esc(sn.ts) + "</span>" +
       "<span>" + fmtBytes(sn.size) + "</span>" +
       "<button data-a='rb'>" + esc(t("btn.rollback")) + "</button>";
+    row.querySelector("[data-a='rb']").disabled = state.current && state.current.role === "viewer";
     row.querySelector("[data-a='rb']").addEventListener("click", function(){
       if (!window.confirm(t("confirm.rollback", {ts: sn.ts}))) return;
       api("POST", "/api/admin/sites/" + curRef() + "/rollback",
@@ -4250,6 +4306,7 @@ function loadPerms(){
     renderPermAdmins();
     renderPermSites();
     renderPermBulkSlugs();
+    loadGroups();
   }).catch(function(e){
     if (e.status === 404 || e.status === 501){
       $("perms-main").style.display = "none";
@@ -4262,6 +4319,60 @@ function loadPerms(){
     }
   });
 }
+
+var teamGroups = [];
+function loadGroups(){
+  return api("GET", "/api/admin/permissions/groups").then(function(d){
+    teamGroups = d.groups || [];
+    var selected = $("group-select").value;
+    $("group-select").innerHTML = teamGroups.map(function(g){
+      return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>';
+    }).join("");
+    if (teamGroups.some(function(g){return g.id === selected;})) $("group-select").value = selected;
+    $("group-site").innerHTML = ((state.perms || {}).sites_acl || []).map(function(s){
+      return '<option value="' + esc(s.site_id) + '">' + esc(s.slug || s.name || s.site_id) + '</option>';
+    }).join("");
+    renderGroup();
+  }).catch(function(e){ toast(e.message, true); });
+}
+function groupAction(method, suffix, body){
+  var id = $("group-select").value;
+  if (!id) return;
+  return api(method, "/api/admin/permissions/groups/" + encodeURIComponent(id) + suffix, body)
+    .then(loadGroups).catch(function(e){toast(e.message, true);});
+}
+function renderGroup(){
+  var group = teamGroups.find(function(g){return g.id === $("group-select").value;});
+  $("group-detail").hidden = !group;
+  $("group-delete").disabled = !group;
+  if (!group) return;
+  function rows(target, values, label, remove){
+    target.textContent = "";
+    values.forEach(function(value){
+      var row = document.createElement("p");
+      var span = document.createElement("span"); span.textContent = label(value) + " ";
+      var button = document.createElement("button"); button.textContent = t("groups.remove");
+      button.onclick = function(){remove(value);};
+      row.appendChild(span); row.appendChild(button); target.appendChild(row);
+    });
+  }
+  rows($("group-members"), group.members, function(email){return email;}, function(email){
+    groupAction("DELETE", "/members", {email:email});
+  });
+  rows($("group-grants"), group.grants, function(grant){
+    var site = ((state.perms || {}).sites_acl || []).find(function(s){return s.site_id === grant.site_id;});
+    return (site ? (site.slug || site.name) : grant.site_id) + " · " + t("role." + grant.role);
+  }, function(grant){groupAction("DELETE", "/sites", {site:grant.site_id});});
+}
+$("group-select").onchange = renderGroup;
+$("group-create").onclick = function(){
+  api("POST", "/api/admin/permissions/groups", {name:$("group-name").value}).then(function(){
+    $("group-name").value = ""; loadGroups();
+  }).catch(function(e){toast(e.message, true);});
+};
+$("group-delete").onclick = function(){if (confirm(t("groups.confirm"))) groupAction("DELETE", "");};
+$("group-member-add").onclick = function(){groupAction("POST", "/members", {email:$("group-email").value});};
+$("group-grant").onclick = function(){groupAction("POST", "/sites", {site:$("group-site").value,role:$("group-role").value});};
 
 function permSourceLabel(){
   var me = state.me || {};

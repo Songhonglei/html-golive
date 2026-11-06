@@ -21,8 +21,8 @@ OIDC session cookie when the server runs with auth.provider=oidc.
 Image upload: POST {serve_base}/api/sites/<slug>/upload (only when the
 server has an ImageUploader configured; otherwise images stay inline).
 
-Single-writer model: no CRDT. The server snapshots the previous version
-before every save (rollback covers conflicts).
+Conditional saves reject stale content revisions. Snapshots preserve successful
+writes; conflicting local drafts stay in the browser for comparison.
 """
 
 from __future__ import annotations
@@ -34,6 +34,47 @@ from golive.inject import layer_attrs
 from golive.inject._escape import _json_for_script, _safe_comment
 
 EDITOR_SCRIPT_ID = "golive-inline-editor"
+
+_MESSAGES = {
+    "en": {
+        "edit": "Edit this page", "cancel": "✕ Cancel", "image": "🖼 Image",
+        "upload_hint": "Upload an image at the cursor", "save": "💾 Save",
+        "edit_ready": "✏️ Editing enabled. Click text to change it.",
+        "unsaved_leave": "You have unsaved changes. Leave this page?",
+        "unsaved_exit": "You have unsaved changes. Exit editing?",
+        "image_large": "❌ Image too large (>8MB)", "uploading": "⏳ Uploading image…",
+        "uploaded": "✅ Image uploaded", "inlined": "✅ Image kept inline (no image host configured)",
+        "upload_failed": "❌ Image upload failed: {error}",
+        "conflict_title": "Someone else updated this page. Your draft is not saved.",
+        "local_draft": "Local draft (copy to keep)", "server_content": "Latest server content",
+        "loading": "Loading…", "keep_draft": "Keep my draft",
+        "reload": "Discard draft and reload",
+        "confirm_reload": "Discard your local draft? Copy any changes you want to keep first.",
+        "read_failed": "Could not read the latest content: {error}",
+        "revision_missing": "❌ Content revision missing. Copy your draft, then reload this page.",
+        "saving": "⏳ Saving…", "saved": "✅ Saved (snapshot {snapshot}). Reloading…",
+        "save_failed": "❌ Save failed: {error}",
+        "conflict_error": "Content changed. Compare the latest version before retrying.",
+    },
+    "zh": {
+        "edit": "编辑此页面", "cancel": "✕ 取消", "image": "🖼 图片",
+        "upload_hint": "在光标位置上传图片", "save": "💾 保存",
+        "edit_ready": "✏️ 编辑模式已开启，点击文字即可修改",
+        "unsaved_leave": "有未保存的修改，确定离开？", "unsaved_exit": "有未保存的修改，确定退出编辑？",
+        "image_large": "❌ 图片过大（>8MB）", "uploading": "⏳ 正在上传图片…",
+        "uploaded": "✅ 图片已上传", "inlined": "✅ 图片已内联（未配置图床）",
+        "upload_failed": "❌ 图片上传失败：{error}",
+        "conflict_title": "内容已被其他编辑者更新，草稿尚未保存",
+        "local_draft": "本地草稿（可复制保留）", "server_content": "服务器最新内容",
+        "loading": "正在读取…", "keep_draft": "继续保留草稿", "reload": "放弃草稿并重新加载",
+        "confirm_reload": "确定放弃本地草稿？请先复制需要保留的内容。",
+        "read_failed": "读取失败：{error}",
+        "revision_missing": "❌ 缺少内容版本，请复制保留草稿后重新加载页面",
+        "saving": "⏳ 保存中…", "saved": "✅ 已保存（快照 {snapshot}），即将刷新…",
+        "save_failed": "❌ 保存失败：{error}",
+        "conflict_error": "内容已变更，请比较最新版本后再重试。",
+    },
+}
 
 _JS_TEMPLATE = r"""
 /* golive inline editor — generated {generated_at} */
@@ -48,6 +89,27 @@ _JS_TEMPLATE = r"""
 
   var TOKEN_KEY = '__golive_editor_token__';
   var USER_KEY  = '__golive_editor_user__';
+  var MESSAGES = {messages_json};
+
+  function _language() {{
+    // Explicit admin preference wins; otherwise follow the page, then browser.
+    // Storage may be unavailable on restricted/static origins.
+    try {{
+      var preferred = localStorage.getItem('golive_admin_lang');
+      if (preferred === 'en' || preferred === 'zh') return preferred;
+    }} catch (e) {{}}
+    var hint = (document.documentElement.getAttribute('lang') || '').trim();
+    if (!hint) hint = navigator.language || navigator.userLanguage || 'en';
+    return /^zh/i.test(hint) ? 'zh' : 'en';
+  }}
+
+  function _t(key, values) {{
+    var text = MESSAGES[_language()][key] || MESSAGES.en[key] || key;
+    Object.keys(values || {{}}).forEach(function (name) {{
+      text = text.split('{{' + name + '}}').join(String(values[name]));
+    }});
+    return text;
+  }}
 
   /* pick up ?editor_token= & ?editor_user= once, stash in sessionStorage */
   (function _grabParams() {{
@@ -72,6 +134,8 @@ _JS_TEMPLATE = r"""
   var _editableEls = [];
   var _dirty = false;
   var _saving = false;
+  var _revisionNode = document.getElementById('__golive_revision__');
+  var _revision = _revisionNode ? '"' + _revisionNode.content + '"' : '';
 
   /* ── styles ── */
   var _css = [
@@ -108,7 +172,9 @@ _JS_TEMPLATE = r"""
   var EDITOR_IDS = ['__golive_editor_fab__', '__golive_editor_toolbar__',
                     '__golive_editor_status__', '__golive_editor_style__',
                     '__golive_editor_img__', '__golive_editor_file__',
-                    '__golive_editor_cancel__', '__golive_editor_save__'];
+                    '__golive_editor_cancel__', '__golive_editor_save__',
+                    '__golive_revision__', '__golive_editor_compare__',
+                    'golive-inline-editor'];
 
   /* ── UI construction ── */
   function _buildUI() {{
@@ -120,7 +186,7 @@ _JS_TEMPLATE = r"""
 
     var fab = document.createElement('button');
     fab.id = '__golive_editor_fab__';
-    fab.title = 'Edit this page';
+    fab.title = _t('edit');
     fab.textContent = '✏️';
     fab.onclick = _enterEditMode;
     document.body.appendChild(fab);
@@ -130,18 +196,18 @@ _JS_TEMPLATE = r"""
     var cancel = document.createElement('button');
     cancel.id = '__golive_editor_cancel__';
     cancel.className = 'golive-editor-btn';
-    cancel.textContent = '✕ 取消';
+    cancel.textContent = _t('cancel');
     cancel.onclick = _exitEditMode;
     var img = document.createElement('button');
     img.id = '__golive_editor_img__';
     img.className = 'golive-editor-btn';
-    img.textContent = '🖼 图片';
-    img.title = 'Upload an image at the cursor';
+    img.textContent = _t('image');
+    img.title = _t('upload_hint');
     img.onclick = _pickImage;
     var save = document.createElement('button');
     save.id = '__golive_editor_save__';
     save.className = 'golive-editor-btn';
-    save.textContent = '💾 保存';
+    save.textContent = _t('save');
     save.onclick = _save;
     bar.appendChild(cancel);
     bar.appendChild(img);
@@ -203,7 +269,7 @@ _JS_TEMPLATE = r"""
     }});
     document.addEventListener('keydown', _onKey);
     window.addEventListener('beforeunload', _unloadGuard);
-    _showStatus('✏️ 编辑模式已开启，点击文字即可修改', 'info', 3000);
+    _showStatus(_t('edit_ready'), 'info', 3000);
   }}
 
   function _markDirty() {{ _dirty = true; }}
@@ -211,7 +277,7 @@ _JS_TEMPLATE = r"""
   function _unloadGuard(e) {{
     if (_dirty && !_saving) {{
       e.preventDefault();
-      e.returnValue = '有未保存的修改，确定离开？';
+      e.returnValue = _t('unsaved_leave');
       return e.returnValue;
     }}
   }}
@@ -219,7 +285,7 @@ _JS_TEMPLATE = r"""
   function _onKey(e) {{ if (e.key === 'Escape') _exitEditMode(); }}
 
   function _exitEditMode() {{
-    if (_dirty && !confirm('有未保存的修改，确定退出编辑？')) return;
+    if (_dirty && !confirm(_t('unsaved_exit'))) return;
     document.body.classList.remove('golive-edit-mode');
     _editableEls.forEach(function (el) {{
       el.removeAttribute('contenteditable');
@@ -279,9 +345,9 @@ _JS_TEMPLATE = r"""
     ev.target.value = '';   /* allow re-picking the same file */
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {{
-      _showStatus('❌ 图片过大（>8MB）', 'err', 5000); return;
+      _showStatus(_t('image_large'), 'err', 5000); return;
     }}
-    _showStatus('⏳ 正在上传图片…', 'info', 0);
+    _showStatus(_t('uploading'), 'info', 0);
     var url = (CFG.apiBase || '') + '/api/sites/'
               + encodeURIComponent(CFG.slug) + '/upload';
     fetch(url, {{
@@ -305,16 +371,16 @@ _JS_TEMPLATE = r"""
     .then(function (remoteUrl) {{
       if (remoteUrl) {{
         _insertImgNode(remoteUrl);
-        _showStatus('✅ 图片已上传', 'ok', 2500);
+        _showStatus(_t('uploaded'), 'ok', 2500);
       }} else {{
         return _fileToDataURL(file).then(function (dataUrl) {{
           _insertImgNode(dataUrl);
-          _showStatus('✅ 图片已内联（未配置图床）', 'ok', 3000);
+          _showStatus(_t('inlined'), 'ok', 3000);
         }});
       }}
     }})
     .catch(function (e) {{
-      _showStatus('❌ 图片上传失败：' + e.message, 'err', 6000);
+      _showStatus(_t('upload_failed', {{error: e.message}}), 'err', 6000);
     }});
   }}
 
@@ -336,20 +402,63 @@ _JS_TEMPLATE = r"""
   }}
 
   /* ── save ── */
+  function _compareConflict(localHTML, url) {{
+    var old = document.getElementById('__golive_editor_compare__');
+    if (old) old.remove();
+    var panel = document.createElement('dialog');
+    panel.id = '__golive_editor_compare__';
+    panel.style.cssText = 'box-sizing:border-box;width:90vw;max-width:1000px;max-height:85vh;z-index:100000;padding:20px;border:1px solid #bbb;border-radius:12px;background:white;color:#222;font:14px system-ui,sans-serif';
+    var title = document.createElement('h2');
+    title.id = '__golive_conflict_title__'; panel.setAttribute('aria-labelledby', title.id);
+    title.textContent = _t('conflict_title');
+    panel.appendChild(title);
+    function area(label, value) {{
+      var heading = document.createElement('p'); heading.textContent = label;
+      var text = document.createElement('textarea'); text.readOnly = true;
+      text.setAttribute('aria-label', label);
+      text.style.cssText = 'width:100%;height:22vh'; text.value = value;
+      panel.appendChild(heading); panel.appendChild(text); return text;
+    }}
+    area(_t('local_draft'), localHTML);
+    var latest = area(_t('server_content'), _t('loading'));
+    var close = document.createElement('button'); close.textContent = _t('keep_draft');
+    close.onclick = function () {{ panel.close(); }}; panel.appendChild(close);
+    var reload = document.createElement('button'); reload.textContent = _t('reload');
+    reload.onclick = function () {{
+      if (confirm(_t('confirm_reload'))) {{
+        _dirty = false; location.reload();
+      }}
+    }};
+    [close, reload].forEach(function (button) {{
+      button.type = 'button'; button.style.cssText = 'padding:8px 12px;margin:8px 8px 0 0;cursor:pointer';
+    }});
+    panel.appendChild(reload); document.body.appendChild(panel); panel.showModal(); close.focus();
+    fetch(url, {{credentials: 'include', cache: 'no-store', headers: {{
+      'Authorization': 'Bearer ' + _token(), 'X-Editor-User': _user()
+    }}}}).then(function (r) {{
+      if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+    }}).then(function (j) {{
+      var parsed = new DOMParser().parseFromString(j.html, 'text/html');
+      var script = parsed.getElementById('golive-inline-editor'); if (script) script.remove();
+      latest.value = '<!DOCTYPE html>\n' + parsed.documentElement.outerHTML;
+    }}).catch(function (e) {{
+      latest.value = _t('read_failed', {{error: e.message}});
+    }});
+  }}
+
   function _save() {{
     if (_saving) return;
     var token = _token();
     var user = _user();
-    if (!token) {{
-      _showStatus('❌ 缺少编辑令牌：请通过 ?editor_token=xxx&editor_user=you@example.com 打开页面',
-                  'err', 6000);
+    if (!_revision) {{
+      _showStatus(_t('revision_missing'), 'err', 0);
       return;
     }}
     _saving = true;
     var btn = document.getElementById('__golive_editor_save__');
     btn.disabled = true;
-    btn.textContent = '⏳ 保存中…';
-    _showStatus('⏳ 正在保存…', 'info', 0);
+    btn.textContent = _t('saving');
+    _showStatus(_t('saving'), 'info', 0);
 
     var html = _getCleanHTML();
     var url = (CFG.apiBase || '') + '/api/sites/'
@@ -361,25 +470,30 @@ _JS_TEMPLATE = r"""
         'Content-Type': 'text/html; charset=utf-8',
         'Authorization': 'Bearer ' + token,
         'X-Editor-User': user,
+        'If-Match': _revision,
       }},
       body: html,
     }})
     .then(function (r) {{
       return r.json().catch(function () {{ return {{}}; }}).then(function (j) {{
+        if (r.status === 409 && j.code === 'edit_conflict') {{
+          _compareConflict(html, url);
+          throw new Error(_t('conflict_error'));
+        }}
         if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
         return j;
       }});
     }})
     .then(function (j) {{
       _dirty = false;
-      _showStatus('✅ 已保存（快照 ' + (j.snapshot_id || '-') + '），即将刷新…', 'ok', 2000);
+      _showStatus(_t('saved', {{snapshot: j.snapshot_id || '-'}}), 'ok', 2000);
       setTimeout(function () {{ location.reload(); }}, 1200);
     }})
     .catch(function (e) {{
       _saving = false;
       btn.disabled = false;
-      btn.textContent = '💾 保存';
-      _showStatus('❌ 保存失败：' + e.message, 'err', 8000);
+      btn.textContent = _t('save');
+      _showStatus(_t('save_failed', {{error: e.message}}), 'err', 8000);
     }});
   }}
 
@@ -406,6 +520,7 @@ def generate_js(slug: str, site_name: str = "", api_base: str = "") -> str:
         slug_json=_json_for_script(slug),
         site_name_json=_json_for_script(site_name or ""),
         api_base_json=_json_for_script(api_base.rstrip("/") if api_base else ""),
+        messages_json=_json_for_script(_MESSAGES),
     )
     return (f'<script id="{EDITOR_SCRIPT_ID}" {layer_attrs("editor")}>'
             f'\n{js_code}\n</script>')

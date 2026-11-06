@@ -46,8 +46,16 @@ def get_storage(cfg=None):
     if backend == "s3":
         from golive.backends.storage.s3 import S3Storage
         return S3Storage()
+    if backend == 'webdav':
+        import os
+        from golive.backends.storage.webdav import WebDAVStorage
+        st = cfg.storage
+        return WebDAVStorage(st.webdav_url,
+                             os.environ.get(st.webdav_username_env, ''),
+                             os.environ.get(st.webdav_password_env, ''),
+                             st.webdav_timeout)
     raise ValueError(f"unknown storage backend: {backend!r} "
-                     "(expected local | s3 | supabase)")
+                     "(expected local | s3 | supabase | webdav)")
 
 
 def get_template_store(cfg=None):
@@ -63,7 +71,9 @@ def get_template_store(cfg=None):
     backend = cfg.data.backend
     if backend in ("", "sqlite"):
         from golive.backends.data.sqlite_store import TemplateStore
-        return TemplateStore()
+        from golive.core.paths import get_data_db
+        return TemplateStore(db_path=cfg.data.sqlite_path or get_data_db(),
+                             table=cfg.data.templates_table)
     if backend == "supabase":
         from golive.backends.data.supabase import TemplateStore
         from golive.backends.postgrest import client_from_config

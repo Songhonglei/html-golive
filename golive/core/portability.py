@@ -24,6 +24,7 @@ shipping a silently incomplete archive.
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -32,6 +33,7 @@ import tarfile
 import tempfile
 import datetime
 import uuid
+import zlib
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +76,8 @@ def _paginated_data_list(store, page_size: int = DATA_PAGE_SIZE):
     a page returns fewer rows than requested (or the total is reached).
     """
     models = store.list_models(scan_limit=100000)
+    if store.count(""):
+        models = models + [{"model_code": ""}]
     all_rows = []
     for m in models:
         model_code = m["model_code"]
@@ -180,17 +184,18 @@ def export_archive(
         # always agrees — including when the pager is the thing that is
         # broken, which is the only failure this check exists to catch.
         actual = _registry_total(registry)
-        if actual is not None and actual != len(registry_rows):
+        if actual is None:
+            raise RuntimeError("Registry does not expose an independent total; export aborted")
+        if actual != len(registry_rows):
             raise RuntimeError(
                 f"Registry count mismatch during export: collected "
                 f"{len(registry_rows)} sites but the backend holds {actual}. "
                 f"Aborting rather than writing a silently incomplete archive "
                 f"— a backup missing sites is worse than no backup.")
 
-    # For data: sum count() across all models.
+    # Count the complete table independently of discovery/pagination.
     if data_store is not None and not sites_only:
-        models = data_store.list_models(scan_limit=100000)
-        total_expected = sum(m.get("count", 0) for m in models)
+        total_expected = data_store.total_count()
         if len(data_rows) != total_expected:
             raise RuntimeError(
                 f"Data row count mismatch during export: collected {len(data_rows)} "
@@ -324,8 +329,8 @@ def _registry_total(registry):
     went through the same pagination code, a broken pager would agree with
     itself and the check would pass while the archive was short.
 
-    Returns ``None`` when the backend offers no way to count cheaply — the
-    caller then skips the check rather than blocking the export.
+    Returns ``None`` for an unknown backend; the caller refuses an export
+    without an independent witness. A known backend's count failure also aborts.
     """
     try:
         if hasattr(registry, "db_path"):
@@ -341,8 +346,10 @@ def _registry_total(registry):
                     return None
                 return int(row[0] if not isinstance(row, dict)
                            else list(row.values())[0])
-    except Exception:  # noqa: BLE001 — the check is a safety net, not a gate
-        return None
+        if hasattr(registry, "client"):
+            return registry.client.count(registry.table, {"select": "site_id"})
+    except Exception:
+        raise RuntimeError("Cannot independently verify registry total; export aborted") from None
     return None
 
 
@@ -461,7 +468,7 @@ def _prepare_data_rows(rows):
 
 def _read_archive(path: str) -> tuple:
     """Read an archive's contents into memory. Returns (manifest, registry_rows, data_rows, html_map)."""
-    with tarfile.open(path, "r:gz") as tar:
+    with gzip.open(path, "rb") as compressed, tarfile.open(fileobj=compressed, mode="r:") as tar:
         # Validate before extracting anything
         members = tar.getmembers()
         member_names = [m.name for m in members]
@@ -521,6 +528,12 @@ def _read_archive(path: str) -> tuple:
                 if f:
                     html_map[site_id] = f.read().decode("utf-8")
 
+        # Tar ends at its zero blocks, before gzip necessarily checks the
+        # trailer. Finish the same stream so truncated/invalid CRC/size trailers
+        # cannot pass preview or reach a restore target. Keep extra memory bounded.
+        while compressed.read(1024 * 1024):
+            pass
+
     return manifest, registry_rows, data_rows, html_map
 
 
@@ -572,7 +585,7 @@ def _validated_archive(archive_path):
         if "html_files" in manifest_counts and len(html_map) != manifest_counts["html_files"]:
             raise ValueError("Archive HTML count differs from manifest")
         return manifest, registry_rows, data_rows, html_map, data_defaults
-    except (ValueError, OSError, tarfile.TarError, UnicodeError, TypeError, AttributeError) as error:
+    except (ValueError, OSError, EOFError, zlib.error, tarfile.TarError, UnicodeError, TypeError, AttributeError) as error:
         message = ("Archive path traversal is forbidden" if str(error).startswith("Refusing to extract path-traversal member:")
                    else "Archive is invalid or unreadable")
         raise ArchiveValidationError(message) from None

@@ -46,7 +46,7 @@ DEFAULT_TABLE = "golive_templates"
 
 # Columns a caller (including the HTTP adapter) may filter/sort on.
 FILTERABLE = ("id", "model_code", "name", "user_id", "version")
-SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code")
+SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code", "id")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS {table} (
@@ -106,6 +106,7 @@ class TemplateStore:
     def _conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
+        conn.create_function("golive_lower", 1, lambda value: str(value).lower(), deterministic=True)
         return conn
 
     # ── row mapping ─────────────────────────────────────────────────────────
@@ -158,7 +159,7 @@ class TemplateStore:
                 params).fetchone()[0]
             rows = c.execute(
                 f"SELECT * FROM {self.table} WHERE {clause} "
-                "ORDER BY sort_index DESC, created_at DESC LIMIT ? OFFSET ?",
+                "ORDER BY sort_index DESC, created_at DESC, id ASC LIMIT ? OFFSET ?",
                 params + [int(page_size), offset]).fetchall()
         return {"total": total, "list": [self._row_to_dict(r) for r in rows]}
 
@@ -174,52 +175,34 @@ class TemplateStore:
                 f"SELECT COUNT(*) FROM {self.table} WHERE model_code = ?",
                 (model_code,)).fetchone()[0]
 
-    def list_models(self, scan_limit: int = 10000) -> list:
-        """Distinct model_code values + row count each (admin portal, M6).
+    def total_count(self) -> int:
+        with self._conn() as connection:
+            return connection.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]
 
-        ``scan_limit`` caps how many rows are considered, mirroring the
-        PostgREST implementation (which cannot do a server-side DISTINCT);
-        SQLite groups natively, so the cap only bounds pathological tables.
-        """
-        with self._conn() as c:
-            rows = c.execute(
-                f"SELECT model_code, COUNT(*) AS n FROM ("
-                f"  SELECT model_code FROM {self.table} LIMIT ?"
-                f") GROUP BY model_code ORDER BY model_code",
-                (int(scan_limit),)).fetchall()
-        return [{"model_code": r["model_code"], "count": r["n"]}
-                for r in rows if r["model_code"]]
+    def list_models(self, scan_limit: int = 10000) -> list:
+        """Exact groups; legacy scan_limit does not truncate statistics."""
+        with self._conn() as connection:
+            rows = connection.execute(
+                f"SELECT model_code, COUNT(*) AS n FROM {self.table} "
+                "WHERE model_code <> '' GROUP BY model_code ORDER BY model_code").fetchall()
+        return [{"model_code": r["model_code"], "count": r["n"]} for r in rows]
 
     def search(self, model_code: str, q: str = "", page_no: int = 1,
                page_size: int = 20, scan_limit: int = 2000) -> dict:
-        """Paged rows for one model with substring filter (M6).
-
-        Without ``q`` this delegates to :meth:`list`. With ``q`` we scan up
-        to ``scan_limit`` rows of the model and match case-insensitively
-        over name/description/content — same contract as the PostgREST twin.
-        """
-        page_no = max(1, int(page_no))
-        page_size = max(1, min(int(page_size), 200))
+        """Exact Unicode/literal substring search, counted and paged in SQL."""
+        page_no, page_size = max(1, int(page_no)), max(1, min(int(page_size), 200))
         if not q:
             return self.list(model_code, page_no=page_no, page_size=page_size)
-        with self._conn() as c:
-            rows = c.execute(
-                f"SELECT * FROM {self.table} WHERE model_code = ? "
-                "ORDER BY sort_index DESC, created_at DESC LIMIT ?",
-                (model_code, int(scan_limit))).fetchall()
-        needle = q.lower()
-        hits = []
-        for r in rows:
-            d = self._row_to_dict(r)
-            hay = " ".join([
-                str(d.get("name") or ""),
-                str(d.get("description") or ""),
-                json.dumps(d.get("content"), ensure_ascii=False, default=str),
-            ]).lower()
-            if needle in hay:
-                hits.append(d)
-        start = (page_no - 1) * page_size
-        return {"total": len(hits), "list": hits[start:start + page_size]}
+        pattern = '%' + q.lower().replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+        clause = "model_code = ? AND golive_lower(COALESCE(name, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(content, '')) LIKE ? ESCAPE '!'"
+        values = [model_code, pattern]
+        with self._conn() as connection:
+            total = connection.execute(f"SELECT COUNT(*) FROM {self.table} WHERE {clause}", values).fetchone()[0]
+            rows = connection.execute(
+                f"SELECT * FROM {self.table} WHERE {clause} "
+                "ORDER BY sort_index DESC, created_at DESC, id ASC LIMIT ? OFFSET ?",
+                values + [page_size, (page_no - 1) * page_size]).fetchall()
+        return {"total": total, "list": [self._row_to_dict(row) for row in rows]}
 
     # ── writes ──────────────────────────────────────────────────────────────
 
@@ -316,7 +299,10 @@ class TemplateStore:
             if col not in SORTABLE:
                 continue
             terms.append(f"{col} {'DESC' if direction.lower() == 'desc' else 'ASC'}")
-        return ", ".join(terms) or "sort_index DESC, created_at DESC"
+        terms = terms or ["sort_index DESC", "created_at DESC"]
+        if not any(term.split()[0] == "id" for term in terms):
+            terms.append("id ASC")
+        return ", ".join(terms)
 
     def query(self, filters: dict, order: str = "", limit: int = 20,
               offset: int = 0, want_count: bool = False) -> tuple:

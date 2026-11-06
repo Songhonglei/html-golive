@@ -87,7 +87,7 @@ class TemplateStore:
              page_no: int = 1, page_size: int = 20) -> dict:
         params = {
             "model_code": f"eq.{model_code}",
-            "order": "sort_index.desc,created_at.desc",
+            "order": "sort_index.desc,created_at.desc,id.asc",
             "limit": str(page_size),
             "offset": str((max(page_no, 1) - 1) * page_size),
         }
@@ -96,7 +96,9 @@ class TemplateStore:
         if name_prefix:
             params["name"] = f"like.{name_prefix}*"
         rows, total = self.client.select(self.table, params, count=True)
-        return {"total": total or 0, "list": rows}
+        if type(total) is not int or total < 0:
+            raise RuntimeError("PostgREST exact count is unavailable")
+        return {"total": total, "list": rows}
 
     def get(self, template_id: str) -> Optional[dict]:
         rows, _ = self.client.select(
@@ -107,57 +109,53 @@ class TemplateStore:
         return self.client.count(self.table,
                                  {"model_code": f"eq.{model_code}"})
 
-    def list_models(self, scan_limit: int = 10000) -> list:
-        """Distinct model_code values + row count each (admin portal, M6).
+    def total_count(self) -> int:
+        return self.client.count(self.table)
 
-        PostgREST has no first-class DISTINCT, so we pull the model_code
-        column (capped at ``scan_limit`` rows) and aggregate client-side.
-        Returns [{"model_code": str, "count": int}, ...] sorted by code.
-        """
-        rows, _ = self.client.select(self.table, {
-            "select": "model_code",
-            "limit": str(scan_limit),
-        })
-        counts: dict = {}
-        for r in rows:
-            code = str(r.get("model_code") or "")
+    def _all_pages(self, params, batch_size=1000):
+        """Walk through server-side caps, refusing missing/changing totals."""
+        offset, expected = 0, None
+        while True:
+            query = dict(params, limit=str(max(1, min(int(batch_size), 1000))), offset=str(offset))
+            rows, total = self.client.select(self.table, query, count=True)
+            if type(total) is not int or total < 0 or (expected is not None and total != expected):
+                raise RuntimeError("PostgREST total missing or changed; pause writers and retry")
+            expected = total
+            if not rows and offset < total:
+                raise RuntimeError("PostgREST returned an incomplete page")
+            offset += len(rows)
+            if offset > total:
+                raise RuntimeError("PostgREST page exceeds its exact total")
+            yield from rows
+            if offset == total:
+                return
+
+    def list_models(self, scan_limit: int = 10000) -> list:
+        """Exact complete discovery; legacy scan_limit is a page-size hint."""
+        counts = {}
+        for row in self._all_pages({"select": "id,model_code", "order": "id.asc"}, scan_limit):
+            code = str(row.get("model_code") or "")
             if code:
                 counts[code] = counts.get(code, 0) + 1
-        return [{"model_code": c, "count": n}
-                for c, n in sorted(counts.items())]
+        return [{"model_code": code, "count": count} for code, count in sorted(counts.items())]
 
     def search(self, model_code: str, q: str = "", page_no: int = 1,
                page_size: int = 20, scan_limit: int = 2000) -> dict:
-        """Paged rows for one model with best-effort substring filter (M6).
-
-        Without ``q`` this delegates to :meth:`list` (server-side paging).
-        With ``q`` we fetch up to ``scan_limit`` rows of the model and do a
-        case-insensitive containment match over name/description/content
-        client-side — PostgREST cannot LIKE into arbitrary jsonb portably.
-        """
-        page_no = max(1, int(page_no))
-        page_size = max(1, min(int(page_size), 200))
+        """Complete bounded-memory fallback; PostgREST has no generic JSON cast filter."""
+        page_no, page_size = max(1, int(page_no)), max(1, min(int(page_size), 200))
         if not q:
-            return self.list(model_code, page_no=page_no,
-                             page_size=page_size)
-        rows, _ = self.client.select(self.table, {
-            "model_code": f"eq.{model_code}",
-            "order": "sort_index.desc,created_at.desc",
-            "limit": str(scan_limit),
-        })
-        needle = q.lower()
-        hits = []
-        for r in rows:
-            hay = " ".join([
-                str(r.get("name") or ""),
-                str(r.get("description") or ""),
-                json.dumps(r.get("content"), ensure_ascii=False,
-                           default=str),
-            ]).lower()
-            if needle in hay:
-                hits.append(r)
+            return self.list(model_code, page_no=page_no, page_size=page_size)
+        needle, total, selected = q.lower(), 0, []
         start = (page_no - 1) * page_size
-        return {"total": len(hits), "list": hits[start:start + page_size]}
+        for row in self._all_pages({"model_code": f"eq.{model_code}",
+                                    "order": "sort_index.desc,created_at.desc,id.asc"}, scan_limit):
+            hay = " ".join([str(row.get("name") or ""), str(row.get("description") or ""),
+                            json.dumps(row.get("content"), ensure_ascii=False, default=str)]).lower()
+            if needle in hay:
+                if start <= total < start + page_size:
+                    selected.append(row)
+                total += 1
+        return {"total": total, "list": selected}
 
     # ── writes ──────────────────────────────────────────────────────────────
 

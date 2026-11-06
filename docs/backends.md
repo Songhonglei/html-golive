@@ -16,15 +16,19 @@ Stores published site content.
 | `local` | ✅ v0.1 | `$GOLIVE_HOME/sites/<site_id>/index.html`, snapshots in `backups/` |
 | `s3` | ✅ v0.2 | MinIO / COS / OSS / TOS / AWS — `pip install 'html-golive[s3]'` |
 | `supabase` | ✅ v0.2 | Supabase Storage bucket (default `golive-sites`) |
+| `webdav` | Candidate P3 | Private NAS/Nextcloud collection; [configuration and limits](webdav.md); no extra runtime dependency |
 
 Required methods (see `golive/backends/storage/local.py`):
 `publish(html, site_id)`, `read(site_id)`, `exists(site_id)`,
 `delete(site_id)`, `list_snapshots(site_id)`, `rollback(site_id, ts)`.
 
-All three implementations keep the same rollback contract: max 10
+These implementations keep the same rollback contract: max 10
 snapshots per site, rollback itself snapshots the current version.
 Remote backends (`s3` / `supabase`) add a 60 s in-memory read cache for
 serve mode.
+
+WebDAV reads have no process-local cache. Remote storage adapters currently
+do not implement P2 conditional editor writes (HTTP 501).
 
 That cache lives inside each process, so publishing from a *separate*
 shell while `golive serve` is already running can take up to 60 s to show

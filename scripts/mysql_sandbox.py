@@ -91,7 +91,11 @@ def client(root, state, sql):
         owned = docker_identity(root, state)
         if not owned or not owned["running"]:
             raise RuntimeError("Owned MySQL container is not running")
-        command = ["docker", "exec", "--user", "0", "-i", owned["id"], "mysql", "--defaults-extra-file=/run/golive-root.cnf", "--batch", "--skip-column-names"]
+        # The image initializes with a temporary --skip-networking server.
+        # A Unix-socket SELECT 1 can succeed just before that server stops,
+        # racing the account setup below. TCP only reaches the final server.
+        command = ["docker", "exec", "--user", "0", "-i", owned["id"], "mysql", "--defaults-extra-file=/run/golive-root.cnf",
+                   "--protocol=TCP", "--host=127.0.0.1", "--port=3306", "--batch", "--skip-column-names"]
     else:
         command = ["mysql", "--defaults-extra-file=" + str(root / "root.cnf"), "--batch", "--skip-column-names"]
     return run(command, input=sql)

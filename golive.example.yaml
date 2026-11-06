@@ -24,7 +24,7 @@ supabase:
 
 # ── storage backend (published site HTML) ────────────────────────────────────
 storage:
-  backend: local          # local | s3 | supabase
+  backend: local          # local | s3 | supabase | webdav
   # s3:                   # any S3-compatible store (MinIO / COS / OSS / TOS / AWS)
   #   endpoint: https://s3.example.com     # empty = AWS default endpoints
   #   bucket: golive-sites
@@ -35,6 +35,18 @@ storage:
   #   public_base: ""                       # optional public/CDN URL prefix
   # supabase:
   #   bucket: golive-sites                  # Supabase Storage bucket name
+  # webdav:
+  #   url: https://nas.example/remote.php/dav/files/golive/sites/
+  #   username_env: GOLIVE_WEBDAV_USERNAME
+  #   password_env: GOLIVE_WEBDAV_PASSWORD
+  #   timeout: 15           # >0 and <=120 seconds; verified TLS, no redirects
+  # Pre-create a dedicated collection; private credentials stay in server env.
+  # WebDAV editor conditional writes are not supported (HTTP 501).
+
+# Optional same-host shared login/groups: set GOLIVE_STATE_DIR to an absolute
+# private LOCAL-DISK directory in each process environment before startup.
+# It is independent of GOLIVE_HOME, not a YAML/database setting. Migrate control
+# state offline before opting in; never use NFS/SMB SQLite. See docs/shared-state.md.
 
 # ── registry backend (site metadata) ─────────────────────────────────────────
 registry:

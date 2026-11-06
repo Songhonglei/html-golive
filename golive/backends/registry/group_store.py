@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS permission_group_events (
 class GroupStore:
     def __init__(self, db_path=None):
         if db_path is None:
-            from golive.core.paths import get_registry_db
-            db_path = get_registry_db()
+            from golive.core.state import management_db
+            db_path = management_db()
         self.db_path = str(db_path)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)

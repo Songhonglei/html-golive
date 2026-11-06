@@ -4,7 +4,7 @@ Baseline: P2 `a21ae3b2131d6a12bff78cfc6110a21f4bd77c4f` (PR #17).
 Tracking: [#19](https://github.com/Songhonglei/html-golive/issues/19).
 Branch: `codex/p3-shared-state-webdav`, stacked on P2. Candidate package remains
 unpublished `0.9.8`; use exact commit/manifest hashes rather than version alone.
-No merge, release, business deployment or existing acceptance-resource changes.
+The tested commit and CI wheel below remain the independent acceptance baseline.
 
 ## Implemented scope
 
@@ -56,6 +56,33 @@ Python source copied alongside tests. The existing full installed CI gate and
 real database jobs remain required. Test counts, artifact hashes and browser
 receipts for the final commit are recorded in the PR and ignored task evidence
 directory `.artifacts/p3/`; this document does not pre-label unrun checks passed.
+
+## Independent reacceptance
+
+On 2026-11-06 an independent run passed the same-host shared login and wölkli
+WebDAV acceptance against [PR #20](https://github.com/Songhonglei/html-golive/pull/20)
+at `92fc7fa366263e815163e39ded441180bafc3937`. It installed the
+byte-matched CI wheel from artifact `13238112836` into a fresh environment and
+ran outside the checkout. Wheel SHA-256:
+`b3899cbb1933e58f7672eb2616ac11f05744cf6ece9599a575ea1bb3f34685fa`.
+
+- In a real browser on macOS arm64 with local APFS, A initiated OIDC login and
+  B handled the fixed callback after RS256 and PKCE verification. A restart
+  preserved login. Revocation returned 403 on both processes while identity
+  remained 200. After logout, replaying the original cookie returned 401 on both.
+  The installed shared-state regression run passed all 12 tests.
+- One wölkli Cloud FREE account authenticated over verified public HTTPS.
+  CLI publish, direct WebDAV GET and OpenGoLive HTTP agreed on the HTML hash.
+  Twelve revisions retained the ten expected snapshots. Rolling back to the
+  selected sixth revision restored its exact bytes. Repeated page deletion
+  succeeded and a sibling page stayed readable.
+- Cleanup was verified with DELETE 204, followed by an authenticated Depth 0
+  PROPFIND returning 404 on the owned collection and 207 on the account root.
+  The test processes and listeners exited successfully.
+
+The independent report is retained locally. Its SHA-256 is
+`4219ac99042519c5a03e6c1f3bf3c61b801273c3427b7e1630c35ec6653ed850`.
+See the [candidate stage summary](stage-summary-0.9.8.md) for P0–P3 scope.
 
 ## Explicit boundaries
 

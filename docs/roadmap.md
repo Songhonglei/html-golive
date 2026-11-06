@@ -1,6 +1,6 @@
 # OpenGoLive development plan and prioritized backlog
 
-Updated: 2026-11-03. [中文版](roadmap.zh-CN.md)
+Updated: 2026-11-06. [中文版](roadmap.zh-CN.md)
 
 Prioritize reliable single-instance, intranet and AI Agent publishing: deliver the accepted fixes, make upgrades/recovery and automation failures verifiable, then expand collaboration and infrastructure. Work follows milestone gates rather than unconfirmed dates. `0.9.8` is a candidate for the next release, not a published version or a release-date commitment.
 
@@ -9,7 +9,8 @@ Prioritize reliable single-instance, intranet and AI Agent publishing: deliver t
 - Diagnostics, CLI, full acceptance and REL-01 lifecycle protection were merged via [PR #7](https://github.com/Songhonglei/html-golive/pull/7) as `c0c54cbf4c97f694a8c59e2044aacacce7cb5782`; runtime baseline: `3af077b`.
 - All eight CI checks passed at the runtime baseline; 1182 local tests passed. Earlier independent f2d8254 diagnostic acceptance passed 46 CLI checks and 125 regressions; REL-01 added 16 CLI commands and 143 focused regressions. These checks do not replace 0.9.8 artifact/upgrade acceptance.
 - A 16-stage MySQL/Chrome full-acceptance run has passed. Docker and controlled local TLS/proxy paths now have evidence; external remote TLS/enterprise proxies remain unverified. Passing PostgreSQL/Supabase CI does not imply every manual acceptance scenario has run.
-- This plan tracks execution: REL-01/REL-02 and REL-03 candidate artifacts are complete. REL-04 candidate installation, upgrade and code rollback passed; the historical accepted artifact has an ID-restore limitation (#11); the DATA-01 source fix has independent acceptance and PR #12 awaits review; remaining P1 implementation/local checks are complete, with CI/installed acceptance recorded. Official publication and business deployment are outside this execution. See the [candidate checklist](release-0.9.8.md).
+- P3 passed independent acceptance for same-host shared login and public wölkli WebDAV. The owned remote collection was confirmed removed. See the [0.9.8 stage summary](stage-summary-0.9.8.md).
+- This plan tracks execution: REL-01/REL-02 and REL-03 candidate artifacts are complete. REL-04 candidate installation, upgrade and code rollback passed; the historical accepted artifact has an ID-restore limitation (#11); the DATA-01 source fix has independent acceptance and the remaining P1 CI and installed checks are recorded. Official publication and business deployment are outside this execution. See the [candidate checklist](release-0.9.8.md).
 
 ## Implemented; awaiting release delivery
 
@@ -26,7 +27,7 @@ Do not schedule these as new feature work. Carry them into version, installation
 
 ## Complete backlog
 
-P0 gates the next release. P1 addresses data and automation reliability. P2 follows demonstrated collaboration demand. P3 first-slice development is now user-authorized; real NAS and cross-host environments have separate acceptance gates. “Pending” is neither an implementation promise nor a declaration of a discovered fault.
+P0 gates the next release. P1 addresses data and automation reliability. P2 follows demonstrated collaboration demand. P3 first-slice development and independent acceptance are complete for the tested environments. Other NAS targets and cross-host environments have separate acceptance gates. “Pending” is neither an implementation promise nor a declaration of a discovered fault.
 
 | ID | Priority | Work and user benefit | Status / dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
@@ -43,8 +44,8 @@ P0 gates the next release. P1 addresses data and automation reliability. P2 foll
 | QA-01 | P1 | Complete coverage matrix and boundaries for four backends | Per-backend matrix, performance/allocation baseline and reproduction commands recorded; real-backend CI and outside-checkout/Chrome receipts recorded; untested scope explicit; [P1](validation-p1-remaining.md) | Separate contracts, real browser, SQL/server evidence, restart and migration; label each backend/scenario passed/failed/skipped/unverified; supported failures cannot silently downgrade to overall success |
 | COLLAB-01 | P2 | Detect editing conflicts; prevent users/Agents overwriting one another | Started on confirmed team demand; local conditional saves, conflict comparison and regression coverage implemented; see [collaboration](collaboration.md) for scope and validation | Version/hash supplied with save; stale writes return explicit conflict and preserve saved content; reload/compare path; two editors and Agent retries covered |
 | AUTH-01 | P2 | Group-based site permissions; reduce per-user administration | Started on confirmed team demand; local groups, viewer/maintainer grants, revocation and transactional audit implemented; individual roles preserved; see [collaboration](collaboration.md) | Define personal/group precedence, inheritance and revocation; deny unauthorized requests; prompt revocation and complete audit; identity-source and migration design |
-| SCALE-01 | P3 | Shared sessions and inventory of local state dependencies | First slice implemented: same-host shared login/control state and local dependency inventory; [scope](shared-state.md) / [validation](validation-p3.md); cross-host HA deferred | Confirm dual-instance/load-balancing need; inventory sessions, keys, files, configuration, caches and jobs; login/logout/revocation consistent across two instances; single-instance users require no added infrastructure |
-| STORE-01 | P3 | WebDAV adapter; reuse NAS/Nextcloud/company storage | Adapter and isolated storage/failure contracts implemented; [scope](webdav.md) / [validation](validation-p3.md); target NAS/Nextcloud acceptance pending | Confirm NAS/WebDAV use case and endpoint; publish/read/delete, timeouts, auth and cleanup pass storage contracts; shared page files with server-only credentials; document separate DB/session/backup responsibilities |
+| SCALE-01 | P3 | Shared sessions and inventory of local state dependencies | Same-host shared login and authorization passed independent browser acceptance. Local state dependencies are documented in [scope](shared-state.md) / [validation](validation-p3.md); cross-host HA deferred | Confirm dual-instance/load-balancing need; inventory sessions, keys, files, configuration, caches and jobs; login/logout/revocation consistent across two instances; single-instance users require no added infrastructure |
+| STORE-01 | P3 | WebDAV adapter; reuse NAS/Nextcloud/company storage | Public wölkli Cloud FREE lifecycle and cleanup passed independent acceptance. Other targets require separate validation. [Scope](webdav.md) / [validation](validation-p3.md) | Confirm NAS/WebDAV use case and endpoint; publish/read/delete, timeouts, auth and cleanup pass storage contracts; shared page files with server-only credentials; document separate DB/session/backup responsibilities |
 
 REL-01 was reproduced and fixed: stop at ce7b3aa terminated this run's unrelated Python sleeper in a fresh HOME. PID/HOME checks now guard stop, escalation and startup; restart aborts after failed stop and invalid/replaced records are preserved. Independent CLI acceptance and all 16 real MySQL/Chrome stages passed. See [REL-01 validation](validation-rel01.md). Only newly created test resources were controlled; existing acceptance services/databases were not modified.
 
@@ -52,11 +53,11 @@ REL-01 was reproduced and fixed: stop at ce7b3aa terminated this run's unrelated
 
 | Milestone | Scope | Entry condition | Deliverable / exit gate |
 | --- | --- | --- | --- |
-| M0: deliver fixes | REL-01 → REL-02 → REL-03 → REL-04 | Traceable implementation and acceptance | Review, final CI and install/upgrade acceptance complete; official-source checks follow authorized release. Candidate 0.9.8; exclude new collaboration/storage features |
+| M0: deliver fixes | REL-01 → REL-02 → REL-03 → REL-04 | Traceable implementation and acceptance | Review, final CI and install/upgrade acceptance complete; official-source checks follow authorized release. Review the final 0.9.8 publication scope and select its artifacts |
 | M1: single-instance reliability | DATA-01 + OPS-01 → AUTO-01; ENV-01/ENV-02/QA-01 as environments become available | User authorized P1 development before publication; keep publication separate; isolated resources/evidence directories ready | Repeatable recovery drills, Agent failure paths and environment matrix; missing environment remains unverified |
 | M2: growing datasets | DATA-02; continue QA-01 | Dataset/performance baseline and measurable targets | Correct large-data aggregation/search/pagination; measured improvements; preserve CLI/page contracts |
 | M3: team collaboration | COLLAB-01, then AUTH-01 when justified | Demonstrated multi-editor or team-permission need | No silent overwrite; explicit permission rules, audit and regression evidence; release number decided separately |
-| M4: first P3 slice | SCALE-01 / STORE-01 | User authorized development/validation with isolated processes and WebDAV | Deliver same-host shared control state and storage contracts; cross-host HA and real NAS/Nextcloud remain separate acceptance items |
+| M4: first P3 slice | SCALE-01 / STORE-01 | User authorized development/validation with isolated processes and WebDAV | Same-host sharing and wölkli WebDAV passed independent acceptance. Cross-host HA and other NAS or Nextcloud services require target validation |
 
 Do not invent dates or effort estimates before capacity and environments are confirmed. Split work into issues/PRs before implementation, recording dependencies, acceptance cases, evidence paths and actual coverage. Update task status after delivery; reprioritization must explain user benefit and displaced work.
 

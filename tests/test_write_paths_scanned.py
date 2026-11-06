@@ -187,7 +187,8 @@ class TestEveryWritePathIsAccountedFor(unittest.TestCase):
                 src = inspect.getsource(importlib.import_module(dotted))
                 actual = sum(
                     1 for line in src.splitlines()
-                    if ".publish(" in line and not line.strip().startswith("#"))
+                    if any(call in line for call in (".publish(", ".publish_if_revision("))
+                    and not line.strip().startswith("#"))
                 self.assertEqual(
                     actual, expected,
                     f"{dotted} now has {actual} storage.publish() call(s), "

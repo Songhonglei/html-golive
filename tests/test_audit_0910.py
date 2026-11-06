@@ -253,7 +253,11 @@ class TestDoctorRejectsEmptySiteRef(unittest.TestCase):
         self.assertNotIn(
             "cli_version", out,
             "an empty --site must not fall through to the global report")
-        self.assertTrue(err.strip(), "refusal must say what was wrong")
+        import json
+        failure = json.loads(out)
+        self.assertEqual(failure["code"], "invalid_arguments")
+        self.assertTrue(failure["error"], "refusal must say what was wrong")
+        self.assertFalse(err.strip())
 
     def test_absent_flag_still_runs_the_global_check(self):
         """The distinction being drawn is absent vs empty, so prove both."""

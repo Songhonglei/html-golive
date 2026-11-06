@@ -6,28 +6,29 @@ import uuid
 from typing import Optional
 
 FILTERABLE = ("id", "model_code", "name", "user_id", "version")
-SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code")
+SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code", "id")
 
 def _now():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 class SQLTemplateStore:
+    content_is_decoded = False
+    search_text_sql = "COALESCE(name, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(content::text, '')"
+
     def _conn(self):
         raise NotImplementedError
 
     # ── row mapping ─────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _row_to_dict(row) -> dict:
+    @classmethod
+    def _row_to_dict(cls, row) -> dict:
         d = dict(row) if row else {}
         raw = d.get("content")
-        if isinstance(raw, str):
+        if isinstance(raw, str) and not cls.content_is_decoded:
             try:
                 d["content"] = json.loads(raw)
             except ValueError:
                 d["content"] = {"raw": raw}
-        elif raw is None:
-            d["content"] = {}
         # psycopg3 returns JSONB as dict already, but we normalise anyway
         return d
 
@@ -68,7 +69,7 @@ class SQLTemplateStore:
                 params).fetchone()["count"]
             rows = c.execute(
                 f"SELECT * FROM {self.table} WHERE {clause} "
-                "ORDER BY sort_index DESC, created_at DESC LIMIT %s OFFSET %s",
+                "ORDER BY sort_index DESC, created_at DESC, id ASC LIMIT %s OFFSET %s",
                 params + [int(page_size), offset]).fetchall()
         return {"total": total, "list": [self._row_to_dict(r) for r in rows]}
 
@@ -85,44 +86,40 @@ class SQLTemplateStore:
                 (model_code,)).fetchone()
         return row["cnt"]
 
+    def total_count(self) -> int:
+        with self._conn() as connection:
+            return connection.execute(f"SELECT COUNT(*) AS n FROM {self.table}").fetchone()["n"]
+
     def list_models(self, scan_limit: int = 10000) -> list:
-        """Distinct model_code values + row count each (admin portal, M6)."""
-        with self._conn() as c:
-            rows = c.execute(
-                f"SELECT model_code, COUNT(*) AS n FROM ("
-                f"  SELECT model_code FROM {self.table} LIMIT %s"
-                f") sub GROUP BY model_code ORDER BY model_code",
-                (int(scan_limit),)).fetchall()
-        return [{"model_code": r["model_code"], "count": r["n"]}
-                for r in rows if r["model_code"]]
+        """Exact groups. scan_limit remains accepted for older callers."""
+        with self._conn() as connection:
+            rows = connection.execute(
+                f"SELECT model_code, COUNT(*) AS n FROM {self.table} "
+                "WHERE model_code <> '' GROUP BY model_code ORDER BY model_code").fetchall()
+        return [{"model_code": r["model_code"], "count": r["n"]} for r in rows]
 
     def search(self, model_code: str, q: str = "", page_no: int = 1,
                page_size: int = 20, scan_limit: int = 2000) -> dict:
-        """Paged rows for one model with substring filter (M6)."""
-        page_no = max(1, int(page_no))
-        page_size = max(1, min(int(page_size), 200))
+        """Exact literal substring filter/count/pagination in the database."""
+        page_no, page_size = max(1, int(page_no)), max(1, min(int(page_size), 200))
         if not q:
             return self.list(model_code, page_no=page_no, page_size=page_size)
-        with self._conn() as c:
-            rows = c.execute(
-                f"SELECT * FROM {self.table} WHERE model_code = %s "
-                "ORDER BY sort_index DESC, created_at DESC LIMIT %s",
-                (model_code, int(scan_limit))).fetchall()
-        needle = q.lower()
-        hits = []
-        for r in rows:
-            d = self._row_to_dict(r)
-            hay = " ".join([
-                str(d.get("name") or ""),
-                str(d.get("description") or ""),
-                json.dumps(d.get("content"), ensure_ascii=False, default=str),
-            ]).lower()
-            if needle in hay:
-                hits.append(d)
-        start = (page_no - 1) * page_size
-        return {"total": len(hits), "list": hits[start:start + page_size]}
+        pattern = '%' + q.lower().replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+        clause = f"model_code = %s AND LOWER({self.search_text_sql}) LIKE %s ESCAPE %s"
+        values = [model_code, pattern, '!']
+        with self._conn() as connection:
+            total = connection.execute(f"SELECT COUNT(*) AS n FROM {self.table} WHERE {clause}", values).fetchone()["n"]
+            rows = connection.execute(
+                f"SELECT * FROM {self.table} WHERE {clause} "
+                "ORDER BY sort_index DESC, created_at DESC, id ASC LIMIT %s OFFSET %s",
+                values + [page_size, (page_no - 1) * page_size]).fetchall()
+        return {"total": total, "list": [self._row_to_dict(row) for row in rows]}
 
     # ── writes ──────────────────────────────────────────────────────────────
+
+    def restore_row(self, row: dict, overwrite: bool = False) -> dict:
+        from ._restore import restore_sql_row
+        return restore_sql_row(self, row, overwrite=overwrite)
 
     def create(self, model_code: str, name: str, content=None,
                description: str = "", version: str = "1.0.0",
@@ -216,7 +213,10 @@ class SQLTemplateStore:
             if col not in SORTABLE:
                 continue
             terms.append(f"{col} {'DESC' if direction.lower() == 'desc' else 'ASC'}")
-        return ", ".join(terms) or "sort_index DESC, created_at DESC"
+        terms = terms or ["sort_index DESC", "created_at DESC"]
+        if not any(term.split()[0] == "id" for term in terms):
+            terms.append("id ASC")
+        return ", ".join(terms)
 
     def query(self, filters: dict, order: str = "", limit: int = 20,
               offset: int = 0, want_count: bool = False) -> tuple:

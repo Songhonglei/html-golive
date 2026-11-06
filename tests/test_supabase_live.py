@@ -152,11 +152,13 @@ def test_live_supabase_cli_verify_publish_export_import(supabase_live):
     assert response.ok and '中文 🚀' in response.content.decode()
     assert s.cfg.supabase.service_key not in response.text
     row = s.data.create('live', 'archive', content={'汉字': '🚀'})
+    row = s.data.update(row['id'], {'sort_index': 37})
     archive = s.home / 'all.tar.gz'
     cli('export', '--output', str(archive))
     s.storage.delete(site['site_id']); s.registry.delete(site['site_id']); s.data.delete(row['id'])
     cli('import', str(archive), '--yes')
-    assert s.data.list('live')['list'][0]['content'] == {'汉字': '🚀'}
+    from golive.backends.data._restore import same_record
+    assert same_record(row, s.data.get(row['id']))
     assert s.registry.get(site['site_id'])['slug'] == 'live-app'
     assert '中文 🚀' in s.storage.read(site['site_id'])
     cli('doctor', '--port', s.base.rsplit(':', 1)[1], '--json')
@@ -170,20 +172,53 @@ def test_live_supabase_migration_round_trip(supabase_live, sql_backend, monkeypa
     from golive.core.portability import migrate_backend
     from golive.backends.factory import get_template_store
     row = s.data.create('live', 'migration', content={'往返': [1, '🚀']})
+    row = s.data.update(row['id'], {'sort_index': 31})
     result = migrate_backend('data', sql_backend)
     assert result['ok'], result.get('error')
     from copy import deepcopy
     sql_cfg = deepcopy(s.cfg); sql_cfg.data.backend = sql_backend
     sql_store = get_template_store(sql_cfg)
     try:
-        assert sql_store.list('live')['list'][0]['content'] == {'往返': [1, '🚀']}
+        from golive.backends.data._restore import same_record
+        assert same_record(row, sql_store.get(row['id']))
+        repeated = migrate_backend('data', sql_backend)
+        assert repeated['ok'] and repeated['migrated'] == 0 and repeated['skipped'] == 1
+        changed = sql_store.update(row['id'], {'content': {'keep_target': True}})
+        conflict = migrate_backend('data', sql_backend)
+        assert not conflict['ok'] and conflict['migrated'] == 0
+        assert sql_store.get(row['id']) == changed
+        sql_store.restore_row(row, overwrite=True)
         s.data.delete(row['id'])
         set_config(sql_cfg)
         result = migrate_backend('data', 'supabase')
         assert result['ok'], result.get('error')
-        assert s.data.list('live')['list'][0]['content'] == {'往返': [1, '🚀']}
+        assert same_record(row, s.data.get(row['id']))
     finally:
         set_config(s.cfg)
         if env:
             with sql_store._conn() as db:
                 db.execute(f'DROP TABLE {sql_store.table}')
+
+
+def test_live_supabase_restore_json_scalars_and_metadata(supabase_live):
+    from golive.backends.data._restore import same_record
+    store=supabase_live.data
+    for index,value in enumerate([{'nested':[1,None,True]},[1,'二'],'plain string','123','null','{"key":1}','"quoted"',4,False,None]):
+        row=dict(id=str(uuid.uuid4()),model_code='restore',name='scalar-'+str(index),user_id='',description='中文 🧪',content=value,version='2.0',sort_index=index,created_at='2020-01-01T00:00:00+00:00',updated_at='2021-01-01T00:00:00+00:00')
+        assert same_record(row,store.restore_row(row))
+        changed=dict(row,sort_index=-index,updated_at='2022-01-01T00:00:00+00:00')
+        assert same_record(changed,store.restore_row(changed,overwrite=True))
+        assert same_record(changed,store.get(row['id']))
+
+
+def test_live_supabase_large_complete_statistics_and_search(supabase_live):
+    from tests.test_large_data_contract import large_rows
+    rows=list(large_rows());store=supabase_live.data
+    for start in range(0,len(rows),500):store.client.insert(store.table,rows[start:start+500],returning=False)
+    assert store.total_count()==12050
+    assert {m['model_code']:m['count'] for m in store.list_models()}=={'large':11000,'late_model':1000}
+    assert store.search('large','needle')['list'][0]['id']==rows[10999]['id']
+    assert store.search('large','%_! 中文')['total']==1
+    ids=[]
+    for page in range(1,6):ids.extend(row['id'] for row in store.list('large',page_no=page,page_size=200)['list'])
+    assert ids==[row['id'] for row in rows[:1000]]

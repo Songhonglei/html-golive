@@ -33,7 +33,7 @@ DEFAULT_TABLE = "golive_templates"
 
 # Columns a caller (including the HTTP adapter) may filter/sort on.
 FILTERABLE = ("id", "model_code", "name", "user_id", "version")
-SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code")
+SORTABLE = ("sort_index", "created_at", "updated_at", "name", "model_code", "id")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS {table} (
@@ -70,6 +70,9 @@ def _valid_table(name: str) -> str:
 
 class TemplateStore(SQLTemplateStore):
     """CRUD for golive_templates on Postgres (self-hosted data backend)."""
+
+    # psycopg has already decoded JSONB, including scalar string values.
+    content_is_decoded = True
 
     def __init__(self, dsn_env: str = "", table: str = ""):
         if not table or not dsn_env:

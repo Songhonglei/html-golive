@@ -105,6 +105,8 @@ Click **✏️** to enter edit mode, edit text, use **🖼 图片 / Image** to u
 re-runs the security scan and writes a rollback snapshot. Only site owners
 and maintainers may save (see next section).
 
+Conditional editor saves require an `If-Match` content revision. Stale writes return 409 and preserve the draft for comparison. This P2 development capability currently requires local storage; remote storage returns an explicit 501 for editor saves. Custom clients and legacy injected editors must adopt the new contract. See [team collaboration](collaboration.md).
+
 ## 7. Access control
 
 Editing is limited to a site's **owner** (set at publish time) and any
@@ -119,6 +121,8 @@ golive maintainer remove q3 alice@corp.com
 Identity comes from the OIDC session when logged in, otherwise from the
 `editor_user` parameter validated against the editor token. A shared token
 (single token, many editors) is supported but warns at publish time.
+
+The P2 development branch also supports explicit OIDC-email groups with viewer/maintainer site grants, prompt revocation and durable change audit. Existing personal permissions remain independent. See [groups and API](collaboration.md).
 
 ## 8. Built-in data storage
 
@@ -446,12 +450,16 @@ gives you the defaults (local storage, sqlite registry and data) no matter
 what the source used. To restore *into* Supabase, Postgres or MySQL, put a
 `golive.yaml` and the credentials in the new home first.
 
-**Identity limitation:** importing data rows into an empty database currently
-generates new record IDs. Matching counts and content do not prove exact recovery;
-references to old IDs may break. ID, ordering and timestamp preservation are tracked
-in [DATA-01](https://github.com/Songhonglei/html-golive/issues/11). Use a separate
-consistent database backup when exact identity is required. Configuration,
-credentials, audit history and external resources need separate recovery steps.
+**Restore identity:** the DATA-01 development implementation preserves business
+record IDs, content, ordering and timestamps when restoring a full archive into
+an empty supported target. Published 0.9.7.post1 and the previously accepted
+0.9.8 artifact at `f0de446` still regenerate IDs; use an exact fix commit/artifact,
+not a version string alone. Conflict/clone policies and partial failure affect
+exactness; inspect `golive import --yes --json` and verify application references.
+See [restore validation](validation-data01.md) and the [recovery runbook](recovery.md).
+Configuration, credentials, audit/session state, registry timestamps and external
+resources are outside the exact business-record restore contract.
+
 
 **Export** the full instance state (sites, HTML, and data rows) into a
 single tar.gz archive:

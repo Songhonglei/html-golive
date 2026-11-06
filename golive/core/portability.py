@@ -24,6 +24,7 @@ shipping a silently incomplete archive.
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -31,6 +32,8 @@ import sys
 import tarfile
 import tempfile
 import datetime
+import uuid
+import zlib
 from pathlib import Path
 from typing import Optional
 
@@ -73,6 +76,8 @@ def _paginated_data_list(store, page_size: int = DATA_PAGE_SIZE):
     a page returns fewer rows than requested (or the total is reached).
     """
     models = store.list_models(scan_limit=100000)
+    if store.count(""):
+        models = models + [{"model_code": ""}]
     all_rows = []
     for m in models:
         model_code = m["model_code"]
@@ -179,17 +184,18 @@ def export_archive(
         # always agrees — including when the pager is the thing that is
         # broken, which is the only failure this check exists to catch.
         actual = _registry_total(registry)
-        if actual is not None and actual != len(registry_rows):
+        if actual is None:
+            raise RuntimeError("Registry does not expose an independent total; export aborted")
+        if actual != len(registry_rows):
             raise RuntimeError(
                 f"Registry count mismatch during export: collected "
                 f"{len(registry_rows)} sites but the backend holds {actual}. "
                 f"Aborting rather than writing a silently incomplete archive "
                 f"— a backup missing sites is worse than no backup.")
 
-    # For data: sum count() across all models.
+    # Count the complete table independently of discovery/pagination.
     if data_store is not None and not sites_only:
-        models = data_store.list_models(scan_limit=100000)
-        total_expected = sum(m.get("count", 0) for m in models)
+        total_expected = data_store.total_count()
         if len(data_rows) != total_expected:
             raise RuntimeError(
                 f"Data row count mismatch during export: collected {len(data_rows)} "
@@ -281,20 +287,17 @@ def _find_existing_row(data_store, model_code: str, name: str,
     candidate names are compared exactly here — otherwise importing "row-1"
     would be treated as a conflict with an existing "row-10".
     """
-    try:
+    page_no = 1
+    while True:
         page = data_store.list(model_code, name_prefix=name,
-                               user_id=user_id, page_no=1, page_size=50)
-    except Exception:  # noqa: BLE001 — treated as "cannot tell", see below
-        return None
-    rows = page.get("list", []) if isinstance(page, dict) else []
-    for row in rows:
-        if row.get("name") != name:
-            continue
-        # user_id="" means "any" for stores that do not stamp identity.
-        if user_id and (row.get("user_id") or "") != user_id:
-            continue
-        return row
-    return None
+                               user_id=user_id, page_no=page_no, page_size=50)
+        rows = page["list"]
+        for row in rows:
+            if row.get("name") == name and (row.get("user_id") or "") == user_id:
+                return row
+        if len(rows) < 50 or page_no * 50 >= page.get("total", float("inf")):
+            return None
+        page_no += 1
 
 
 def _credential_findings(html: str) -> list:
@@ -326,8 +329,8 @@ def _registry_total(registry):
     went through the same pagination code, a broken pager would agree with
     itself and the check would pass while the archive was short.
 
-    Returns ``None`` when the backend offers no way to count cheaply — the
-    caller then skips the check rather than blocking the export.
+    Returns ``None`` for an unknown backend; the caller refuses an export
+    without an independent witness. A known backend's count failure also aborts.
     """
     try:
         if hasattr(registry, "db_path"):
@@ -343,8 +346,10 @@ def _registry_total(registry):
                     return None
                 return int(row[0] if not isinstance(row, dict)
                            else list(row.values())[0])
-    except Exception:  # noqa: BLE001 — the check is a safety net, not a gate
-        return None
+        if hasattr(registry, "client"):
+            return registry.client.count(registry.table, {"select": "site_id"})
+    except Exception:
+        raise RuntimeError("Cannot independently verify registry total; export aborted") from None
     return None
 
 
@@ -415,14 +420,64 @@ def _registry_create_with_id(registry, site_id: str, name: str, slug: str,
 
 
 
+def _restore_data_record(store, row, policy):
+    """Never quietly substitute a different ID for an archived record."""
+    from golive.backends.data._restore import same_record, RestoreConflict, RestoreMismatch
+    by_id = store.get(row["id"])
+    by_key = _find_existing_row(store, row["model_code"], row["name"], row["user_id"])
+    conflict = by_id or by_key
+    payload = dict(row)
+    if conflict:
+        if policy == "migration":
+            if by_id and same_record(row, by_id) and (not by_key or by_key["id"] == row["id"]):
+                return "skipped", by_id
+            raise RestoreConflict("Target data conflict differs from source; target left unchanged")
+        if policy == "rename":
+            payload["id"] = str(uuid.uuid4())
+            payload["name"] += "-imported-" + row["id"][:8]
+            if _find_existing_row(store, payload["model_code"], payload["name"], payload["user_id"]):
+                raise RestoreConflict("Renamed data record already exists; target left unchanged")
+        else:
+            if by_id and any(by_id.get(k) != row[k] for k in ("model_code", "name", "user_id")):
+                raise RestoreConflict("Data ID belongs to a different logical record; target left unchanged")
+            if policy == "skip":
+                return "skipped", conflict
+            if by_key and by_key["id"] != row["id"]:
+                raise RestoreConflict("Logical data key has a different ID; overwrite cannot preserve references")
+    restored = store.restore_row(payload, overwrite=bool(by_id) and policy == "overwrite")
+    if not same_record(payload, restored):
+        raise RestoreMismatch("Data readback differs from archived identity, content or metadata")
+    return "imported", restored
+
+
+def _prepare_data_rows(rows):
+    from golive.backends.data._restore import restore_payload
+    prepared, ids, keys, defaults = [], set(), set(), {}
+    for row in rows:
+        payload = restore_payload(row)
+        logical_key = tuple(payload[k] for k in ("model_code", "name", "user_id"))
+        if payload["id"] in ids or logical_key in keys:
+            raise ValueError("Archive contains duplicate data IDs or logical keys")
+        ids.add(payload["id"]); keys.add(logical_key)
+        missing = sorted(set(payload) - set(row))
+        if missing:
+            defaults[payload["id"]] = missing
+        prepared.append(payload)
+    return prepared, defaults
+
+
 def _read_archive(path: str) -> tuple:
     """Read an archive's contents into memory. Returns (manifest, registry_rows, data_rows, html_map)."""
-    with tarfile.open(path, "r:gz") as tar:
+    with gzip.open(path, "rb") as compressed, tarfile.open(fileobj=compressed, mode="r:") as tar:
         # Validate before extracting anything
         members = tar.getmembers()
         member_names = [m.name for m in members]
+        if len(set(member_names)) != len(member_names):
+            raise ValueError("Archive has duplicate members")
         # Check for path traversal
         for m in members:
+            if not m.isfile():
+                raise ValueError("Archive members must be regular files")
             if m.name.startswith("/") or ".." in m.name:
                 raise ValueError(
                     f"Refusing to extract path-traversal member: {m.name!r}"
@@ -473,7 +528,67 @@ def _read_archive(path: str) -> tuple:
                 if f:
                     html_map[site_id] = f.read().decode("utf-8")
 
+        # Tar ends at its zero blocks, before gzip necessarily checks the
+        # trailer. Finish the same stream so truncated/invalid CRC/size trailers
+        # cannot pass preview or reach a restore target. Keep extra memory bounded.
+        while compressed.read(1024 * 1024):
+            pass
+
     return manifest, registry_rows, data_rows, html_map
+
+
+class ArchiveValidationError(ValueError):
+    """Archive parsing/validation failed before a target was opened."""
+
+
+def _validated_archive(archive_path):
+    try:
+        manifest, registry_rows, data_rows, html_map = _read_archive(archive_path)
+        if not isinstance(manifest, dict) or not isinstance(manifest.get("counts"), dict):
+            raise ValueError("Archive manifest/counts must be objects")
+        if any(not isinstance(row, dict) for row in registry_rows):
+            raise ValueError("Archive registry rows must be objects")
+        site_ids = set()
+        for site in registry_rows:
+            ident = site.get("site_id")
+            if not isinstance(ident, str) or not ident or ident in site_ids or any(c in ident for c in ("/", "\\", "\x00")):
+                raise ValueError("Archive site IDs must be unique safe strings")
+            site_ids.add(ident)
+            for key in ("name", "owner", "notes"):
+                if not isinstance(site.get(key, ""), str):
+                    raise ValueError("Archive site metadata must be strings")
+            if site.get("slug") is not None and not isinstance(site.get("slug"), str):
+                raise ValueError("Archive site slug must be a string")
+            # Older registry archives serialized this JSON column as text.
+            if isinstance(site.get("maintainers"), str):
+                site["maintainers"] = json.loads(site["maintainers"])
+            if not isinstance(site.get("maintainers", []), list) or any(not isinstance(m, str) for m in site.get("maintainers", [])):
+                raise ValueError("Archive maintainers must be a list of strings")
+        data_rows, data_defaults = _prepare_data_rows(data_rows)
+
+        # Validate manifest counts
+        manifest_counts = manifest.get("counts", {})
+        if any(type(value) is not int or value < 0 for value in manifest_counts.values()):
+            raise ValueError("Archive counts must be nonnegative integers")
+        if len(registry_rows) != manifest_counts.get("sites", 0):
+            raise ValueError(
+                f"Archive manifest claims {manifest_counts.get('sites')} sites "
+                f"but registry.jsonl has {len(registry_rows)} rows. "
+                "Archive may be corrupt."
+            )
+        if len(data_rows) != manifest_counts.get("data_rows", 0):
+            raise ValueError(
+                f"Archive manifest claims {manifest_counts.get('data_rows')} data rows "
+                f"but data.jsonl has {len(data_rows)} rows. "
+                "Archive may be corrupt."
+            )
+        if "html_files" in manifest_counts and len(html_map) != manifest_counts["html_files"]:
+            raise ValueError("Archive HTML count differs from manifest")
+        return manifest, registry_rows, data_rows, html_map, data_defaults
+    except (ValueError, OSError, EOFError, zlib.error, tarfile.TarError, UnicodeError, TypeError, AttributeError) as error:
+        message = ("Archive path traversal is forbidden" if str(error).startswith("Refusing to extract path-traversal member:")
+                   else "Archive is invalid or unreadable")
+        raise ArchiveValidationError(message) from None
 
 
 def import_archive(
@@ -503,26 +618,28 @@ def import_archive(
     if cfg is None:
         cfg = get_config()
 
+    if on_conflict not in ("skip", "overwrite", "rename"):
+        raise ValueError("Unknown import conflict policy")
+    manifest, registry_rows, data_rows, html_map, data_defaults = _validated_archive(archive_path)
+
+    if dry_run:
+        return {"ok": True, "dry_run": True, "sites_imported": 0,
+                "sites_skipped": 0, "sites_overwritten": 0, "sites_renamed": 0,
+                "data_rows_imported": 0, "data_rows_skipped": 0,
+                "html_files_written": 0, "conflicts": [], "errors": [],
+                "summary": {"sites_to_import": len(registry_rows),
+                            "data_rows_to_import": len(data_rows),
+                            "html_files_to_write": len(html_map),
+                            "conflicts": [], "conflict_count": None,
+                            "target_inspected": False,
+                            "data_metadata_defaults": data_defaults}}
+
+    # No target files/tables are opened until archive validation has passed.
     registry = get_registry(cfg)
     storage = get_storage(cfg)
     data_store = get_template_store(cfg)
-
-    manifest, registry_rows, data_rows, html_map = _read_archive(archive_path)
-
-    # Validate manifest counts
-    manifest_counts = manifest.get("counts", {})
-    if len(registry_rows) != manifest_counts.get("sites", 0):
-        raise ValueError(
-            f"Archive manifest claims {manifest_counts.get('sites')} sites "
-            f"but registry.jsonl has {len(registry_rows)} rows. "
-            "Archive may be corrupt."
-        )
-    if len(data_rows) != manifest_counts.get("data_rows", 0):
-        raise ValueError(
-            f"Archive manifest claims {manifest_counts.get('data_rows')} data rows "
-            f"but data.jsonl has {len(data_rows)} rows. "
-            "Archive may be corrupt."
-        )
+    if data_rows and (data_store is None or not callable(getattr(data_store, "restore_row", None))):
+        raise RuntimeError("Target data backend cannot preserve archived record identity")
 
     # ── dry run: report what would happen ──────────────────────────────────
     conflicts = []
@@ -542,22 +659,8 @@ def import_archive(
         "html_files_to_write": len(html_map),
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
+        "data_metadata_defaults": data_defaults,
     }
-
-    if dry_run:
-        return {
-            "dry_run": True,
-            "sites_imported": 0,
-            "sites_skipped": 0,
-            "sites_overwritten": 0,
-            "sites_renamed": 0,
-            "data_rows_imported": 0,
-            "data_rows_skipped": 0,
-            "html_files_written": 0,
-            "conflicts": conflicts,
-            "errors": [],
-            "summary": summary,
-        }
 
     # ── confirm before writing (unless --yes) ──────────────────────────────
     if not yes:
@@ -585,6 +688,7 @@ def import_archive(
     sites_overwritten = 0
     sites_renamed = 0
     errors = []
+    site_writes_uncertain = False
 
     # Build a mapping from original site_id → actual site_id in the target
     # (they may differ if rename or overwrite changes the ID). A site absent
@@ -687,64 +791,44 @@ def import_archive(
                 created_site_ids.add(site_id)
                 sites_imported += 1
 
-        except Exception as e:
+        except Exception:
+            site_writes_uncertain = True
             errors.append(
-                f"Site {site_id} (slug={slug}): {e} "
+                f"Site {site_id}: restore failed; target may be partial; "
                 f"[imported {sites_imported + sites_overwritten + sites_renamed} so far]"
             )
 
     # ── import data rows ───────────────────────────────────────────────────
     data_rows_imported = 0
     data_rows_skipped = 0
+    data_id_map = {}
+    data_errors = []
+    data_exact_restore = not bool(data_defaults)
+    data_writes_uncertain = False
 
     if data_store is not None and data_rows:
         for row in data_rows:
             try:
-                model_code = row.get("model_code", "")
-                name = row.get("name", "")
-                content = row.get("content")
-                description = row.get("description", "")
-                version = row.get("version", "1.0.0")
-                user_id = row.get("user_id", "")
-
-                # Check for existing row (by model_code + name + user_id).
-                # Uses the public store interface rather than a raw SQL
-                # probe: the Supabase store speaks PostgREST and has no
-                # ._conn, so a backend-specific query left existing_check
-                # permanently None there — "skip" silently imported
-                # duplicates on every run and reported them as successes.
-                existing_check = _find_existing_row(
-                    data_store, model_code, name, user_id)
-
-                if existing_check:
-                    if on_conflict == "skip":
-                        data_rows_skipped += 1
-                        continue
-                    elif on_conflict == "overwrite":
-                        # Use upsert to overwrite
-                        data_store.upsert(model_code, name, content=content,
-                                          user_id=user_id, description=description,
-                                          version=version)
-                        data_rows_imported += 1
-                    elif on_conflict == "rename":
-                        # Append suffix to name
-                        new_name = f"{name}-imported-{row.get('id', '')[:8]}"
-                        data_store.create(model_code, new_name, content=content,
-                                          description=description, version=version,
-                                          user_id=user_id)
-                        data_rows_imported += 1
+                from golive.backends.data._restore import same_record
+                state, restored = _restore_data_record(data_store, row, on_conflict)
+                data_id_map[row["id"]] = restored["id"]
+                data_exact_restore = data_exact_restore and same_record(row, restored)
+                if state == "skipped":
+                    data_rows_skipped += 1
                 else:
-                    # No conflict — create
-                    data_store.create(model_code, name, content=content,
-                                      description=description, version=version,
-                                      user_id=user_id)
                     data_rows_imported += 1
 
-            except Exception as e:
+            except Exception as error:
+                # Driver exceptions can contain passwords, DSNs and row content.
+                from golive.backends.data._restore import RestoreConflict, RestoreMismatch
+                code = ("identity_conflict" if isinstance(error, RestoreConflict) else
+                        "restore_mismatch" if isinstance(error, RestoreMismatch) else "restore_failed")
+                data_errors.append({"id": row["id"], "code": code})
+                data_writes_uncertain = data_writes_uncertain or code != "identity_conflict"
                 errors.append(
-                    f"Data row (model={model_code}, name={name}): {e} "
-                    f"[imported {data_rows_imported} so far]"
-                )
+                    f"Data record {row['id']}: restore failed (conflict, unavailable backend "
+                    f"or readback mismatch); target may be partial; imported {data_rows_imported} so far")
+                data_exact_restore = False
 
     # ── import HTML files ───────────────────────────────────────────────────
     html_files_written = 0
@@ -790,11 +874,12 @@ def import_archive(
                     registry.delete(target_site_id)
                     rolled_back = True
                     sites_imported = max(0, sites_imported - 1)
-                except Exception as e:
+                except Exception:
+                    site_writes_uncertain = True
                     errors.append(
                         f"Site {slug or target_site_id}: held back for a "
                         f"credential, but its registry entry could not be "
-                        f"removed: {e}")
+                        "removed; target may be partial")
             html_files_blocked.append({
                 "site_id": orig_site_id,
                 "slug": slug,
@@ -806,10 +891,14 @@ def import_archive(
         try:
             storage.publish(html, target_site_id, backup_previous=False)
             html_files_written += 1
-        except Exception as e:
-            errors.append(f"HTML for {orig_site_id}: {e}")
+        except Exception:
+            site_writes_uncertain = True
+            errors.append(f"HTML for {orig_site_id}: restore failed; target may be partial")
 
     return {
+        "ok": not errors and not html_files_blocked,
+        "partial": bool(errors or html_files_blocked) and bool(sites_imported or sites_overwritten or data_rows_imported or html_files_written or data_writes_uncertain or site_writes_uncertain),
+        "site_writes_uncertain": site_writes_uncertain,
         "dry_run": False,
         "sites_imported": sites_imported,
         "sites_skipped": sites_skipped,
@@ -817,6 +906,13 @@ def import_archive(
         "sites_renamed": sites_renamed,
         "data_rows_imported": data_rows_imported,
         "data_rows_skipped": data_rows_skipped,
+        "data_id_map": data_id_map,
+        "data_errors": data_errors,
+        "data_writes_uncertain": data_writes_uncertain,
+        "data_identity_preserved": len(data_id_map) == len(data_rows) and all(k == v for k, v in data_id_map.items()),
+        "data_exact_restore": data_exact_restore and len(data_id_map) == len(data_rows),
+        "data_metadata_defaults": data_defaults,
+        "references_rewritten": False,
         "html_files_skipped": html_files_skipped,
         # Pages held back because they carry a literal credential. Reported
         # separately from `errors`: nothing malfunctioned, and the rest of the
@@ -931,99 +1027,53 @@ def migrate_backend(
     # ── read all source data FIRST (before instantiating target) ────────────
     if layer == "data":
         source_rows = _paginated_data_list(source_store)
+        source_rows, _ = _prepare_data_rows(source_rows)
         source_count = sum(m.get("count", 0) for m in
                             source_store.list_models(scan_limit=100000))
     else:
         source_rows = _paginated_registry_list(source_store)
         source_count = len(source_rows)
 
-    # ── get target backend (skip for dry-run when target unavailable) ─────
-    target_store = None
+    if dry_run:
+        return {"ok": True, "dry_run": True, "source_backend": source_backend,
+                "target_backend": target, "source_count": source_count,
+                "target_existing": None, "would_migrate": source_count,
+                "target_has_data": False, "target_inspected": False,
+                "warning": "", "preview_note": "Target not inspected; conflicts and connectivity are unknown. Preview opens no target tables."}
 
-    # None means "we could not look" — distinct from a real zero. A dry run
-    # that cannot reach the target must say so rather than print "0 existing
-    # rows", which reads as "the target is empty" and invites a migration
-    # into a table that already holds data.
-    target_count = None
-
-    # Open the target and count what it already holds — dry runs included,
-    # since it is a read-only query and the existing row count is the single
-    # most decision-relevant number in the preview. On a dry run the whole
-    # block is advisory: an unreachable target (driver missing, no DSN,
-    # network down) leaves the count as None → "unknown" and the preview
-    # still prints. A real migration re-raises, because then an unreachable
-    # target is a hard stop.
+    # A real migration may initialize its explicitly selected target.
     try:
         if layer == "data":
             target_cfg = _clone_config_with(cfg, data_backend=target)
-            from golive.backends.factory import get_template_store
             target_store = get_template_store(target_cfg)
-            if target_store is None:
-                return {
-                    "ok": False,
-                    "error": f"Target data backend {target!r} is not available.",
-                }
-            target_models = target_store.list_models(scan_limit=100000)
-            target_count = sum(m.get("count", 0) for m in target_models)
+            if target_store is None or not callable(getattr(target_store, "restore_row", None)):
+                return {"ok": False, "code": "unsupported_restore",
+                        "error": "Target backend cannot preserve record identity."}
+            target_count = sum(m.get("count", 0) for m in target_store.list_models(scan_limit=100000))
         else:
             target_cfg = _clone_config_with(cfg, registry_backend=target)
-            from golive.backends.factory import get_registry
             target_store = get_registry(target_cfg)
             target_count = len(target_store.list_all(limit=100000))
     except Exception:
-        if not dry_run:
-            raise
-        target_store = None
-        target_count = None
-
-    if dry_run:
-        return {
-            "ok": True,
-            "dry_run": True,
-            "source_backend": source_backend,
-            "target_backend": target,
-            "source_count": source_count,
-            "target_existing": target_count,
-            "would_migrate": source_count,
-            "target_has_data": bool(target_count),
-            "warning": ("Target already has data — migration will mix "
-                        "source and existing rows." if target_count else ""),
-        }
+        return {"ok": False, "code": "target_unavailable",
+                "error": "Target backend is unavailable; check configuration and connectivity."}
 
     # ── migrate ─────────────────────────────────────────────────────────────
     migrated = 0
+    skipped = 0
     errors = []
 
     if layer == "data":
         for row in source_rows:
             try:
-                target_store.create(
-                    model_code=row.get("model_code", ""),
-                    name=row.get("name", ""),
-                    content=row.get("content"),
-                    description=row.get("description", ""),
-                    version=row.get("version", "1.0.0"),
-                    user_id=row.get("user_id", ""),
-                )
-                migrated += 1
-            except Exception as e:
-                # Try upsert if create fails (unique constraint)
-                try:
-                    target_store.upsert(
-                        row.get("model_code", ""),
-                        row.get("name", ""),
-                        content=row.get("content"),
-                        user_id=row.get("user_id", ""),
-                        description=row.get("description", ""),
-                        version=row.get("version", "1.0.0"),
-                    )
+                state, _ = _restore_data_record(target_store, row, "migration")
+                if state == "skipped":
+                    skipped += 1
+                else:
                     migrated += 1
-                except Exception as e2:
-                    errors.append(
-                        f"Row (model={row.get('model_code')}, "
-                        f"name={row.get('name')}): {e2} "
-                        f"[migrated {migrated} so far]"
-                    )
+            except Exception:
+                errors.append(f"Data record {row['id']}: migration failed (target conflict, "
+                              "connection failure or readback mismatch); no ID substitution was attempted")
     else:
         for site in source_rows:
             try:
@@ -1032,6 +1082,7 @@ def migrate_backend(
                 existing = target_store.get(site_id)
                 if existing:
                     # Skip — don't overwrite in migration
+                    skipped += 1
                     continue
                 slug = site.get("slug", "")
                 name = site.get("name", "")
@@ -1042,19 +1093,17 @@ def migrate_backend(
 
                 # Handle slug conflict
                 if slug and target_store.slug_taken(slug, exclude_site_id=site_id):
-                    slug = f"{slug}-migrated-{site_id[:8]}"
+                    raise ValueError("Target slug belongs to a different site")
 
-                new_site = target_store.create(name=name, slug=slug, owner=owner, notes=notes)
+                new_site = _registry_create_with_id(target_store, site_id, name, slug, owner, notes)
                 if editable:
                     target_store.set_editable(new_site["site_id"], True)
                 for m in (maintainers or []):
                     target_store.add_maintainer(new_site["site_id"], m)
                 migrated += 1
-            except Exception as e:
-                errors.append(
-                    f"Site {site.get('site_id', '?')}: {e} "
-                    f"[migrated {migrated} so far]"
-                )
+            except Exception:
+                errors.append(f"Site {site.get('site_id', '?')}: migration failed; "
+                              f"target may be partial; migrated {migrated} so far")
 
     # ── verify counts ───────────────────────────────────────────────────────
     if layer == "data":
@@ -1067,17 +1116,23 @@ def migrate_backend(
     count_ok = (target_count_after - target_count) == migrated
 
     result = {
-        "ok": True,
+        "ok": not errors and count_ok,
+        "code": "ok" if not errors and count_ok else "partial_failure" if migrated else "migration_failed",
         "dry_run": False,
         "source_backend": source_backend,
         "target_backend": target,
         "source_count": source_count,
         "target_existing_before": target_count,
         "migrated": migrated,
+        "skipped": skipped,
+        "partial": bool(errors) and (migrated > 0 or target_count_after != target_count),
         "target_count_after": target_count_after,
         "count_ok": count_ok,
         "errors": errors,
     }
+
+    if errors:
+        result["error"] = "Migration incomplete; inspect per-record errors; target may contain completed records."
 
     if not count_ok:
         result["ok"] = False

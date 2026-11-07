@@ -1,6 +1,6 @@
 # Use html-golive with your agent
 
-> Development candidate 0.9.8 is not published. The registry installation examples below intentionally use the published 0.9.7.post1. For candidate source/artifact validation, follow [the release checklist](release-0.9.8.md).
+> These installation examples target 0.9.8. Keep the package, CLI, running service and bundled Skill on the same version. See [release scope and validation](release-0.9.8.md).
 
 html-golive exposes the same CLI and bundled AgentSkill to different agents.
 Choose an agent that can run local commands, and install the skill into a
@@ -14,7 +14,7 @@ directory that agent actually reads. The product is not tied to one client.
 Create a Python 3.9+ virtual environment in your project and activate it. Then:
 
 ```bash
-python -m pip install 'html-golive==0.9.7.post1'
+python -m pip install 'html-golive==0.9.8'
 golive --version
 golive skill install --list-targets
 golive skill install
@@ -71,8 +71,8 @@ up its temporary page and records. It does not replace a browser check.
 ## Add data or collaboration
 
 - **Four databases:** [SQLite / PostgreSQL / MySQL / Supabase setup and acceptance](backend-validation.md).
-- **MySQL:** install `html-golive[mysql]==0.9.7.post1`, then follow the bundled [MySQL runbook](../golive/resources/skill/references/mysql.md). Its database configuration and acceptance steps apply across agents; adapt the skill installation directory to yours.
-- **PostgreSQL:** install `html-golive[postgres]==0.9.7.post1` and configure the dedicated server-side DSN as described in the backend guide.
+- **MySQL:** install `html-golive[mysql]==0.9.8`, then follow the bundled [MySQL runbook](../golive/resources/skill/references/mysql.md). Its database configuration and acceptance steps apply across agents; adapt the skill installation directory to yours.
+- **PostgreSQL:** install `html-golive[postgres]==0.9.8` and configure the dedicated server-side DSN as described in the backend guide.
 - **Security:** [scanning, blocking rules and optional LLM review](security.md).
 - **Collaboration:** [site owners, maintainers and management roles](manual.md#7-access-control), with [admin permissions and audit](manual.md#18-admin-portal).
 

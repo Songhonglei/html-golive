@@ -1,10 +1,10 @@
 # 四种数据库后端的配置与验收
 
-> 开发候选 0.9.8 尚未发布；下方仓库安装示例继续使用已发布的 0.9.7.post1。候选源码/产物的验收方式见[版本交付清单](release-0.9.8.md)。
+> 下方安装示例统一使用 0.9.8。CLI、运行服务与 Skill 应保持同版本，支持范围与验收记录见[版本交付说明](release-0.9.8.md)。
 
 SQLite、PostgreSQL、MySQL 和 Supabase 均支持站点目录（registry）和页面业务数据（data）。HTML 文件由独立的 storage 配置保存：前三者可搭配本地目录或 S3，Supabase 还可搭配 Supabase Storage。后台设置、审计、服务运行信息等本机控制数据仍保存在 `GOLIVE_HOME`。
 
-> MySQL 从 v0.9.7 起提供。使用 `python3 -m pip install -U 'html-golive[mysql]==0.9.7.post1'` 安装；v0.9.6 及更早版本不包含 MySQL。推荐 0.9.7.post1，它修正了 0.9.7 的 MySQL verify 浮点时间戳误报。
+> MySQL 从 v0.9.7 起提供。使用 `python3 -m pip install -U 'html-golive[mysql]==0.9.8'` 安装；v0.9.6 及更早版本不包含 MySQL。推荐 0.9.8，它包含 0.9.7.post1 的 MySQL verify 浮点时间戳误报修正及后续可靠性改进。
 > 通过 Agent 使用时，见[通用安装与使用指南](agents.md)。MySQL 的完整验收见[随包手册](../golive/resources/skill/references/mysql.md)。
 
 ## 选择与配置

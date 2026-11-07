@@ -10,11 +10,11 @@
 Turn any HTML file, project folder or zip archive into a shareable URL on
 your own machine, NAS, VPS or intranet server.
 
-**v0.9.7.post1: four databases, one page API.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. Manage everything in the light/dark admin workspace.
+**v0.9.8: reliable publishing, recovery and team workflows.** Start with SQLite, or use PostgreSQL, MySQL 8.4+ or Supabase. This release adds identity-preserving recovery, local editing conflict checks, team groups, same-host shared login state and WebDAV page storage.
 
-**Development candidate: 0.9.8 (not published).** CI artifacts passed isolated installation, MySQL/Chrome and upgrade/code-rollback acceptance; the checklist records the existing record-ID restore limitation. Published installation instructions below remain pinned to 0.9.7.post1. See [candidate release checklist](docs/release-0.9.8.md).
+Install `html-golive==0.9.8` and keep the CLI, running service and Agent Skill on the same version. See [release scope and validation](docs/release-0.9.8.md) for supported configurations and acceptance boundaries.
 
-[Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent setup & usage](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.7.post1 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.7.post1)
+[Backend setup and acceptance](https://github.com/Songhonglei/html-golive/blob/main/docs/backend-validation.md) · [Agent setup & usage](https://github.com/Songhonglei/html-golive/blob/main/docs/agents.md) · [v0.9.8 release](https://github.com/Songhonglei/html-golive/releases/tag/v0.9.8)
 
 ### 30-second quickstart
 
@@ -35,7 +35,7 @@ golive publish report.html --name "Q3 Report" --slug q3
 </p>
 
 Something not working? Run `golive verify` and paste the output into an issue.
-For optional real-browser, SQL and restart checks, see [full acceptance and diagnostics](docs/acceptance.md) (unreleased source changes).
+For optional real-browser, SQL and restart checks, see [full acceptance and diagnostics](docs/acceptance.md) (included in 0.9.8).
 
 ---
 
@@ -423,14 +423,14 @@ docker compose --profile minio up -d        # + local S3 stack for images
 Prioritize reliable single-instance and Agent publishing. Work is ordered by
 acceptance gates; there are no committed release dates.
 
-- **P0 — Deliver the accepted fixes:** close service-control identity boundaries, review PR #7, align versions/artifacts, and accept clean installs and upgrades (candidate 0.9.8).
+- **P0 — Deliver the accepted fixes:** close service-control identity boundaries, review PR #7, align versions/artifacts, and accept clean installs and upgrades (0.9.8).
 - **P1 — Reliability:** backup/restore and migration drills, upgrade/recovery guidance, Agent/CLI failure contracts, accurate large-data statistics/search/pagination, and Docker/TLS coverage.
-- **P2 — Collaboration:** editing conflict detection and group permissions are in development following confirmed team demand; [scope and compatibility](docs/collaboration.md).
-- **P3 — First slice:** [same-host shared login/control state](docs/shared-state.md) and [WebDAV page storage](docs/webdav.md) are implemented as candidate features. Cross-host HA and target NAS acceptance remain separate; single-instance users need no added infrastructure.
+- **P2 — Collaboration:** editing conflict detection and group permissions are included in 0.9.8 following confirmed team demand; [scope and compatibility](docs/collaboration.md).
+- **P3 — First slice:** [same-host shared login/control state](docs/shared-state.md) and [WebDAV page storage](docs/webdav.md) are included in 0.9.8. Cross-host HA and target NAS acceptance remain separate; single-instance users need no added infrastructure.
 
 See the [complete prioritized backlog and milestone gates](https://github.com/Songhonglei/html-golive/blob/main/docs/roadmap.md).
-Implemented diagnostics, CLI and full-acceptance fixes remain pending release;
-they are tracked separately from future feature work.
+The 0.9.8 release includes the implemented diagnostics, CLI and full-acceptance fixes;
+remaining environment coverage is tracked separately from future feature work.
 
 ## Contributing
 

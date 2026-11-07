@@ -10,7 +10,7 @@ homepage: https://github.com/Songhonglei/html-golive
 
 # html-golive
 
-Development candidate 0.9.8 is not published. For candidate acceptance, use the exact provided source/wheel and matching Skill. Public package/release download instructions for 0.9.8 become valid only after publication; do not substitute a public 0.9.7.post1 CLI for this candidate Skill.
+This Skill targets html-golive 0.9.8. Install the matching CLI from PyPI with `python -m pip install "html-golive==0.9.8"`, and keep the running service and installed Skill on the same version. Use the matching 0.9.8 release assets for manual Skill installation.
 
 `golive` is a **self-hosted** static-HTML deployment tool. One command
 turns a local HTML file into a URL served by the user's own machine.

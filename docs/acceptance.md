@@ -1,6 +1,6 @@
 # Database diagnostics and full acceptance
 
-Changes after `0.9.7.post1`; source checkout required until the next release.
+The diagnostics and acceptance commands described here are included in `0.9.8`. Historical results below remain bound to their recorded source/artifact baselines.
 
 `golive context --json` resolves the probe port from explicit `--port`, a live
 managed service record in the current `GOLIVE_HOME`, `server.port`, then 8787.

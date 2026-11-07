@@ -1,8 +1,10 @@
 # OpenGoLive development plan and prioritized backlog
 
+Release update 2026-11-07: the implemented P0–P3 first-slice work is included in 0.9.8. The detailed entries below retain their historical implementation and acceptance context. See [release scope](release-0.9.8.md) for current distribution and limitations.
+
 Updated: 2026-11-06. [中文版](roadmap.zh-CN.md)
 
-Prioritize reliable single-instance, intranet and AI Agent publishing: deliver the accepted fixes, make upgrades/recovery and automation failures verifiable, then expand collaboration and infrastructure. Work follows milestone gates rather than unconfirmed dates. `0.9.8` is a candidate for the next release, not a published version or a release-date commitment.
+Prioritize reliable single-instance, intranet and AI Agent publishing: deliver the accepted fixes, make upgrades/recovery and automation failures verifiable, then expand collaboration and infrastructure. Work follows milestone gates rather than unconfirmed dates. The implemented first slice is delivered in `0.9.8`; future release dates follow their acceptance gates.
 
 ## Status and evidence
 

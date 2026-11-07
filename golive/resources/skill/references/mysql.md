@@ -1,6 +1,6 @@
 # MySQL setup and acceptance (v0.9.8+)
 
-> 0.9.8 是尚未发布的开发候选。候选验收请安装提供的精确本地 wheel/源码，勿运行指向公共仓库或 Release 的 0.9.8 下载命令；这些命令仅在正式发布后可用。CLI 与 Skill 必须来自同一候选产物。
+> 本指南适用于 0.9.8。使用 PyPI 安装同版本 CLI 与 MySQL extra，手工导入 Skill 时使用对应的 0.9.8 Release 产物，并确认运行服务已重启到同一版本。
 
 Use an isolated project home and a dedicated MySQL 8.4+ test database. The
 registry and business data both support MySQL; HTML remains in local files or

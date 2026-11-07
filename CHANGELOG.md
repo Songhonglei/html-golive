@@ -3,21 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.9.8] - 2026-11-07
 
 - Wait for the final Docker MySQL TCP listener during sandbox startup; the image's temporary initialization socket no longer signals readiness prematurely.
 - Persist OIDC sessions and one-use PKCE/state across restart. Optional same-host `GOLIVE_STATE_DIR` shares cookie signing, sessions, groups/guards/group audit and managed admins between independent HOMEs. Configured OIDC refuses startup on state/config failure; logout failure returns 503 without claiming revocation. Add a read-only control-state inventory to context/doctor JSON.
 - Add WebDAV page storage with verified TLS, environment credentials, scoped paths, snapshots/rollback, bounded responses/timeouts and explicit failure handling. Remote protected editor writes remain unsupported (501). Independent public WebDAV acceptance passed on wölkli Cloud FREE. See the [P3 validation](docs/validation-p3.md#independent-reacceptance) for coverage.
 - Localize the inline editor and conflict comparison in English/Chinese, including confirmations and error guidance; follow saved admin/page/browser language. Repair installed-test source-path assumptions and add a full source-free CI wheel acceptance gate.
 
-- P2 development (separate delivery): require content revisions for local-storage editor saves, reject stale writes without changing saved HTML/snapshots, retain browser drafts for comparison, and serialize local writers across processes. Custom clients need `If-Match`; remote object-storage editor saves explicitly refuse unsupported conditional writes.
+- Local editing: require content revisions for local-storage editor saves, reject stale writes without changing saved HTML/snapshots, retain browser drafts for comparison, and serialize local writers across processes. Custom clients need `If-Match`; remote object-storage editor saves explicitly refuse unsupported conditional writes.
 - Add instance-local team groups with verified-login email membership, additive viewer/maintainer site grants, immediate next-request revocation, admin management UI/API and transactional change audit. Preserve personal roles; group state needs a separate management-database backup. See [collaboration scope and compatibility](docs/collaboration.md).
 
 - Preserve business record IDs, JSON values, sort indices and timestamps during archive restore and data migration; verify readback, reject identity conflicts and report clone mappings/partial writes. Honor explicit SQLite target configuration. Add archive-only previews, import/migrate JSON results and recovery guidance; earlier candidate artifacts require separate replacement and acceptance.
 
-## [0.9.8] - Unreleased candidate
 
-- Retain standard CI wheel/sdist/Skill artifacts with source commits and checksums; record isolated installed MySQL/Chrome, upgrade and code-rollback acceptance. Document the existing export/import record-ID regeneration limitation separately from content restoration.
+- Retain standard CI wheel/sdist/Skill artifacts with source commits and checksums; record isolated installed MySQL/Chrome, upgrade and code-rollback acceptance. The old f0de446 candidate had an export/import record-ID regeneration limitation; 0.9.8 includes the independently validated DATA-01 identity-preserving restore fix.
 
 - Require matching health PID/HOME before stop signals, recheck before force-kill, abort restart after any failed stop, preserve replaced/unverifiable records, and reject foreign startup health or a second managed endpoint. Dead records still clean up safely; restart inherits only a verified endpoint and otherwise uses configuration.
 

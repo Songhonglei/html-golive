@@ -1,0 +1,179 @@
+name: Publish accepted distributions
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful CI run containing the accepted distributions
+        required: true
+        type: string
+      version:
+        description: Exact package version to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve successful same-repository CI artifact
+        id: accepted
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          run_id = os.environ['CI_RUN_ID']
+          assert run_id.isdigit(), 'invalid CI run ID'
+          repo = os.environ['REPOSITORY']
+          run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/runs/{run_id}']))
+          assert run['status'] == 'completed' and run['conclusion'] == 'success', 'CI must pass first'
+          assert run['name'] == 'CI' and run['path'] == '.github/workflows/ci.yml'
+          assert run['head_repository']['full_name'] == repo, 'foreign artifacts are not accepted'
+          sha = run['head_sha']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'source_commit={sha}\nartifact_name=distributions-{sha}\n')
+          PY
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.accepted.outputs.artifact_name }}
+          path: accepted
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify hashes and matching package versions
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ steps.accepted.outputs.source_commit }}
+        run: |
+          python - <<'PY'
+          import email, hashlib, json, os, pathlib, re, shutil, tarfile, zipfile
+          root = pathlib.Path('accepted')
+          manifest = json.loads((root / 'artifact-manifest.json').read_text())
+          version = os.environ['RELEASE_VERSION']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:\.post[0-9]+)?', version)
+          assert manifest['version'] == version
+          assert manifest['source_commit'] == os.environ['SOURCE_COMMIT']
+          expected = {f'html_golive-{version}-py3-none-any.whl', f'html_golive-{version}.tar.gz', f'html-golive-skill-{version}.zip'}
+          assert set(manifest['files']) == expected
+          for name, entry in manifest['files'].items():
+              assert pathlib.Path(name).name == name
+              content = (root / name).read_bytes()
+              assert hashlib.sha256(content).hexdigest() == entry['sha256'], name
+              assert len(content) == entry['bytes'], name
+          with zipfile.ZipFile(root / f'html_golive-{version}-py3-none-any.whl') as wheel:
+              metadata = email.message_from_bytes(wheel.read(next(n for n in wheel.namelist() if n.endswith('.dist-info/METADATA'))))
+              assert metadata['Name'] == 'html-golive' and metadata['Version'] == version
+              skill = wheel.read('golive/resources/skill/SKILL.md')
+              assert re.search(rb'^version: (.+)$', skill, re.M).group(1).decode() == version
+          with tarfile.open(root / f'html_golive-{version}.tar.gz') as archive:
+              prefix = archive.getnames()[0].split('/')[0]
+              assert email.message_from_bytes(archive.extractfile(prefix + '/PKG-INFO').read())['Version'] == version
+          with zipfile.ZipFile(root / f'html-golive-skill-{version}.zip') as archive:
+              assert archive.read('html-golive/SKILL.md') == skill
+          pathlib.Path('pypi-dist').mkdir()
+          for name in expected:
+              if name.endswith(('.whl', '.tar.gz')):
+                  shutil.copyfile(root / name, pathlib.Path('pypi-dist') / name)
+          PY
+
+      - name: Upload accepted wheel and sdist to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: pypi-dist/
+          attestations: false
+
+      - name: Verify official-source installation and upgrade
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, subprocess, sys, time, urllib.request, venv
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'release-verification'
+          root.mkdir()
+          version = os.environ['RELEASE_VERSION']
+          manifest = json.loads(pathlib.Path('accepted/artifact-manifest.json').read_text())
+          for attempt in range(12):
+              try:
+                  with urllib.request.urlopen(f'https://pypi.org/pypi/html-golive/{version}/json', timeout=20) as response:
+                      metadata = json.load(response)
+                  break
+              except Exception:
+                  if attempt == 11:
+                      raise
+                  time.sleep(5)
+          assert metadata['info']['version'] == version
+          for item in metadata['urls']:
+              assert item['digests']['sha256'] == manifest['files'][item['filename']]['sha256']
+          assert {item['filename'] for item in metadata['urls']} == {name for name in manifest['files'] if name.endswith(('.whl', '.tar.gz'))}
+          env = {k:v for k,v in os.environ.items() if not k.startswith(('GOLIVE_', 'PYTHON'))}
+          env['GOLIVE_HOME'] = str(root / 'upgrade-home')
+          def run(command, **kwargs):
+              return subprocess.check_output([str(x) for x in command], cwd=root, env=env, text=True, **kwargs)
+          upgrade = root / 'upgrade-env'
+          venv.create(upgrade, with_pip=True)
+          python, golive = upgrade/'bin/python', upgrade/'bin/golive'
+          run([python, '-m', 'pip', 'install', '--no-cache-dir', 'html-golive==0.9.7.post1'])
+          page = root / 'upgrade.html'
+          page.write_text('<html><body><h1>Release upgrade preserved</h1></body></html>')
+          run([golive, 'publish', page, '--slug', 'upgrade-check'])
+          run([golive, 'serve', 'start', '--host', '127.0.0.1', '--port', '18878'])
+          with urllib.request.urlopen('http://127.0.0.1:18878/health') as response:
+              old = json.load(response)
+          assert old['version'] == '0.9.7.post1'
+          try:
+              run([python, '-m', 'pip', 'install', '--no-cache-dir', '--upgrade', f'html-golive=={version}'])
+              assert version in run([golive, '--version'])
+              with urllib.request.urlopen('http://127.0.0.1:18878/health') as response:
+                  assert json.load(response)['version'] == '0.9.7.post1'
+              run([golive, 'serve', 'restart'])
+              with urllib.request.urlopen('http://127.0.0.1:18878/health') as response:
+                  health = json.load(response)
+              assert health['version'] == version and health['pid'] != old['pid']
+              with urllib.request.urlopen('http://127.0.0.1:18878/upgrade-check') as response:
+                  assert b'Release upgrade preserved' in response.read()
+              doctor = json.loads(run([golive, 'doctor', '--port', '18878', '--json']))
+              assert doctor['ok'] and doctor['service']['version_match']
+              skills = root / 'skills'
+              skills.mkdir()
+              run([golive, 'skill', 'install', '--target', skills])
+              assert f'version: {version}' in (skills/'html-golive/SKILL.md').read_text()
+          finally:
+              run([golive, 'serve', 'stop'])
+          fresh = root / 'fresh-env'
+          venv.create(fresh, with_pip=True)
+          fresh_python = fresh/'bin/python'
+          run([fresh_python, '-m', 'pip', 'install', '--no-cache-dir', f'html-golive=={version}'])
+          provenance = json.loads(run([fresh_python, '-c', 'import importlib.metadata,json,golive; print(json.dumps({"version":importlib.metadata.version("html-golive"),"module":golive.__file__,"runtime_version":golive.__version__}))']))
+          assert provenance['version'] == provenance['runtime_version'] == version
+          assert str(fresh) in provenance['module']
+          receipt = {'version': version, 'source_commit':manifest['source_commit'], 'pypi_hashes_match':True,
+                     'fresh_install':provenance, 'upgrade_from':'0.9.7.post1', 'old_service_retained_until_restart':True,
+                     'restart_changed_pid':True, 'page_preserved':True, 'doctor_version_match':True, 'installed_skill_version':version,
+                     'scope':'isolated Linux local storage/SQLite; existing backend/browser acceptance is recorded separately'}
+          pathlib.Path('release-verification.json').write_text(json.dumps(receipt, indent=2)+'\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-verification-${{ inputs.version }}
+          path: release-verification.json
+          if-no-files-found: error
